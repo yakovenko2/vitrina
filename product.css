@@ -1,0 +1,249 @@
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  --site-accent: #2b4c85;
+  --site-accent-soft: #dbe7fb;
+  --site-accent-deep: #1f3f75;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(circle at 0% 0%, #f5f8ff 0%, #eef2f8 42%, #e8edf6 100%);
+  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  color: #1f2733;
+  padding: 22px 14px 36px;
+}
+
+.product-page {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.product-page.custom-background {
+  border-radius: 22px;
+  padding: 10px;
+  background-size: cover;
+  background-position: center;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.2);
+}
+
+.product-page.custom-background .back-btn {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(212, 224, 244, 0.9);
+  backdrop-filter: blur(4px);
+}
+
+.product-page.custom-background .product-card {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(224, 234, 246, 0.95);
+  backdrop-filter: blur(5px);
+}
+
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: var(--site-accent);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: var(--site-accent-soft);
+}
+
+.product-card {
+  background: #fff;
+  border: 1px solid #e4e9f2;
+  border-radius: 20px;
+  box-shadow: 0 12px 28px rgba(29, 45, 78, 0.1);
+  padding: 16px;
+}
+
+.main-image-wrap {
+  border-radius: 16px;
+  overflow: hidden;
+  background: #eceff4;
+}
+
+.main-image {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  display: block;
+}
+
+.product-head {
+  margin-top: 14px;
+}
+
+.product-name {
+  margin: 0 0 6px;
+  font-size: 26px;
+  line-height: 1.2;
+}
+
+.sku {
+  margin: 0;
+  color: #5b6472;
+  font-size: 14px;
+}
+
+.price-row {
+  margin-top: 12px;
+}
+
+.price {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--site-accent-deep);
+}
+
+.buy-row {
+  margin-top: 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.qty-control {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #d4deee;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f8fbff;
+}
+
+.qty-btn {
+  width: 38px;
+  height: 38px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--site-accent);
+  font-size: 22px;
+}
+
+.qty-input {
+  width: 52px;
+  border: none;
+  border-left: 1px solid #d4deee;
+  border-right: 1px solid #d4deee;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2733;
+  background: #fff;
+  height: 38px;
+}
+
+.qty-input:focus {
+  outline: none;
+}
+
+.add-btn {
+  flex: 1;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--site-accent), var(--site-accent-deep));
+  color: #fff;
+  height: 40px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.add-btn.added {
+  background: linear-gradient(135deg, #47b284, #2f9369);
+}
+
+.description-block,
+.details-block {
+  margin-top: 18px;
+}
+
+.description-block h2,
+.details-block h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.description-block p {
+  margin: 0;
+  line-height: 1.6;
+  color: #465062;
+}
+
+.detail-gallery {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.detail-gallery img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  display: block;
+  border-radius: 12px;
+  border: 1px solid #e3e8f0;
+}
+
+@media (max-width: 640px) {
+  .product-page.custom-background {
+    border-radius: 18px;
+    padding: 8px;
+  }
+
+  .product-name {
+    font-size: 22px;
+  }
+
+  .price {
+    font-size: 24px;
+  }
+
+  .buy-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .qty-control {
+    width: fit-content;
+  }
+
+  .detail-gallery {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 380px) {
+  body {
+    padding: 12px 8px 24px;
+  }
+
+  .product-page.custom-background {
+    border-radius: 14px;
+    padding: 6px;
+  }
+
+  .product-card {
+    border-radius: 16px;
+    padding: 12px;
+  }
+
+  .detail-gallery {
+    grid-template-columns: 1fr;
+  }
+}

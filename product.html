@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Товар — Lavka Keramiky</title>
+<link rel="stylesheet" href="product.css">
+</head>
+<body>
+  <main class="product-page">
+    <a id="backToCategory" class="back-btn" href="index.html">
+      <span aria-hidden="true">←</span>
+      Повернутись в категорію
+    </a>
+
+    <section class="product-card" id="productCard">
+      <div class="main-image-wrap">
+        <img id="mainImage" class="main-image" src="" alt="Фото товару">
+      </div>
+
+      <div class="product-head">
+        <h1 id="productName" class="product-name"></h1>
+        <p class="sku">Артикул: <span id="productSku"></span></p>
+      </div>
+
+      <div class="price-row">
+        <p id="productPrice" class="price"></p>
+      </div>
+
+      <div class="buy-row">
+        <div class="qty-control" aria-label="Вибір кількості">
+          <button id="minusQty" type="button" class="qty-btn" aria-label="Зменшити кількість">−</button>
+          <input id="qtyInput" class="qty-input" type="number" min="1" value="1" aria-label="Кількість">
+          <button id="plusQty" type="button" class="qty-btn" aria-label="Збільшити кількість">+</button>
+        </div>
+        <button id="addToCart" class="add-btn" type="button">Додати в кошик</button>
+      </div>
+
+      <section class="description-block">
+        <h2>Опис</h2>
+        <p id="productDescription"></p>
+      </section>
+
+      <section class="details-block">
+        <h2>Детальні фото</h2>
+        <div id="detailGallery" class="detail-gallery"></div>
+      </section>
+    </section>
+  </main>
+
+<script src="product.js"></script>
+</body>
+</html>

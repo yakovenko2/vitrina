@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lavka Keramiky Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <div class="admin-layout">
+    <aside class="sidebar" id="adminSidebar">
+      <div class="sidebar-head">
+        <a class="brand" href="index.html">
+          <span class="brand-dot"></span>
+          Lavka Admin
+        </a>
+        <button class="menu-toggle" id="mobileMenuToggle" type="button" aria-label="Відкрити меню" aria-expanded="false" aria-controls="sidebarNav">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+      </div>
+
+      <div class="sidebar-nav" id="sidebarNav">
+        <nav class="menu primary-menu" aria-label="Адмін меню">
+          <button class="menu-item active" data-section="orders">Замовлення</button>
+          <button class="menu-item" data-section="products">Товари</button>
+          <button class="menu-item" data-section="stock">Склад</button>
+          <button class="menu-item" data-section="categories">Категорії</button>
+          <button class="menu-item" data-section="views">Статистика переглядів</button>
+          <button class="menu-item" data-section="sales">Статистика продажів</button>
+          <button class="menu-item" data-section="billing">Тарифний план</button>
+          <button class="menu-item" data-section="promocodes">Промо-коди</button>
+          <button class="menu-item" data-section="settings">Налаштування</button>
+          <button class="menu-item danger" data-section="logout">Вихід</button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <p>Власник магазину</p>
+          <strong>Lavka Keramiky</strong>
+        </div>
+      </div>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <h1 id="sectionTitle">Замовлення</h1>
+        <a class="store-link" href="index.html">До вітрини</a>
+      </header>
+
+      <nav class="settings-subnav" id="settingsSubnav" aria-label="Підрозділи налаштувань">
+        <button class="settings-item" data-section="settings">Основні</button>
+        <button class="settings-item" data-section="personalization">Персоналізація</button>
+        <button class="settings-item" data-section="notifications">Сповіщення</button>
+        <button class="settings-item" data-section="payments">Оплата</button>
+        <button class="settings-item" data-section="shipping">Доставка</button>
+      </nav>
+
+      <section class="panel active" id="orders">
+        <div class="cards-row">
+          <article class="kpi">
+            <p>Нові сьогодні</p>
+            <strong>12</strong>
+          </article>
+          <article class="kpi">
+            <p>В обробці</p>
+            <strong>8</strong>
+          </article>
+          <article class="kpi">
+            <p>Відправлено</p>
+            <strong>5</strong>
+          </article>
+        </div>
+
+        <div class="panel-box">
+          <h2>Список замовлень</h2>
+
+          <div class="orders-search-row">
+            <label for="ordersSearchInput">Пошук замовлення</label>
+            <input id="ordersSearchInput" type="search" placeholder="Телефон, № замовлення, ПІБ, товар або сума">
+
+            <div class="orders-filters-grid" aria-label="Фільтри замовлень">
+              <label>
+                Статус замовлення
+                <select id="ordersStatusFilter">
+                  <option value="all">Усі</option>
+                  <option value="Очікує">Очікує</option>
+                  <option value="В обробці">В обробці</option>
+                  <option value="Відправлено">Відправлено</option>
+                  <option value="Доставлено">Доставлено</option>
+                  <option value="Скасовано">Скасовано</option>
+                </select>
+              </label>
+
+              <label>
+                Статус оплати
+                <select id="ordersPaymentFilter">
+                  <option value="all">Усі</option>
+                  <option value="Не оплачено">Не оплачено</option>
+                  <option value="Частково оплачено">Частково оплачено</option>
+                  <option value="Оплачено">Оплачено</option>
+                  <option value="Повернення">Повернення</option>
+                </select>
+              </label>
+
+              <label>
+                Сума від
+                <input id="ordersAmountFromFilter" type="number" min="0" step="1" placeholder="0">
+              </label>
+
+              <label>
+                Сума до
+                <input id="ordersAmountToFilter" type="number" min="0" step="1" placeholder="2000">
+              </label>
+
+              <button id="ordersFiltersReset" type="button" class="mini-btn">Скинути фільтри</button>
+            </div>
+          </div>
+
+          <table id="ordersTable" class="orders-list-table">
+            <thead>
+              <tr>
+                <th>№</th>
+                <th>Клієнт</th>
+                <th>Товар</th>
+                <th>Сума</th>
+                <th>Статус</th>
+                <th>Оплата</th>
+                <th>Дії</th>
+              </tr>
+            </thead>
+            <tbody id="ordersTableBody">
+            </tbody>
+          </table>
+        </div>
+
+        <div class="modal-backdrop" id="orderDetailsModal" aria-hidden="true">
+          <div class="modal-dialog order-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="orderDetailsTitle">
+            <div class="modal-head">
+              <h3 id="orderDetailsTitle">Деталі замовлення</h3>
+              <button class="modal-close" id="closeOrderDetailsModal" type="button" aria-label="Закрити вікно">×</button>
+            </div>
+
+            <div class="order-modal-content">
+              <div class="order-meta-grid">
+                <article class="order-meta-card">
+                  <h4>Клієнт</h4>
+                  <p><strong>ПІБ:</strong> <span id="orderClientName">-</span></p>
+                  <p><strong>Телефон:</strong> <span id="orderClientPhone">-</span></p>
+                </article>
+
+                <article class="order-meta-card">
+                  <h4>Доставка</h4>
+                  <p><strong>Спосіб:</strong> <span id="orderDeliveryMethod">-</span></p>
+                  <p><strong>Адреса:</strong> <span id="orderDeliveryAddress">-</span></p>
+                </article>
+
+                <article class="order-meta-card">
+                  <h4>Фінанси</h4>
+                  <p><strong>Сума:</strong> <span id="orderTotalAmount">-</span></p>
+                  <p><strong>Знижка:</strong> <span id="orderDiscountAmount">-</span></p>
+                  <p><strong>Промо-код:</strong> <span id="orderPromoCode">-</span></p>
+                  <p><strong>Знижка за промо:</strong> <span id="orderPromoDiscount">-</span></p>
+                  <p><strong>Статус оплати:</strong> <span id="orderPaymentStatus">-</span></p>
+                </article>
+              </div>
+
+              <article class="order-meta-card order-comment-card">
+                <h4>Коментар клієнта</h4>
+                <p id="orderClientComment">-</p>
+              </article>
+
+              <article class="order-meta-card order-comment-card">
+                <h4>Коментар менеджера</h4>
+                <p id="orderManagerComment">-</p>
+              </article>
+
+              <div class="order-items-wrap">
+                <h4>Товари у замовленні</h4>
+                <table class="order-items-table">
+                  <thead>
+                    <tr>
+                      <th>Фото</th>
+                      <th>Артикул</th>
+                      <th>Назва</th>
+                      <th>Ціна</th>
+                      <th>Кількість</th>
+                    </tr>
+                  </thead>
+                  <tbody id="orderItemsTableBody"></tbody>
+                </table>
+              </div>
+
+              <form id="orderUpdateForm" class="order-update-form">
+                <input id="orderEditingId" type="hidden">
+
+                <label>
+                  Статус замовлення
+                  <select id="orderStatusSelect" required>
+                    <option value="Очікує">Очікує</option>
+                    <option value="В обробці">В обробці</option>
+                    <option value="Відправлено">Відправлено</option>
+                    <option value="Доставлено">Доставлено</option>
+                    <option value="Скасовано">Скасовано</option>
+                  </select>
+                </label>
+
+                <label>
+                  Статус оплати
+                  <select id="orderPaymentStatusSelect" required>
+                    <option value="Не оплачено">Не оплачено</option>
+                    <option value="Частково оплачено">Частково оплачено</option>
+                    <option value="Оплачено">Оплачено</option>
+                    <option value="Повернення">Повернення</option>
+                  </select>
+                </label>
+
+                <label>
+                  ТТН (номер посилки)
+                  <input id="orderTrackingNumber" type="text" maxlength="40" placeholder="Наприклад: 20451234567890">
+                </label>
+
+                <label class="order-manager-comment-field">
+                  Коментар менеджера
+                  <textarea id="orderManagerCommentInput" rows="2" maxlength="280" placeholder="Додайте службовий коментар для цього замовлення"></textarea>
+                </label>
+
+                <button class="action-btn" type="submit">Зберегти зміни</button>
+                <p id="orderSavedMessage" class="saved-message" aria-live="polite"></p>
+              </form>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="products">
+        <div class="panel-box">
+          <div class="box-head">
+            <h2>Каталог товарів</h2>
+            <button class="action-btn" id="openProductModal" type="button">+ Додати товар</button>
+          </div>
+
+          <div class="products-visibility-filters" aria-label="Фільтр видимості товарів">
+            <button class="mini-btn products-filter-btn active" id="showVisibleProducts" type="button">Видимі</button>
+            <button class="mini-btn products-filter-btn" id="showHiddenProducts" type="button">Приховані</button>
+          </div>
+
+          <p id="bulkToolsHint" class="products-bulk-hint">Для масових дій оберіть щонайменше 2 товари.</p>
+
+          <div id="bulkToolsPanel" class="products-bulk-tools" aria-label="Масові дії з товарами" hidden>
+            <p id="bulkSelectionInfo" class="bulk-selection-info">Вибрано товарів: 0</p>
+
+            <div class="bulk-tool-group">
+              <strong>Ціна</strong>
+              <select id="bulkPriceOperation">
+                <option value="increase">Додати</option>
+                <option value="decrease">Відняти</option>
+              </select>
+              <input id="bulkPriceValue" type="number" min="0.01" step="0.01" placeholder="Значення">
+              <select id="bulkPriceUnit">
+                <option value="uah">грн</option>
+                <option value="percent">%</option>
+              </select>
+              <button id="applyBulkPrice" type="button" class="mini-btn">Застосувати</button>
+            </div>
+
+            <div class="bulk-tool-group">
+              <strong>Видимість</strong>
+              <select id="bulkVisibilityValue">
+                <option value="visible">Видимий</option>
+                <option value="hidden">Прихований</option>
+              </select>
+              <button id="applyBulkVisibility" type="button" class="mini-btn">Застосувати</button>
+            </div>
+
+            <div class="bulk-tool-group">
+              <strong>Знижка</strong>
+              <input id="bulkDiscountValue" type="number" min="0" step="0.01" placeholder="Значення">
+              <select id="bulkDiscountUnit">
+                <option value="uah">грн</option>
+                <option value="percent">%</option>
+              </select>
+              <button id="applyBulkDiscount" type="button" class="mini-btn">Застосувати</button>
+            </div>
+
+            <button id="clearBulkSelection" type="button" class="mini-btn">Очистити вибір</button>
+            <p id="bulkActionMessage" class="saved-message" aria-live="polite"></p>
+          </div>
+
+          <div class="modal-backdrop" id="productModal" aria-hidden="true">
+            <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="productModalTitle">
+              <div class="modal-head">
+                <h3 id="productModalTitle">Створення товару</h3>
+                <button class="modal-close" id="closeProductModal" type="button" aria-label="Закрити вікно">×</button>
+              </div>
+
+              <form id="productCreateForm" class="product-form">
+                <input id="productEditingId" type="hidden">
+                <label>
+                  Назва товару
+                  <input id="productName" type="text" maxlength="60" placeholder="Наприклад: Чашка Терра" required>
+                  <small id="productNameCounter" class="name-counter">0/60</small>
+                </label>
+
+                <label>
+                  Артикул
+                  <input id="productSku" type="text" maxlength="30" placeholder="Наприклад: LK-CUP-010" required>
+                </label>
+
+                <label>
+                  Категорії (можна обрати декілька)
+                  <div id="productCategories" class="product-categories-chooser"></div>
+                </label>
+
+                <label>
+                  Опис товару
+                  <textarea id="productDescription" rows="3" maxlength="240" placeholder="Короткий опис товару" required></textarea>
+                  <small id="productDescriptionCounter" class="desc-counter">0/240</small>
+                </label>
+
+                <label>
+                  Вартість (грн)
+                  <input id="productPrice" type="number" min="1" step="1" placeholder="Наприклад: 890" required>
+                </label>
+
+                <div class="product-compare-prices">
+                  <p class="product-compare-prices-hint">Для знижки: вкажіть стару і нову ціну, щоб показати порівняння вартості.</p>
+                  <div class="product-compare-prices-grid">
+                    <label>
+                      Стара ціна (грн)
+                      <input id="productOldPrice" type="number" min="1" step="1" placeholder="Наприклад: 1200">
+                    </label>
+                    <label>
+                      Нова ціна (грн)
+                      <input id="productNewPrice" type="number" min="1" step="1" placeholder="Наприклад: 990">
+                    </label>
+                  </div>
+                </div>
+
+                <label class="product-visibility-toggle" for="productVisible">
+                  <input id="productVisible" type="checkbox" checked>
+                  Показувати товар у вітрині
+                </label>
+
+                <label>
+                  Фото товару (до 4 файлів, кожен до 3 МБ)
+                  <input id="productPhotos" type="file" accept="image/*" multiple>
+                </label>
+
+                <button id="productSubmitButton" type="submit" class="action-btn">Створити товар</button>
+                <p id="productSavedMessage" class="saved-message" aria-live="polite"></p>
+              </form>
+            </div>
+          </div>
+
+          <div class="products-table-wrap">
+            <table class="products-table">
+              <thead>
+                <tr>
+                  <th class="products-select-col"><input id="selectAllProductsOnPage" type="checkbox" aria-label="Вибрати товари на сторінці"></th>
+                  <th>Артикул</th>
+                  <th>Назва</th>
+                  <th>Категорії</th>
+                  <th>Ціна</th>
+                  <th>Знижка</th>
+                  <th>Фото</th>
+                  <th>Опис</th>
+                  <th>Видимість</th>
+                  <th>Дії</th>
+                </tr>
+              </thead>
+              <tbody id="productsTableBody">
+                <tr>
+                  <td class="products-select-col"><input type="checkbox" aria-label="Вибрати товар LK-CUP-001"></td>
+                  <td>LK-CUP-001</td>
+                  <td>Чашка "Терра"</td>
+                  <td>Чашки</td>
+                  <td>420 грн</td>
+                  <td>Без знижки</td>
+                  <td>0</td>
+                  <td>Керамічна чашка ручної роботи.</td>
+                  <td><span class="visibility-pill is-visible">Видимий</span></td>
+                  <td>
+                    <button type="button" class="mini-btn">Редагувати</button>
+                    <button type="button" class="mini-btn warn">Приховати</button>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="products-select-col"><input type="checkbox" aria-label="Вибрати товар LK-PLT-002"></td>
+                  <td>LK-PLT-002</td>
+                  <td>Тарілка "Хвиля"</td>
+                  <td>Тарілки</td>
+                  <td>560 грн</td>
+                  <td>Без знижки</td>
+                  <td>0</td>
+                  <td>Тарілка з м'якою хвилястою формою краю.</td>
+                  <td><span class="visibility-pill is-visible">Видимий</span></td>
+                  <td>
+                    <button type="button" class="mini-btn">Редагувати</button>
+                    <button type="button" class="mini-btn warn">Приховати</button>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="products-select-col"><input type="checkbox" aria-label="Вибрати товар LK-VAS-003"></td>
+                  <td>LK-VAS-003</td>
+                  <td>Ваза "Гай"</td>
+                  <td>Вази</td>
+                  <td>890 грн</td>
+                  <td>Без знижки</td>
+                  <td>0</td>
+                  <td>Ваза для сухоцвітів та інтер'єрного декору.</td>
+                  <td><span class="visibility-pill is-visible">Видимий</span></td>
+                  <td>
+                    <button type="button" class="mini-btn">Редагувати</button>
+                    <button type="button" class="mini-btn warn">Приховати</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div id="productsPagination" class="products-pagination" aria-label="Пагінація товарів"></div>
+        </div>
+      </section>
+
+      <section class="panel" id="stock">
+        <div class="panel-box">
+          <div class="box-head">
+            <h2>Залишки товарів</h2>
+          </div>
+          <p class="categories-hint">Тут відображаються всі створені товари. Змінюйте залишок через кнопку редагування.</p>
+
+          <div class="stock-table-wrap">
+            <table class="stock-table">
+              <thead>
+                <tr>
+                  <th>Артикул</th>
+                  <th>Назва</th>
+                  <th>Категорії</th>
+                  <th>Ціна</th>
+                  <th>Залишок</th>
+                  <th>Дії</th>
+                </tr>
+              </thead>
+              <tbody id="stockTableBody"></tbody>
+            </table>
+          </div>
+
+          <div id="stockPagination" class="products-pagination" aria-label="Пагінація залишків"></div>
+
+          <div class="modal-backdrop" id="stockModal" aria-hidden="true">
+            <div class="modal-dialog stock-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="stockModalTitle">
+              <div class="modal-head">
+                <h3 id="stockModalTitle">Редагування залишку</h3>
+                <button class="modal-close" id="closeStockModal" type="button" aria-label="Закрити вікно">×</button>
+              </div>
+
+              <form id="stockUpdateForm" class="stock-update-form">
+                <input id="stockEditingProductId" type="hidden">
+
+                <p class="stock-product-label">Товар: <strong id="stockProductLabel">-</strong></p>
+
+                <label>
+                  Кількість в наявності
+                  <input id="stockQuantityInput" type="number" min="0" step="1" required>
+                </label>
+
+                <button class="action-btn" type="submit">Зберегти залишок</button>
+                <p id="stockSavedMessage" class="saved-message" aria-live="polite"></p>
+              </form>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="categories">
+        <div class="panel-box">
+          <h2>Керування категоріями</h2>
+          <p class="categories-hint">Перетягуйте категорії мишкою або пальцем, щоб змінити порядок.</p>
+
+          <form id="categoryCreateForm" class="category-create-form">
+            <label>
+              Нова категорія
+              <input id="categoryNameInput" type="text" maxlength="40" placeholder="Наприклад: Чайники" required>
+              <small id="categoryNameCounter" class="name-counter">0/40</small>
+            </label>
+            <button type="submit" class="action-btn">Додати категорію</button>
+            <p id="categorySavedMessage" class="saved-message" aria-live="polite"></p>
+          </form>
+
+          <div id="categoriesList" class="categories-list"></div>
+        </div>
+      </section>
+
+      <section class="panel" id="views">
+        <div class="cards-row">
+          <article class="kpi">
+            <p>Відвідувачі сьогодні</p>
+            <strong id="viewsTodayCount">0</strong>
+          </article>
+          <article class="kpi">
+            <p>Відвідувачі вчора</p>
+            <strong id="viewsYesterdayCount">0</strong>
+          </article>
+          <article class="kpi">
+            <p>Останні 5 хвилин</p>
+            <strong id="viewsLastFiveMinutesCount">0</strong>
+          </article>
+          <article class="kpi">
+            <p>Останні 7 днів</p>
+            <strong id="viewsSevenDaysCount">0</strong>
+          </article>
+          <article class="kpi">
+            <p>Останні 30 днів</p>
+            <strong id="viewsThirtyDaysCount">0</strong>
+          </article>
+        </div>
+        <div class="panel-box">
+          <h2>Відвідувачі за власний діапазон</h2>
+          <form id="viewsRangeForm" class="views-range-form">
+            <label>
+              Від
+              <input id="viewsRangeFrom" type="date" required>
+            </label>
+            <label>
+              До
+              <input id="viewsRangeTo" type="date" required>
+            </label>
+            <button type="submit" class="action-btn">Порахувати</button>
+          </form>
+          <p id="viewsRangeResult" class="views-range-result">Оберіть дати, щоб побачити кількість унікальних відвідувачів.</p>
+        </div>
+      </section>
+
+      <section class="panel" id="sales">
+        <div class="cards-row">
+          <article class="kpi">
+            <p>Сума продажів</p>
+            <strong id="salesRevenue">0 грн</strong>
+          </article>
+          <article class="kpi">
+            <p>Середній чек</p>
+            <strong id="salesAverageCheck">0 грн</strong>
+          </article>
+          <article class="kpi">
+            <p>Кількість замовлень</p>
+            <strong id="salesOrdersCount">0</strong>
+          </article>
+        </div>
+        <div class="panel-box">
+          <h2>Статистика за період</h2>
+          <form id="salesRangeForm" class="sales-range-form">
+            <label>
+              Від
+              <input id="salesRangeFrom" type="date" required>
+            </label>
+            <label>
+              До
+              <input id="salesRangeTo" type="date" required>
+            </label>
+            <button type="submit" class="action-btn">Порахувати</button>
+          </form>
+          <p id="salesRangeResult" class="sales-range-result">Оберіть діапазон дат, щоб побачити статистику продажів.</p>
+
+          <h2>Топ 5 товарів за кількістю продажів</h2>
+          <table class="sales-top-table">
+            <thead>
+              <tr>
+                <th>Товар</th>
+                <th>К-сть</th>
+              </tr>
+            </thead>
+            <tbody id="salesTopProductsBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" id="billing">
+        <div class="cards-row">
+          <article class="kpi">
+            <p>Поточний тариф</p>
+            <strong id="billingCurrentPlanName">Без тарифу</strong>
+          </article>
+          <article class="kpi">
+            <p>Діє до</p>
+            <strong id="billingValidUntil">-</strong>
+          </article>
+        </div>
+
+        <div class="panel-box">
+          <h2>Доступні тарифи</h2>
+          <div id="billingPlansGrid" class="billing-plans-grid"></div>
+        </div>
+
+        <div class="panel-box">
+          <h2>Історія оплат</h2>
+          <div class="billing-history-wrap">
+            <table class="billing-history-table">
+              <thead>
+                <tr>
+                  <th>Дата</th>
+                  <th>Тариф</th>
+                  <th>Період</th>
+                  <th>Сума</th>
+                  <th>Статус</th>
+                </tr>
+              </thead>
+              <tbody id="billingHistoryBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="promocodes">
+        <div class="panel-box">
+          <div class="box-head">
+            <h2>Керування промо-кодами</h2>
+            <button id="openPromoCodeModal" type="button" class="action-btn">Створити промо-код</button>
+          </div>
+
+          <div class="promo-codes-table-wrap">
+            <table class="promo-codes-table">
+              <thead>
+                <tr>
+                  <th>Код</th>
+                  <th>Тип</th>
+                  <th>Знижка</th>
+                  <th>Мін. сума</th>
+                  <th>Макс. знижка</th>
+                  <th>Ліміти</th>
+                  <th>Коментар</th>
+                  <th>Дії</th>
+                </tr>
+              </thead>
+              <tbody id="promoCodesTableBody"></tbody>
+            </table>
+          </div>
+
+          <div class="modal-backdrop" id="promoCodeModal" aria-hidden="true">
+            <div class="modal-dialog promo-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="promoCodeModalTitle">
+              <div class="modal-head">
+                <h3 id="promoCodeModalTitle">Створення промо-коду</h3>
+                <button class="modal-close" id="closePromoCodeModal" type="button" aria-label="Закрити вікно">×</button>
+              </div>
+
+              <form id="promoCodeForm" class="promo-code-form">
+                <div class="promo-code-row promo-code-main-row">
+                  <label>
+                    Тип промо-коду
+                    <select id="promoCodeCharset">
+                      <option value="letters">Букви</option>
+                      <option value="digits">Цифри</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    Промо-код
+                    <input id="promoCodeValue" type="text" maxlength="20" placeholder="Наприклад: SUMMER10" required>
+                  </label>
+
+                  <button id="generatePromoCodeBtn" type="button" class="mini-btn">Згенерувати код</button>
+                </div>
+
+                <div class="promo-code-row">
+                  <label>
+                    Тип знижки
+                    <select id="promoDiscountType">
+                      <option value="percent">%</option>
+                      <option value="uah">грн</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    Значення знижки
+                    <input id="promoDiscountValue" type="number" min="0.01" step="0.01" placeholder="Наприклад: 10" required>
+                  </label>
+
+                  <label>
+                    Мінімальна сума замовлення
+                    <input id="promoMinOrderAmount" type="number" min="0" step="1" placeholder="Наприклад: 500">
+                    <small>Промо-код спрацює лише якщо сума кошика не менша за це значення.</small>
+                  </label>
+
+                  <label>
+                    Максимальна знижка на 1 замовлення
+                    <input id="promoMaxDiscountPerOrder" type="number" min="0" step="1" placeholder="Наприклад: 300">
+                    <small>Обмежує розмір знижки для одного замовлення, навіть якщо % дає більшу суму.</small>
+                  </label>
+
+                  <label>
+                    Використань для 1 клієнта
+                    <input id="promoMaxUsesPerClient" type="number" min="1" step="1" value="1" required>
+                    <small>Скільки разів один і той самий клієнт може застосувати цей код.</small>
+                  </label>
+
+                  <label>
+                    Загальна кількість використань
+                    <input id="promoMaxUsesTotal" type="number" min="1" step="1" placeholder="Наприклад: 200" required>
+                    <small>Після досягнення ліміту промо-код автоматично стає недійсним.</small>
+                  </label>
+                </div>
+
+                <label>
+                  Коментар менеджера
+                  <textarea id="promoManagerComment" rows="2" maxlength="280" placeholder="Службова нотатка: для якої кампанії або аудиторії цей код"></textarea>
+                </label>
+
+                <button type="submit" class="action-btn">Зберегти промо-код</button>
+                <p id="promoCodeMessage" class="saved-message" aria-live="polite"></p>
+              </form>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="settings">
+        <div class="panel-box">
+          <h2>Налаштування магазину</h2>
+          <form class="settings-form" id="storeSettingsForm">
+            <label>
+              Назва магазину
+              <input id="storeName" type="text" maxlength="60" value="Lavka Keramiky" placeholder="Введіть назву магазину">
+              <small id="nameCounter" class="name-counter">0/60</small>
+            </label>
+
+            <div class="avatar-row">
+              <img id="avatarPreview" src="https://picsum.photos/seed/lavka-keramiky/160/160" alt="Аватар магазину" class="avatar-preview">
+              <div class="avatar-fields">
+                <label>
+                  Аватарка (URL)
+                  <input id="storeAvatar" type="url" value="https://picsum.photos/seed/lavka-keramiky/200/200" placeholder="https://...">
+                </label>
+                <label>
+                  або завантажити файл (до 3 МБ)
+                  <input id="storeAvatarFile" type="file" accept="image/*">
+                </label>
+              </div>
+            </div>
+
+            <label>
+              Опис магазину
+              <textarea id="storeDescription" rows="4" maxlength="140" placeholder="Коротко опишіть ваш магазин">Ручна кераміка та посуд для дому. Виготовляємо кожен виріб з любов'ю в невеликій майстерні.</textarea>
+              <small id="descriptionCounter" class="desc-counter">0/140</small>
+            </label>
+
+            <fieldset class="social-fieldset">
+              <legend>Мінімальна сума замовлення</legend>
+              <label class="social-item">
+                <span class="social-item-top">
+                  <span>Увімкнути мінімальну суму</span>
+                  <span class="switch-wrap">
+                    <input id="minimumOrderEnabled" type="checkbox">
+                    <span class="switch-slider"></span>
+                  </span>
+                </span>
+                <input id="minimumOrderAmount" type="number" min="1" step="1" placeholder="Наприклад: 500">
+                <small class="settings-note">Як працює: якщо увімкнено, оформлення замовлення доступне лише коли сума кошика не менша за вказану. Це не обов'язково - можете залишити вимкненим.</small>
+              </label>
+            </fieldset>
+
+            <fieldset class="social-fieldset">
+              <legend>Посилання на соцмережі</legend>
+              <div class="social-grid">
+                <label class="social-item">
+                  <span class="social-item-top">
+                    <span>Instagram</span>
+                    <span class="switch-wrap">
+                      <input id="socialInstagramEnabled" type="checkbox" checked>
+                      <span class="switch-slider"></span>
+                    </span>
+                  </span>
+                  <input id="socialInstagram" type="url" placeholder="https://instagram.com/...">
+                </label>
+                <label class="social-item">
+                  <span class="social-item-top">
+                    <span>Facebook</span>
+                    <span class="switch-wrap">
+                      <input id="socialFacebookEnabled" type="checkbox" checked>
+                      <span class="switch-slider"></span>
+                    </span>
+                  </span>
+                  <input id="socialFacebook" type="url" placeholder="https://facebook.com/...">
+                </label>
+                <label class="social-item">
+                  <span class="social-item-top">
+                    <span>Telegram</span>
+                    <span class="switch-wrap">
+                      <input id="socialTelegramEnabled" type="checkbox" checked>
+                      <span class="switch-slider"></span>
+                    </span>
+                  </span>
+                  <input id="socialTelegram" type="url" placeholder="https://t.me/...">
+                </label>
+                <label class="social-item">
+                  <span class="social-item-top">
+                    <span>TikTok</span>
+                    <span class="switch-wrap">
+                      <input id="socialTiktokEnabled" type="checkbox" checked>
+                      <span class="switch-slider"></span>
+                    </span>
+                  </span>
+                  <input id="socialTiktok" type="url" placeholder="https://tiktok.com/@...">
+                </label>
+              </div>
+            </fieldset>
+
+            <button type="submit" class="action-btn">Зберегти зміни</button>
+            <p id="settingsSavedMessage" class="saved-message" aria-live="polite"></p>
+          </form>
+        </div>
+      </section>
+
+      <section class="panel" id="personalization">
+        <div class="panel-box">
+          <h2>Персоналізація</h2>
+          <form id="personalizationForm" class="settings-form">
+            <fieldset class="color-fieldset">
+              <legend>Налаштування кольорів</legend>
+              <div class="color-grid">
+                <label>
+                  Колір іконки "Кошик"
+                  <input id="cartIconColor" type="color" value="#2b4c85">
+                </label>
+                <label>
+                  Основний колір сайту
+                  <input id="siteColor" type="color" value="#2b4c85">
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="color-fieldset">
+              <legend>Фон сайту</legend>
+              <div class="background-grid">
+                <label>
+                  Режим фону
+                  <select id="siteBackgroundType">
+                    <option value="color">Колір</option>
+                    <option value="image">Власне фото</option>
+                  </select>
+                </label>
+                <label>
+                  Колір фону
+                  <input id="siteBackgroundColor" type="color" value="#eef1f4">
+                </label>
+                <label>
+                  URL фото фону
+                  <input id="siteBackgroundImage" type="url" placeholder="https://example.com/background.jpg">
+                </label>
+                <label>
+                  Або завантаж фото
+                  <input id="siteBackgroundImageFile" type="file" accept="image/*">
+                </label>
+              </div>
+              <div class="background-tools">
+                <button id="clearBackgroundImage" type="button" class="action-btn ghost">Прибрати фото</button>
+              </div>
+              <div id="backgroundPreview" class="background-preview" aria-label="Попередній перегляд фону"></div>
+            </fieldset>
+
+            <button type="submit" class="action-btn">Зберегти кольори</button>
+            <p id="personalizationSavedMessage" class="saved-message" aria-live="polite"></p>
+          </form>
+        </div>
+      </section>
+
+      <section class="panel" id="payments">
+        <div class="panel-box">
+          <h2>Інтеграція еквайрингу та способи оплати</h2>
+          <form id="paymentMethodsForm" class="settings-form">
+            <div class="payment-provider-grid">
+              <article class="payment-provider-card">
+                <div class="payment-provider-head">
+                  <div class="payment-provider-brand">
+                    <img class="payment-provider-logo" src="https://logo.clearbit.com/monobank.ua" alt="Plata by mono">
+                    <div>
+                      <p class="payment-provider-title">Plata by mono</p>
+                      <p class="payment-provider-subtitle">Еквайринг Monobank</p>
+                    </div>
+                  </div>
+                  <span class="switch-wrap">
+                    <input id="paymentMonoEnabled" type="checkbox">
+                    <span class="switch-slider"></span>
+                  </span>
+                </div>
+                <div class="payment-provider-fields">
+                  <label>
+                    Merchant ID
+                    <input id="paymentMonoMerchantId" type="text" placeholder="Наприклад: mono_merchant_001">
+                  </label>
+                  <label>
+                    Secret key
+                    <input id="paymentMonoSecret" type="password" autocomplete="off" placeholder="Ключ інтеграції mono">
+                  </label>
+                </div>
+              </article>
+
+              <article class="payment-provider-card">
+                <div class="payment-provider-head">
+                  <div class="payment-provider-brand">
+                    <img class="payment-provider-logo" src="https://logo.clearbit.com/liqpay.ua" alt="LiqPay ПриватБанк">
+                    <div>
+                      <p class="payment-provider-title">LiqPay</p>
+                      <p class="payment-provider-subtitle">Еквайринг ПриватБанк</p>
+                    </div>
+                  </div>
+                  <span class="switch-wrap">
+                    <input id="paymentLiqpayEnabled" type="checkbox">
+                    <span class="switch-slider"></span>
+                  </span>
+                </div>
+                <div class="payment-provider-fields">
+                  <label>
+                    Public key
+                    <input id="paymentLiqpayPublicKey" type="text" placeholder="Публічний ключ LiqPay">
+                  </label>
+                  <label>
+                    Private key
+                    <input id="paymentLiqpayPrivateKey" type="password" autocomplete="off" placeholder="Приватний ключ LiqPay">
+                  </label>
+                </div>
+              </article>
+            </div>
+
+            <fieldset class="social-fieldset">
+              <legend>Інші способи оплати</legend>
+              <div class="payment-methods-grid">
+                <label class="social-item">
+                  <span class="social-item-top">
+                    <span>Оплата при отриманні</span>
+                    <span class="switch-wrap">
+                      <input id="paymentCodEnabled" type="checkbox">
+                      <span class="switch-slider"></span>
+                    </span>
+                  </span>
+                  <input id="paymentCodFee" type="text" placeholder="Комісія/умови, напр. 2% + 20 грн">
+                </label>
+
+                <label class="social-item">
+                  <span class="social-item-top">
+                    <span>Оплата на реквізити</span>
+                    <span class="switch-wrap">
+                      <input id="paymentBankTransferEnabled" type="checkbox">
+                      <span class="switch-slider"></span>
+                    </span>
+                  </span>
+                  <textarea id="paymentBankRequisites" rows="3" placeholder="IBAN, назва ФОП/ТОВ, ЄДРПОУ, банк"></textarea>
+                </label>
+              </div>
+            </fieldset>
+
+            <button type="submit" class="action-btn">Зберегти способи оплати</button>
+            <p id="paymentsSavedMessage" class="saved-message" aria-live="polite"></p>
+          </form>
+        </div>
+      </section>
+
+      <section class="panel" id="notifications">
+        <div class="panel-box">
+          <h2>Сповіщення</h2>
+          <form id="telegramNotificationsForm" class="settings-form">
+            <label class="social-item">
+              <span class="social-item-top">
+                <span>Telegram-сповіщення про нові замовлення</span>
+                <span class="switch-wrap">
+                  <input id="telegramOrderNotifyEnabled" type="checkbox">
+                  <span class="switch-slider"></span>
+                </span>
+              </span>
+              <small class="notifications-hint">Бот: @lavkaorders_bot. Потрібна лише проста підписка, після чого сповіщення активується автоматично.</small>
+            </label>
+
+            <div class="telegram-subscribe-admin-box">
+              <p class="telegram-subscribe-admin-title">Підписка адміна на бота</p>
+              <p class="telegram-subscribe-admin-text">Натисніть Підписатися на бота і виконайте /start у Telegram. Система сама перевірить підписку.</p>
+              <p class="telegram-subscribe-admin-meta">ID підписки: <strong id="telegramAdminSubscriberId">-</strong></p>
+              <div class="telegram-subscribe-admin-actions">
+                <a id="telegramAdminSubscribeLink" class="action-btn" href="#" target="_blank" rel="noopener noreferrer">Підписатися на бота</a>
+              </div>
+              <p id="telegramSubscriptionStatus" class="saved-message" aria-live="polite"></p>
+            </div>
+            <p id="telegramNotificationsSavedMessage" class="saved-message" aria-live="polite"></p>
+          </form>
+        </div>
+      </section>
+
+      <section class="panel" id="shipping">
+        <div class="panel-box">
+          <h2>Доставка</h2>
+          <form id="shippingMethodsForm" class="settings-form">
+            <fieldset class="social-fieldset">
+              <legend>Варіанти доставки</legend>
+              <div class="payment-methods-grid">
+                <label class="social-item">
+                  <span class="social-item-top">
+                    <span>Нова пошта</span>
+                    <span class="switch-wrap">
+                      <input id="shippingNovaPostEnabled" type="checkbox">
+                      <span class="switch-slider"></span>
+                    </span>
+                  </span>
+                </label>
+
+                <label class="social-item">
+                  <span class="social-item-top">
+                    <span>Укр пошта</span>
+                    <span class="switch-wrap">
+                      <input id="shippingUkrPostEnabled" type="checkbox">
+                      <span class="switch-slider"></span>
+                    </span>
+                  </span>
+                </label>
+
+                <label class="social-item">
+                  <span class="social-item-top">
+                    <span>Нова пошта кур'єр</span>
+                    <span class="switch-wrap">
+                      <input id="shippingNovaCourierEnabled" type="checkbox">
+                      <span class="switch-slider"></span>
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </fieldset>
+
+            <button type="submit" class="action-btn">Зберегти доставку</button>
+            <p id="shippingSavedMessage" class="saved-message" aria-live="polite"></p>
+          </form>
+        </div>
+      </section>
+
+      <section class="panel" id="logout">
+        <div class="panel-box logout-box">
+          <h2>Вихід з адмін-панелі</h2>
+          <p>Завершіть сесію власника магазину для безпечного виходу.</p>
+          <button class="action-btn danger" type="button">Вийти з акаунту</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+<script src="admin.js"></script>
+</body>
+</html>

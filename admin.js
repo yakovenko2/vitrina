@@ -1,12 +1,16 @@
 document.addEventListener("DOMContentLoaded", () => {
-  const primaryMenuItems = document.querySelectorAll(".primary-menu .menu-item");
+  const primaryMenuItems = document.querySelectorAll(".menu-item[data-section]");
   const settingsItems = document.querySelectorAll(".settings-subnav .settings-item");
   const settingsSubnav = document.getElementById("settingsSubnav");
   const adminSidebar = document.getElementById("adminSidebar");
   const mobileMenuToggle = document.getElementById("mobileMenuToggle");
   const panels = document.querySelectorAll(".panel");
   const sectionTitle = document.getElementById("sectionTitle");
+  const homeStoreDomainInput = document.getElementById("homeStoreDomainInput");
+  const copyHomeStoreDomain = document.getElementById("copyHomeStoreDomain");
+  const homeDomainCopyMessage = document.getElementById("homeDomainCopyMessage");
   const SETTINGS_KEY = "lavkaStoreSettings";
+  const CHECKOUT_SETTINGS_KEY = "lavkaCheckoutSettings";
   const PRODUCTS_KEY = "lavkaProducts";
   const CATEGORIES_KEY = "lavkaCategories";
   const ORDERS_KEY = "lavkaOrders";
@@ -15,6 +19,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const BILLING_KEY = "lavkaBilling";
   const TELEGRAM_NOTIFIED_ORDERS_KEY = "lavkaTelegramNotifiedOrders";
   const TELEGRAM_ADMIN_SUBSCRIBER_KEY = "lavkaTelegramAdminSubscriberId";
+  const ADMIN_ACTIVE_SECTION_KEY = "lavkaAdminActiveSection";
   const TELEGRAM_BOT_USERNAME = "lavkaorders_bot";
   const MAX_NAME_LENGTH = 60;
   const MAX_DESCRIPTION_LENGTH = 140;
@@ -41,6 +46,7 @@ document.addEventListener("DOMContentLoaded", () => {
   ];
 
   const titles = {
+    home: "Головна",
     orders: "Замовлення",
     products: "Товари",
     stock: "Склад",
@@ -58,9 +64,44 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const settingsSections = ["settings", "personalization", "notifications", "payments", "shipping"];
-  let currentSection = "orders";
+  let currentSection = "home";
 
   const isMobileViewport = () => window.matchMedia("(max-width: 640px)").matches;
+
+  const getStorefrontUrl = () => {
+    const baseOrigin = window.location.origin;
+    const pathname = window.location.pathname || "/";
+
+    if (pathname.endsWith("/admin.html")) {
+      return `${baseOrigin}${pathname.replace(/admin\.html$/, "index.html")}`;
+    }
+
+    if (pathname.endsWith("/admin")) {
+      return `${baseOrigin}${pathname.slice(0, -"/admin".length) || "/"}`;
+    }
+
+    return `${baseOrigin}/`;
+  };
+
+  const copyTextToClipboard = async (value) => {
+    if (!value) return false;
+
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+
+    const helper = document.createElement("textarea");
+    helper.value = value;
+    helper.setAttribute("readonly", "");
+    helper.style.position = "absolute";
+    helper.style.left = "-9999px";
+    document.body.append(helper);
+    helper.select();
+    const copied = document.execCommand("copy");
+    helper.remove();
+    return copied;
+  };
 
   const setMenuOpen = (open) => {
     if (!adminSidebar || !mobileMenuToggle) return;
@@ -70,6 +111,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const activateSection = (sectionId) => {
     currentSection = sectionId;
+
+    localStorage.setItem(ADMIN_ACTIVE_SECTION_KEY, sectionId);
 
     primaryMenuItems.forEach((item) => {
       const isSettingsRoot = item.dataset.section === "settings";
@@ -114,6 +157,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (item.dataset.section === "settings") {
         const nextSection = settingsSections.includes(currentSection) ? currentSection : "settings";
         activateSection(nextSection);
+        if (isMobileViewport()) {
+          setMenuOpen(false);
+        }
         return;
       }
 
@@ -178,6 +224,36 @@ document.addEventListener("DOMContentLoaded", () => {
   const backgroundPreview = document.getElementById("backgroundPreview");
   const savedMessage = document.getElementById("settingsSavedMessage");
   const personalizationSavedMessage = document.getElementById("personalizationSavedMessage");
+
+  if (homeStoreDomainInput) {
+    homeStoreDomainInput.value = getStorefrontUrl();
+  }
+
+  if (copyHomeStoreDomain) {
+    copyHomeStoreDomain.addEventListener("click", async () => {
+      const valueToCopy = homeStoreDomainInput?.value?.trim();
+
+      try {
+        const copied = await copyTextToClipboard(valueToCopy);
+        if (homeDomainCopyMessage) {
+          homeDomainCopyMessage.classList.toggle("error", !copied);
+          homeDomainCopyMessage.textContent = copied ? "Адресу скопійовано." : "Не вдалося скопіювати адресу.";
+        }
+      } catch (error) {
+        if (homeDomainCopyMessage) {
+          homeDomainCopyMessage.classList.add("error");
+          homeDomainCopyMessage.textContent = "Не вдалося скопіювати адресу.";
+        }
+      }
+
+      setTimeout(() => {
+        if (homeDomainCopyMessage) {
+          homeDomainCopyMessage.textContent = "";
+          homeDomainCopyMessage.classList.remove("error");
+        }
+      }, 2200);
+    });
+  }
   const telegramNotificationsForm = document.getElementById("telegramNotificationsForm");
   const telegramOrderNotifyEnabled = document.getElementById("telegramOrderNotifyEnabled");
   const telegramAdminSubscriberId = document.getElementById("telegramAdminSubscriberId");
@@ -193,6 +269,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const paymentLiqpayPrivateKey = document.getElementById("paymentLiqpayPrivateKey");
   const paymentCodEnabled = document.getElementById("paymentCodEnabled");
   const paymentCodFee = document.getElementById("paymentCodFee");
+  const paymentPrepaymentEnabled = document.getElementById("paymentPrepaymentEnabled");
+  const paymentPrepaymentAmount = document.getElementById("paymentPrepaymentAmount");
   const paymentBankTransferEnabled = document.getElementById("paymentBankTransferEnabled");
   const paymentBankRequisites = document.getElementById("paymentBankRequisites");
   const paymentsSavedMessage = document.getElementById("paymentsSavedMessage");
@@ -200,6 +278,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const shippingNovaPostEnabled = document.getElementById("shippingNovaPostEnabled");
   const shippingUkrPostEnabled = document.getElementById("shippingUkrPostEnabled");
   const shippingNovaCourierEnabled = document.getElementById("shippingNovaCourierEnabled");
+  const deliveryPaymentMatrix = document.getElementById("deliveryPaymentMatrix");
+  const deliveryPaymentMatrixInputs = Array.from(document.querySelectorAll("#deliveryPaymentMatrix input[type='checkbox'][data-delivery-id][data-payment-id]"));
   const shippingSavedMessage = document.getElementById("shippingSavedMessage");
   const nameCounter = document.getElementById("nameCounter");
   const descriptionCounter = document.getElementById("descriptionCounter");
@@ -267,6 +347,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const orderPromoCode = document.getElementById("orderPromoCode");
   const orderPromoDiscount = document.getElementById("orderPromoDiscount");
   const orderPaymentStatus = document.getElementById("orderPaymentStatus");
+  const orderCreatedAt = document.getElementById("orderCreatedAt");
   const orderClientComment = document.getElementById("orderClientComment");
   const orderManagerComment = document.getElementById("orderManagerComment");
   const orderItemsTableBody = document.getElementById("orderItemsTableBody");
@@ -375,6 +456,123 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {
       return null;
     }
+  };
+
+  const MATRIX_DELIVERY_IDS = [
+    "shipping-nova-post",
+    "shipping-ukr-post",
+    "shipping-nova-courier"
+  ];
+
+  const MATRIX_PAYMENT_IDS = [
+    "payment-mono",
+    "payment-liqpay",
+    "payment-cod",
+    "payment-prepayment",
+    "payment-bank-transfer"
+  ];
+
+  const buildDefaultPaymentDeliveryMatrix = () => MATRIX_DELIVERY_IDS.reduce((acc, deliveryId) => {
+    acc[deliveryId] = [...MATRIX_PAYMENT_IDS];
+    return acc;
+  }, {});
+
+  const normalizePaymentDeliveryMatrix = (rawMatrix) => {
+    const defaults = buildDefaultPaymentDeliveryMatrix();
+    if (!rawMatrix || typeof rawMatrix !== "object") {
+      return defaults;
+    }
+
+    return MATRIX_DELIVERY_IDS.reduce((acc, deliveryId) => {
+      const hasDeliveryKey = Object.prototype.hasOwnProperty.call(rawMatrix, deliveryId);
+      const rawPayments = hasDeliveryKey && Array.isArray(rawMatrix[deliveryId])
+        ? rawMatrix[deliveryId]
+        : defaults[deliveryId];
+      const normalized = rawPayments
+        .map((paymentId) => String(paymentId || "").trim())
+        .filter((paymentId, index, array) => MATRIX_PAYMENT_IDS.includes(paymentId) && array.indexOf(paymentId) === index);
+
+      acc[deliveryId] = hasDeliveryKey ? normalized : [...defaults[deliveryId]];
+      return acc;
+    }, {});
+  };
+
+  const collectPaymentDeliveryMatrixFromUi = () => {
+    const matrix = MATRIX_DELIVERY_IDS.reduce((acc, deliveryId) => {
+      acc[deliveryId] = [];
+      return acc;
+    }, {});
+
+    deliveryPaymentMatrixInputs.forEach((input) => {
+      if (!input.checked) return;
+      const deliveryId = String(input.dataset.deliveryId || "").trim();
+      const paymentId = String(input.dataset.paymentId || "").trim();
+      if (!MATRIX_DELIVERY_IDS.includes(deliveryId) || !MATRIX_PAYMENT_IDS.includes(paymentId)) return;
+      if (!matrix[deliveryId].includes(paymentId)) {
+        matrix[deliveryId].push(paymentId);
+      }
+    });
+
+    return normalizePaymentDeliveryMatrix(matrix);
+  };
+
+  const applyPaymentDeliveryMatrixToUi = (rawMatrix) => {
+    const matrix = normalizePaymentDeliveryMatrix(rawMatrix);
+
+    deliveryPaymentMatrixInputs.forEach((input) => {
+      const deliveryId = String(input.dataset.deliveryId || "").trim();
+      const paymentId = String(input.dataset.paymentId || "").trim();
+      input.checked = Boolean(matrix[deliveryId]?.includes(paymentId));
+    });
+  };
+
+  const CHECKOUT_SETTINGS_FIELDS = [
+    "paymentMonoEnabled",
+    "paymentMonoMerchantId",
+    "paymentMonoSecret",
+    "paymentLiqpayEnabled",
+    "paymentLiqpayPublicKey",
+    "paymentLiqpayPrivateKey",
+    "paymentCodEnabled",
+    "paymentCodFee",
+    "paymentPrepaymentEnabled",
+    "paymentPrepaymentAmount",
+    "paymentBankTransferEnabled",
+    "paymentBankRequisites",
+    "shippingNovaPostEnabled",
+    "shippingUkrPostEnabled",
+    "shippingNovaCourierEnabled",
+    "paymentDeliveryMatrix"
+  ];
+
+  const readCheckoutSettings = () => {
+    try {
+      const raw = localStorage.getItem(CHECKOUT_SETTINGS_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const pickCheckoutSettings = (source) => {
+    const safeSource = source && typeof source === "object" ? source : {};
+    return CHECKOUT_SETTINGS_FIELDS.reduce((acc, field) => {
+      if (safeSource[field] !== undefined) {
+        acc[field] = safeSource[field];
+      }
+      return acc;
+    }, {});
+  };
+
+  const persistCheckoutSettings = (source) => {
+    const current = readCheckoutSettings() || {};
+    const payload = {
+      ...current,
+      ...pickCheckoutSettings(source),
+      updatedAt: new Date().toISOString()
+    };
+    localStorage.setItem(CHECKOUT_SETTINGS_KEY, JSON.stringify(payload));
+    return payload;
   };
 
   const readProducts = () => {
@@ -932,6 +1130,19 @@ document.addEventListener("DOMContentLoaded", () => {
     }).format(date);
   };
 
+  const formatDateTime = (value) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return "-";
+    return new Intl.DateTimeFormat("uk-UA", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    }).format(date);
+  };
+
   const renderBillingSection = () => {
     const billing = readBilling();
     const currentPlan = BILLING_PLANS.find((plan) => plan.id === billing.currentPlanId) || null;
@@ -1242,7 +1453,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!filteredOrders.length) {
       const row = document.createElement("tr");
-      row.innerHTML = '<td colspan="7">За вашим запитом замовлень не знайдено.</td>';
+      row.innerHTML = '<td colspan="8">За вашим запитом замовлень не знайдено.</td>';
       ordersTableBody.append(row);
       return;
     }
@@ -1255,9 +1466,11 @@ document.addEventListener("DOMContentLoaded", () => {
         : "-";
       const statusClass = getOrderStatusClass(order.status);
       const paymentStatusClass = getPaymentStatusClass(order.paymentStatus);
+      const createdAtLabel = formatDateTime(order.createdAt || order.updatedAt);
 
       row.innerHTML = `
         <td>${order.id}</td>
+        <td>${createdAtLabel}</td>
         <td>${order.customerName}</td>
         <td>${shortProductText}</td>
         <td>${formatPrice(order.total)}</td>
@@ -1584,6 +1797,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (orderPaymentStatus) {
       orderPaymentStatus.textContent = order.paymentStatus || "Не оплачено";
       orderPaymentStatus.className = `status ${getPaymentStatusClass(order.paymentStatus)}`;
+    }
+    if (orderCreatedAt) {
+      orderCreatedAt.textContent = formatDateTime(order.createdAt || order.updatedAt);
     }
     if (orderClientComment) {
       orderClientComment.textContent = order.comment || "Коментар відсутній";
@@ -2154,13 +2370,25 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const mergeAndSaveSettings = (partialPayload) => {
-    const current = readSettings() || {};
-    const payload = {
-      ...current,
-      ...partialPayload,
-      updatedAt: new Date().toISOString()
-    };
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(payload));
+    let payload = null;
+
+    try {
+      const current = readSettings() || {};
+      payload = {
+        ...current,
+        ...partialPayload,
+        updatedAt: new Date().toISOString()
+      };
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(payload));
+    } catch {
+      payload = {
+        ...(readSettings() || {}),
+        ...partialPayload,
+        updatedAt: new Date().toISOString()
+      };
+    }
+
+    persistCheckoutSettings(payload);
     return payload;
   };
 
@@ -2220,6 +2448,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (paymentCodFee) {
       paymentCodFee.value = String(settings.paymentCodFee || "").trim();
     }
+    if (paymentPrepaymentEnabled) {
+      paymentPrepaymentEnabled.checked = Boolean(settings.paymentPrepaymentEnabled);
+    }
+    if (paymentPrepaymentAmount) {
+      const normalizedPrepayment = Number(settings.paymentPrepaymentAmount);
+      paymentPrepaymentAmount.value = Number.isFinite(normalizedPrepayment) && normalizedPrepayment > 0
+        ? String(Math.round(normalizedPrepayment))
+        : "";
+    }
     if (paymentBankTransferEnabled) {
       paymentBankTransferEnabled.checked = Boolean(settings.paymentBankTransferEnabled);
     }
@@ -2235,6 +2472,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (shippingNovaCourierEnabled) {
       shippingNovaCourierEnabled.checked = Boolean(settings.shippingNovaCourierEnabled);
     }
+    applyPaymentDeliveryMatrixToUi(settings.paymentDeliveryMatrix);
     renderAdminTelegramSubscriptionControls();
     applyBackgroundPreview();
     if (storeName.value.length > MAX_NAME_LENGTH) {
@@ -2253,7 +2491,8 @@ document.addEventListener("DOMContentLoaded", () => {
     telegramApiBaseUrl: String((readSettings() || {}).telegramApiBaseUrl || "http://localhost:8787").trim(),
     shippingNovaPostEnabled: readSettings()?.shippingNovaPostEnabled ?? true,
     shippingUkrPostEnabled: readSettings()?.shippingUkrPostEnabled ?? true,
-    shippingNovaCourierEnabled: readSettings()?.shippingNovaCourierEnabled ?? false
+    shippingNovaCourierEnabled: readSettings()?.shippingNovaCourierEnabled ?? false,
+    paymentDeliveryMatrix: normalizePaymentDeliveryMatrix(readSettings()?.paymentDeliveryMatrix)
   });
   renderAdminTelegramSubscriptionControls();
   applyBackgroundPreview();
@@ -3690,12 +3929,14 @@ document.addEventListener("DOMContentLoaded", () => {
       const monoEnabled = Boolean(paymentMonoEnabled?.checked);
       const liqpayEnabled = Boolean(paymentLiqpayEnabled?.checked);
       const codEnabled = Boolean(paymentCodEnabled?.checked);
+      const prepaymentEnabled = Boolean(paymentPrepaymentEnabled?.checked);
       const bankTransferEnabled = Boolean(paymentBankTransferEnabled?.checked);
       const monoMerchantId = String(paymentMonoMerchantId?.value || "").trim();
       const monoSecret = String(paymentMonoSecret?.value || "").trim();
       const liqpayPublicKey = String(paymentLiqpayPublicKey?.value || "").trim();
       const liqpayPrivateKey = String(paymentLiqpayPrivateKey?.value || "").trim();
       const codFee = String(paymentCodFee?.value || "").trim();
+      const prepaymentAmount = Math.max(0, Math.round(Number(paymentPrepaymentAmount?.value) || 0));
       const bankRequisites = String(paymentBankRequisites?.value || "").trim();
 
       if (paymentsSavedMessage) {
@@ -3726,6 +3967,14 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      if (prepaymentEnabled && prepaymentAmount <= 0) {
+        if (paymentsSavedMessage) {
+          paymentsSavedMessage.textContent = "Для Передоплати вкажіть суму більше 0 грн.";
+          paymentsSavedMessage.classList.add("error");
+        }
+        return;
+      }
+
       mergeAndSaveSettings({
         paymentMonoEnabled: monoEnabled,
         paymentMonoMerchantId: monoMerchantId,
@@ -3735,8 +3984,11 @@ document.addEventListener("DOMContentLoaded", () => {
         paymentLiqpayPrivateKey: liqpayPrivateKey,
         paymentCodEnabled: codEnabled,
         paymentCodFee: codFee,
+        paymentPrepaymentEnabled: prepaymentEnabled,
+        paymentPrepaymentAmount: prepaymentAmount,
         paymentBankTransferEnabled: bankTransferEnabled,
-        paymentBankRequisites: bankRequisites
+        paymentBankRequisites: bankRequisites,
+        paymentDeliveryMatrix: collectPaymentDeliveryMatrixFromUi()
       });
 
       if (paymentsSavedMessage) {
@@ -3758,7 +4010,8 @@ document.addEventListener("DOMContentLoaded", () => {
       mergeAndSaveSettings({
         shippingNovaPostEnabled: Boolean(shippingNovaPostEnabled?.checked),
         shippingUkrPostEnabled: Boolean(shippingUkrPostEnabled?.checked),
-        shippingNovaCourierEnabled: Boolean(shippingNovaCourierEnabled?.checked)
+        shippingNovaCourierEnabled: Boolean(shippingNovaCourierEnabled?.checked),
+        paymentDeliveryMatrix: collectPaymentDeliveryMatrixFromUi()
       });
 
       if (shippingSavedMessage) {
@@ -3793,5 +4046,9 @@ document.addEventListener("DOMContentLoaded", () => {
   renderSalesFromForm();
   renderBillingSection();
 
-  activateSection("orders");
+  const availableSections = new Set(Array.from(panels).map((panel) => panel.id));
+  const savedSection = localStorage.getItem(ADMIN_ACTIVE_SECTION_KEY);
+  const initialSection = savedSection && availableSections.has(savedSection) ? savedSection : "home";
+
+  activateSection(initialSection);
 });

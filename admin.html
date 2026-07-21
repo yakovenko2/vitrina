@@ -17,6 +17,10 @@
           <span class="brand-dot"></span>
           Lavka Admin
         </a>
+        <a class="store-link store-link-head" href="index.html" aria-label="Перейти до вітрини">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 7h18v12H3V7Z" stroke="currentColor" stroke-width="2"/><path d="M8 11h8M8 15h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <span>До вітрини</span>
+        </a>
         <button class="menu-toggle" id="mobileMenuToggle" type="button" aria-label="Відкрити меню" aria-expanded="false" aria-controls="sidebarNav">
           <span></span>
           <span></span>
@@ -26,21 +30,75 @@
 
       <div class="sidebar-nav" id="sidebarNav">
         <nav class="menu primary-menu" aria-label="Адмін меню">
-          <button class="menu-item active" data-section="orders">Замовлення</button>
-          <button class="menu-item" data-section="products">Товари</button>
-          <button class="menu-item" data-section="stock">Склад</button>
-          <button class="menu-item" data-section="categories">Категорії</button>
-          <button class="menu-item" data-section="views">Статистика переглядів</button>
-          <button class="menu-item" data-section="sales">Статистика продажів</button>
-          <button class="menu-item" data-section="billing">Тарифний план</button>
-          <button class="menu-item" data-section="promocodes">Промо-коди</button>
-          <button class="menu-item" data-section="settings">Налаштування</button>
-          <button class="menu-item danger" data-section="logout">Вихід</button>
+          <button class="menu-item active" data-section="home">
+            <span class="menu-item-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 10.5 12 3l9 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 9.5V21h14V9.5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 21v-6h6v6" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+            </span>
+            <span class="menu-item-label">Головна</span>
+          </button>
+          <button class="menu-item" data-section="orders">
+            <span class="menu-item-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <span class="menu-item-label">Замовлення</span>
+          </button>
+          <button class="menu-item" data-section="products">
+            <span class="menu-item-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2 3 7l9 5 9-5-9-5Zm0 20V12M3 7v10l9 5 9-5V7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <span class="menu-item-label">Товари</span>
+          </button>
+          <button class="menu-item" data-section="categories">
+            <span class="menu-item-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 13 11 22l-9-9V4h9l9 9Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="7.5" cy="8.5" r="1.5" fill="currentColor"/></svg>
+            </span>
+            <span class="menu-item-label">Категорії</span>
+          </button>
+          <button class="menu-item" data-section="stock">
+            <span class="menu-item-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2"/><path d="M3 10h18M8 4v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </span>
+            <span class="menu-item-label">Склад</span>
+          </button>
+          <button class="menu-item" data-section="promocodes">
+            <span class="menu-item-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 9a2 2 0 0 1 2-2h14v4a2 2 0 1 0 0 4v4H5a2 2 0 0 1-2-2V9Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 7v12" stroke="currentColor" stroke-width="2" stroke-dasharray="2 2"/></svg>
+            </span>
+            <span class="menu-item-label">Промо-коди</span>
+          </button>
+          <button class="menu-item" data-section="sales">
+            <span class="menu-item-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 19h16M6 16l4-5 3 3 5-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <span class="menu-item-label">Статистика продажів</span>
+          </button>
+          <button class="menu-item" data-section="views">
+            <span class="menu-item-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg>
+            </span>
+            <span class="menu-item-label">Статистика переглядів</span>
+          </button>
+          <button class="menu-item" data-section="billing">
+            <span class="menu-item-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="5" width="20" height="14" rx="3" stroke="currentColor" stroke-width="2"/><path d="M2 10h20" stroke="currentColor" stroke-width="2"/></svg>
+            </span>
+            <span class="menu-item-label">Тарифний план</span>
+          </button>
+          <button class="menu-item" data-section="settings">
+            <span class="menu-item-icon" aria-hidden="true">
+              <svg viewBox="-1 -1 26 26" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/><path d="M19.4 15a1.7 1.7 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 20.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V22a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 8 20.4a1.7 1.7 0 0 0-1-.6 1.7 1.7 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 3.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H1.8a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 3.6 9a1.7 1.7 0 0 0 .6-1 1.7 1.7 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 8 3.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V1.8a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 .4 1.1 1.7 1.7 0 0 0 1 .6 1.7 1.7 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 20.4 8a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.1.4 1.7 1.7 0 0 0-.6 1Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <span class="menu-item-label">Налаштування</span>
+          </button>
         </nav>
 
         <div class="sidebar-footer">
-          <p>Власник магазину</p>
-          <strong>Lavka Keramiky</strong>
+          <button class="menu-item danger" data-section="logout" type="button">
+            <span class="menu-item-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M10 17 15 12 10 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 12H3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </span>
+            <span class="menu-item-label">Вихід</span>
+          </button>
         </div>
       </div>
     </aside>
@@ -48,18 +106,97 @@
     <main class="content">
       <header class="topbar">
         <h1 id="sectionTitle">Замовлення</h1>
-        <a class="store-link" href="index.html">До вітрини</a>
       </header>
 
       <nav class="settings-subnav" id="settingsSubnav" aria-label="Підрозділи налаштувань">
-        <button class="settings-item" data-section="settings">Основні</button>
-        <button class="settings-item" data-section="personalization">Персоналізація</button>
-        <button class="settings-item" data-section="notifications">Сповіщення</button>
-        <button class="settings-item" data-section="payments">Оплата</button>
-        <button class="settings-item" data-section="shipping">Доставка</button>
+        <button class="settings-item" data-section="settings">
+          <span class="settings-item-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 5h16M4 12h16M4 19h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </span>
+          <span class="settings-item-label">Основні</span>
+        </button>
+        <button class="settings-item" data-section="personalization">
+          <span class="settings-item-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a9 9 0 1 0 9 9c0-.7-.1-1.4-.3-2H15a3 3 0 1 1-3-3V3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="7.5" cy="9" r="1" fill="currentColor"/><circle cx="9" cy="14.5" r="1" fill="currentColor"/></svg>
+          </span>
+          <span class="settings-item-label">Персоналізація</span>
+        </button>
+        <button class="settings-item" data-section="notifications">
+          <span class="settings-item-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15 17H5l2-2v-4a5 5 0 1 1 10 0v4l2 2h-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M10 19a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </span>
+          <span class="settings-item-label">Сповіщення</span>
+        </button>
+        <button class="settings-item" data-section="payments">
+          <span class="settings-item-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="5" width="20" height="14" rx="3" stroke="currentColor" stroke-width="2"/><path d="M2 10h20" stroke="currentColor" stroke-width="2"/></svg>
+          </span>
+          <span class="settings-item-label">Оплата</span>
+        </button>
+        <button class="settings-item" data-section="shipping">
+          <span class="settings-item-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 7h11v8H3V7Zm11 2h4l3 3v3h-7V9Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="7" cy="17" r="2" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="17" r="2" stroke="currentColor" stroke-width="2"/></svg>
+          </span>
+          <span class="settings-item-label">Доставка</span>
+        </button>
       </nav>
 
-      <section class="panel active" id="orders">
+      <section class="panel active" id="home">
+        <div class="panel-box home-guide-box">
+          <h2>Швидкий запуск магазину</h2>
+          <p class="home-guide-intro">Цей план допоможе запустити магазин без складних налаштувань. Зробіть базові кроки нижче і вже зможете приймати перші замовлення.</p>
+
+          <div class="home-domain-box">
+            <label for="homeStoreDomainInput">Адреса сайту (домен)</label>
+            <div class="home-domain-row">
+              <input id="homeStoreDomainInput" type="text" readonly>
+              <button id="copyHomeStoreDomain" type="button" class="mini-btn" aria-label="Скопіювати адресу сайту">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+            <p id="homeDomainCopyMessage" class="saved-message" aria-live="polite"></p>
+          </div>
+
+          <ol class="home-guide-list">
+            <li>
+              <strong>Додайте категорії</strong>
+              <p>Перейдіть у розділ Категорії і створіть 3-6 зрозумілих груп товарів, наприклад: Чашки, Тарілки, Вази, Декор. Це основа навігації для клієнта.</p>
+            </li>
+            <li>
+              <strong>Заповніть товари</strong>
+              <p>У розділі Товари додайте назву, ціну, фото та короткий опис. Для старту достатньо 8-12 найкращих позицій, щоб вітрина виглядала повною.</p>
+            </li>
+            <li>
+              <strong>Перевірте залишки</strong>
+              <p>У Склад вкажіть актуальну кількість, щоб не приймати замовлення на відсутні товари.</p>
+            </li>
+            <li>
+              <strong>Налаштуйте оплату</strong>
+              <p>У Налаштування → Оплата увімкніть хоча б один онлайн-метод або додайте оплату при отриманні/на реквізити. Переконайтесь, що поля ключів і реквізити заповнені коректно.</p>
+            </li>
+            <li>
+              <strong>Налаштуйте доставку</strong>
+              <p>У Налаштування → Доставка увімкніть потрібні способи: Нова пошта, Укр пошта, кур'єр. Оберіть лише ті, які реально використовуєте.</p>
+            </li>
+            <li>
+              <strong>Оформіть вигляд магазину</strong>
+              <p>У Налаштування → Основні і Персоналізація заповніть назву, опис, аватар, соцмережі та кольори. Охайна вітрина напряму впливає на довіру і конверсію.</p>
+            </li>
+            <li>
+              <strong>Увімкніть сповіщення</strong>
+              <p>У Налаштування → Сповіщення активуйте Telegram-сповіщення, щоб одразу бачити нові замовлення.</p>
+            </li>
+            <li>
+              <strong>Зробіть тестове замовлення</strong>
+              <p>Зайдіть на вітрину як клієнт, додайте товар у кошик і пройдіть оформлення до кінця. Переконайтесь, що замовлення з'явилося в адмінці.</p>
+            </li>
+          </ol>
+
+          <p class="home-guide-tip"><strong>Мінімум для старту:</strong> категорії + товари + хоча б 1 оплата + хоча б 1 доставка + Telegram-сповіщення. Після цього вже можна запускати рекламу і приймати заявки.</p>
+        </div>
+      </section>
+
+      <section class="panel" id="orders">
         <div class="cards-row">
           <article class="kpi">
             <p>Нові сьогодні</p>
@@ -124,6 +261,7 @@
             <thead>
               <tr>
                 <th>№</th>
+                <th>Оформлено</th>
                 <th>Клієнт</th>
                 <th>Товар</th>
                 <th>Сума</th>
@@ -165,6 +303,7 @@
                   <p><strong>Промо-код:</strong> <span id="orderPromoCode">-</span></p>
                   <p><strong>Знижка за промо:</strong> <span id="orderPromoDiscount">-</span></p>
                   <p><strong>Статус оплати:</strong> <span id="orderPaymentStatus">-</span></p>
+                  <p><strong>Оформлено:</strong> <span id="orderCreatedAt">-</span></p>
                 </article>
               </div>
 
@@ -874,7 +1013,7 @@
               <article class="payment-provider-card">
                 <div class="payment-provider-head">
                   <div class="payment-provider-brand">
-                    <img class="payment-provider-logo" src="https://logo.clearbit.com/monobank.ua" alt="Plata by mono">
+                    <img class="payment-provider-logo" src="plata-by-mono.png" alt="Plata by mono">
                     <div>
                       <p class="payment-provider-title">Plata by mono</p>
                       <p class="payment-provider-subtitle">Еквайринг Monobank</p>
@@ -900,7 +1039,7 @@
               <article class="payment-provider-card">
                 <div class="payment-provider-head">
                   <div class="payment-provider-brand">
-                    <img class="payment-provider-logo" src="https://logo.clearbit.com/liqpay.ua" alt="LiqPay ПриватБанк">
+                    <img class="payment-provider-logo" src="liqpay.png" alt="LiqPay ПриватБанк">
                     <div>
                       <p class="payment-provider-title">LiqPay</p>
                       <p class="payment-provider-subtitle">Еквайринг ПриватБанк</p>
@@ -929,7 +1068,12 @@
               <div class="payment-methods-grid">
                 <label class="social-item">
                   <span class="social-item-top">
-                    <span>Оплата при отриманні</span>
+                    <span class="payment-method-title">
+                      <span class="payment-method-title-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" stroke-width="2"/><path d="M2 10h20" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="14" r="2" stroke="currentColor" stroke-width="2"/></svg>
+                      </span>
+                      <span>Оплата при отриманні</span>
+                    </span>
                     <span class="switch-wrap">
                       <input id="paymentCodEnabled" type="checkbox">
                       <span class="switch-slider"></span>
@@ -940,7 +1084,28 @@
 
                 <label class="social-item">
                   <span class="social-item-top">
-                    <span>Оплата на реквізити</span>
+                    <span class="payment-method-title">
+                      <span class="payment-method-title-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3v18M7 8.5h6.2a2.8 2.8 0 1 1 0 5.6H10.8a2.8 2.8 0 1 0 0 5.6H17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </span>
+                      <span>Передоплата</span>
+                    </span>
+                    <span class="switch-wrap">
+                      <input id="paymentPrepaymentEnabled" type="checkbox">
+                      <span class="switch-slider"></span>
+                    </span>
+                  </span>
+                  <input id="paymentPrepaymentAmount" type="number" min="1" step="1" inputmode="numeric" placeholder="Сума передоплати, грн">
+                </label>
+
+                <label class="social-item">
+                  <span class="social-item-top">
+                    <span class="payment-method-title">
+                      <span class="payment-method-title-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/><path d="M7 8h10M7 12h10M7 16h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                      </span>
+                      <span>Оплата на реквізити</span>
+                    </span>
                     <span class="switch-wrap">
                       <input id="paymentBankTransferEnabled" type="checkbox">
                       <span class="switch-slider"></span>
@@ -995,7 +1160,12 @@
               <div class="payment-methods-grid">
                 <label class="social-item">
                   <span class="social-item-top">
-                    <span>Нова пошта</span>
+                    <span class="payment-method-title">
+                      <span class="shipping-method-logo-wrap" aria-hidden="true">
+                        <img class="shipping-method-logo" src="nova-poshta.png" alt="">
+                      </span>
+                      <span>Нова пошта (відділення та поштомати)</span>
+                    </span>
                     <span class="switch-wrap">
                       <input id="shippingNovaPostEnabled" type="checkbox">
                       <span class="switch-slider"></span>
@@ -1005,7 +1175,12 @@
 
                 <label class="social-item">
                   <span class="social-item-top">
-                    <span>Укр пошта</span>
+                    <span class="payment-method-title">
+                      <span class="shipping-method-logo-wrap" aria-hidden="true">
+                        <img class="shipping-method-logo" src="ukr-poshta.png" alt="">
+                      </span>
+                      <span>Укр пошта</span>
+                    </span>
                     <span class="switch-wrap">
                       <input id="shippingUkrPostEnabled" type="checkbox">
                       <span class="switch-slider"></span>
@@ -1015,13 +1190,102 @@
 
                 <label class="social-item">
                   <span class="social-item-top">
-                    <span>Нова пошта кур'єр</span>
+                    <span class="payment-method-title">
+                      <span class="shipping-method-logo-wrap" aria-hidden="true">
+                        <img class="shipping-method-logo" src="nova-poshta.png" alt="">
+                      </span>
+                      <span>Нова пошта кур'єр</span>
+                    </span>
                     <span class="switch-wrap">
                       <input id="shippingNovaCourierEnabled" type="checkbox">
                       <span class="switch-slider"></span>
                     </span>
                   </span>
                 </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="social-fieldset delivery-payment-matrix-fieldset" id="deliveryPaymentMatrix">
+              <legend>Дозволені способи оплати для кожної доставки</legend>
+              <p class="settings-note">Позначте, які оплати будуть доступні покупцю для конкретного способу доставки.</p>
+              <div class="delivery-payment-matrix-grid">
+                <article class="delivery-payment-card">
+                  <p class="delivery-payment-card-title">Нова пошта (відділення та поштомати)</p>
+                  <div class="delivery-payment-items">
+                    <label class="delivery-payment-item">
+                      <input type="checkbox" data-delivery-id="shipping-nova-post" data-payment-id="payment-mono">
+                      <span>Plata by mono</span>
+                    </label>
+                    <label class="delivery-payment-item">
+                      <input type="checkbox" data-delivery-id="shipping-nova-post" data-payment-id="payment-liqpay">
+                      <span>LiqPay</span>
+                    </label>
+                    <label class="delivery-payment-item">
+                      <input type="checkbox" data-delivery-id="shipping-nova-post" data-payment-id="payment-cod">
+                      <span>Оплата при отриманні</span>
+                    </label>
+                    <label class="delivery-payment-item">
+                      <input type="checkbox" data-delivery-id="shipping-nova-post" data-payment-id="payment-prepayment">
+                      <span>Передоплата</span>
+                    </label>
+                    <label class="delivery-payment-item">
+                      <input type="checkbox" data-delivery-id="shipping-nova-post" data-payment-id="payment-bank-transfer">
+                      <span>Оплата на реквізити</span>
+                    </label>
+                  </div>
+                </article>
+
+                <article class="delivery-payment-card">
+                  <p class="delivery-payment-card-title">Укр пошта</p>
+                  <div class="delivery-payment-items">
+                    <label class="delivery-payment-item">
+                      <input type="checkbox" data-delivery-id="shipping-ukr-post" data-payment-id="payment-mono">
+                      <span>Plata by mono</span>
+                    </label>
+                    <label class="delivery-payment-item">
+                      <input type="checkbox" data-delivery-id="shipping-ukr-post" data-payment-id="payment-liqpay">
+                      <span>LiqPay</span>
+                    </label>
+                    <label class="delivery-payment-item">
+                      <input type="checkbox" data-delivery-id="shipping-ukr-post" data-payment-id="payment-cod">
+                      <span>Оплата при отриманні</span>
+                    </label>
+                    <label class="delivery-payment-item">
+                      <input type="checkbox" data-delivery-id="shipping-ukr-post" data-payment-id="payment-prepayment">
+                      <span>Передоплата</span>
+                    </label>
+                    <label class="delivery-payment-item">
+                      <input type="checkbox" data-delivery-id="shipping-ukr-post" data-payment-id="payment-bank-transfer">
+                      <span>Оплата на реквізити</span>
+                    </label>
+                  </div>
+                </article>
+
+                <article class="delivery-payment-card">
+                  <p class="delivery-payment-card-title">Нова пошта кур'єр</p>
+                  <div class="delivery-payment-items">
+                    <label class="delivery-payment-item">
+                      <input type="checkbox" data-delivery-id="shipping-nova-courier" data-payment-id="payment-mono">
+                      <span>Plata by mono</span>
+                    </label>
+                    <label class="delivery-payment-item">
+                      <input type="checkbox" data-delivery-id="shipping-nova-courier" data-payment-id="payment-liqpay">
+                      <span>LiqPay</span>
+                    </label>
+                    <label class="delivery-payment-item">
+                      <input type="checkbox" data-delivery-id="shipping-nova-courier" data-payment-id="payment-cod">
+                      <span>Оплата при отриманні</span>
+                    </label>
+                    <label class="delivery-payment-item">
+                      <input type="checkbox" data-delivery-id="shipping-nova-courier" data-payment-id="payment-prepayment">
+                      <span>Передоплата</span>
+                    </label>
+                    <label class="delivery-payment-item">
+                      <input type="checkbox" data-delivery-id="shipping-nova-courier" data-payment-id="payment-bank-transfer">
+                      <span>Оплата на реквізити</span>
+                    </label>
+                  </div>
+                </article>
               </div>
             </fieldset>
 

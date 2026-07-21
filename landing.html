@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Лавка — конструктор міні інтернет-магазинів</title>
+  <meta name="description" content="Створи свій інтернет-магазин з телефону за 30 хвилин. Без комп'ютера і без знань ІТ. Керуй товарами, замовленнями і продажами прямо зі смартфона." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --blue: #378ADD;
+      --blue-dark: #2b6db1;
+      --coral: #F0997B;
+      --green: #639922;
+      --bg-soft: #E6F1FB;
+      --ink: #1b2a3d;
+      --gray: #667487;
+      --white: #ffffff;
+      --radius: 16px;
+      --radius-sm: 12px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Nunito', system-ui, -apple-system, sans-serif;
+      font-weight: 600;
+      color: var(--ink);
+      background: var(--white);
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    h1, h2, h3 { font-weight: 800; line-height: 1.2; }
+
+    a { text-decoration: none; color: inherit; }
+
+    img, svg { display: block; }
+
+    .container {
+      width: 100%;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+
+    /* ---------- Buttons ---------- */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 48px;
+      padding: 12px 24px;
+      border-radius: var(--radius-sm);
+      font-family: inherit;
+      font-weight: 800;
+      font-size: 16px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: transform .15s ease, background .15s ease, color .15s ease;
+      white-space: nowrap;
+    }
+    .btn:active { transform: scale(.97); }
+
+    .btn-primary { background: var(--blue); color: var(--white); }
+    .btn-primary:hover { background: var(--blue-dark); }
+
+    .btn-outline { background: transparent; color: var(--blue); border-color: var(--blue); }
+    .btn-outline:hover { background: var(--bg-soft); }
+
+    .btn-ghost { background: transparent; color: var(--ink); min-height: 44px; padding: 10px 16px; }
+    .btn-ghost:hover { color: var(--blue); }
+
+    .btn-coral { background: var(--coral); color: #5a2c17; }
+    .btn-coral:hover { filter: brightness(.96); }
+
+    .btn-block { width: 100%; }
+
+    /* ---------- Header ---------- */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(255,255,255,.92);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid #eef2f7;
+    }
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 68px;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 800;
+      font-size: 22px;
+      color: var(--blue);
+    }
+    .logo-mark {
+      width: 34px; height: 34px;
+      background: var(--blue);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff;
+    }
+    .nav-links { display: none; gap: 28px; }
+    .nav-links a { color: var(--gray); font-weight: 700; }
+    .nav-links a:hover { color: var(--blue); }
+    .nav-actions { display: flex; align-items: center; gap: 10px; }
+
+    /* ---------- Sections ---------- */
+    section { padding: 64px 0; }
+    .section-head { text-align: center; max-width: 640px; margin: 0 auto 40px; }
+    .section-head h2 { font-size: 30px; margin-bottom: 12px; }
+    .section-head p { color: var(--gray); font-size: 17px; }
+    .eyebrow {
+      display: inline-block;
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--green);
+      background: #edf6e2;
+      padding: 6px 14px;
+      border-radius: 999px;
+      margin-bottom: 14px;
+    }
+
+    /* ---------- Hero ---------- */
+    .hero { background: var(--bg-soft); padding: 48px 0 64px; }
+    .hero-grid { display: grid; gap: 40px; align-items: center; }
+    .badge-time {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: #fff; color: var(--blue);
+      border: 2px solid #cfe3f7;
+      padding: 8px 16px; border-radius: 999px;
+      font-weight: 800; font-size: 14px; margin-bottom: 20px;
+    }
+    .hero h1 { font-size: 34px; margin-bottom: 16px; }
+    .hero h1 span { color: var(--blue); }
+    .hero-sub { color: var(--gray); font-size: 18px; margin-bottom: 28px; max-width: 520px; }
+    .hero-btns { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
+    .social-proof {
+      display: flex; align-items: center; gap: 10px;
+      color: var(--gray); font-weight: 700; font-size: 15px;
+    }
+    .avatars { display: flex; }
+    .avatars span {
+      width: 30px; height: 30px; border-radius: 50%;
+      border: 2px solid var(--bg-soft); margin-left: -8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; color: #fff; font-weight: 800;
+    }
+    .avatars span:first-child { margin-left: 0; }
+
+    /* Phone mockup */
+    .phone-wrap { display: flex; justify-content: center; }
+    .phone {
+      width: 260px;
+      background: #0f1c2e;
+      border-radius: 34px;
+      padding: 12px;
+      box-shadow: 0 0 0 2px #0f1c2e;
+    }
+    .phone-screen {
+      background: #fff;
+      border-radius: 24px;
+      overflow: hidden;
+    }
+    .phone-top {
+      background: var(--blue);
+      color: #fff;
+      padding: 16px 16px 20px;
+    }
+    .phone-top .store-name { font-weight: 800; font-size: 17px; }
+    .phone-top .store-cat { font-size: 12px; opacity: .85; font-weight: 700; }
+    .phone-goods {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+      padding: 14px;
+    }
+    .good {
+      background: #f5f8fc; border-radius: 12px; padding: 10px;
+    }
+    .good .thumb {
+      height: 60px; border-radius: 8px; margin-bottom: 8px;
+      display: flex; align-items: center; justify-content: center; font-size: 26px;
+    }
+    .good .g-name { font-size: 12px; font-weight: 800; }
+    .good .g-price { font-size: 12px; color: var(--green); font-weight: 800; }
+    .phone-cta {
+      margin: 4px 14px 16px; background: var(--coral); color: #5a2c17;
+      text-align: center; padding: 12px; border-radius: 12px; font-weight: 800; font-size: 14px;
+    }
+
+    /* ---------- Steps ---------- */
+    .steps { display: grid; gap: 20px; }
+    .step {
+      background: var(--white);
+      border: 2px solid #eef2f7;
+      border-radius: var(--radius);
+      padding: 24px;
+      text-align: center;
+    }
+    .step-num {
+      width: 44px; height: 44px; margin: 0 auto 14px;
+      background: var(--bg-soft); color: var(--blue);
+      border-radius: 12px; display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 18px;
+    }
+    .step h3 { font-size: 17px; margin-bottom: 6px; }
+    .step p { color: var(--gray); font-size: 14px; }
+
+    /* ---------- Features ---------- */
+    .features { background: var(--bg-soft); }
+    .features-grid { display: grid; gap: 16px; }
+    .feature {
+      background: #fff; border-radius: var(--radius); padding: 24px;
+      border: 2px solid transparent; transition: border-color .15s ease, transform .15s ease;
+    }
+    .feature:hover { border-color: #cfe3f7; transform: translateY(-3px); }
+    .feature .icon {
+      width: 46px; height: 46px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 14px; color: #fff;
+    }
+    .feature h3 { font-size: 17px; margin-bottom: 6px; }
+    .feature p { color: var(--gray); font-size: 14px; }
+
+    /* ---------- Examples ---------- */
+    .examples-scroll {
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: 78%;
+      gap: 16px;
+      overflow-x: auto;
+      padding-bottom: 10px;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+    }
+    .ex-card {
+      scroll-snap-align: start;
+      background: #fff;
+      border: 2px solid #eef2f7;
+      border-radius: var(--radius);
+      padding: 22px;
+    }
+    .ex-emoji {
+      width: 56px; height: 56px; border-radius: 14px;
+      background: var(--bg-soft);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 30px; margin-bottom: 14px;
+    }
+    .ex-card h3 { font-size: 18px; margin-bottom: 4px; }
+    .ex-card .ex-type { color: var(--gray); font-size: 14px; margin-bottom: 16px; }
+    .ex-link { color: var(--blue); font-weight: 800; display: inline-flex; gap: 6px; }
+
+    /* ---------- Pricing ---------- */
+    .pricing-grid { display: grid; gap: 20px; }
+    .plan {
+      background: #fff; border: 2px solid #eef2f7; border-radius: var(--radius);
+      padding: 30px 26px; display: flex; flex-direction: column;
+    }
+    .plan.popular { border-color: var(--blue); position: relative; }
+    .plan-tag {
+      position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+      background: var(--blue); color: #fff; font-size: 13px; font-weight: 800;
+      padding: 5px 16px; border-radius: 999px;
+    }
+    .plan h3 { font-size: 20px; margin-bottom: 6px; }
+    .plan .price { font-size: 34px; font-weight: 800; margin: 10px 0 4px; }
+    .plan .price small { font-size: 15px; color: var(--gray); font-weight: 700; }
+    .plan .plan-desc { color: var(--gray); font-size: 14px; margin-bottom: 20px; }
+    .plan ul { list-style: none; margin-bottom: 24px; display: grid; gap: 12px; }
+    .plan li { display: flex; gap: 10px; font-size: 15px; font-weight: 700; }
+    .plan li svg { flex-shrink: 0; color: var(--green); margin-top: 2px; }
+    .plan .btn { margin-top: auto; }
+
+    /* ---------- Final CTA ---------- */
+    .final { background: var(--blue); color: #fff; text-align: center; }
+    .final h2 { font-size: 30px; margin-bottom: 12px; }
+    .final p { opacity: .9; font-size: 18px; max-width: 560px; margin: 0 auto 28px; }
+    .cta-form {
+      display: grid; gap: 12px; max-width: 440px; margin: 0 auto;
+    }
+    .cta-form input {
+      height: 50px; border-radius: 12px; border: none; padding: 0 16px;
+      font-family: inherit; font-weight: 700; font-size: 16px; color: var(--ink);
+    }
+    .cta-form input:focus { outline: 3px solid var(--coral); }
+
+    /* ---------- Footer ---------- */
+    footer { background: #0f1c2e; color: #b7c2d0; padding: 48px 0 32px; }
+    .footer-top {
+      display: grid; gap: 28px; padding-bottom: 28px;
+      border-bottom: 1px solid #23344a;
+    }
+    .footer .logo { color: #fff; margin-bottom: 12px; }
+    .footer p { font-size: 14px; max-width: 280px; }
+    .footer-menu { display: grid; gap: 10px; }
+    .footer-menu h4 { color: #fff; font-size: 15px; margin-bottom: 6px; }
+    .footer-menu a { font-size: 14px; font-weight: 700; }
+    .footer-menu a:hover { color: #fff; }
+    .socials { display: flex; gap: 12px; }
+    .socials a {
+      width: 40px; height: 40px; border-radius: 12px; background: #1c2c40;
+      display: flex; align-items: center; justify-content: center; color: #fff;
+    }
+    .socials a:hover { background: var(--blue); }
+    .copyright { text-align: center; font-size: 13px; padding-top: 24px; }
+
+    /* ---------- Scroll reveal ---------- */
+    .reveal { opacity: 0; transform: translateY(24px); transition: opacity .6s ease, transform .6s ease; }
+    .reveal.visible { opacity: 1; transform: none; }
+    @media (prefers-reduced-motion: reduce) {
+      .reveal { opacity: 1; transform: none; transition: none; }
+    }
+
+    /* ---------- Responsive ---------- */
+    @media (min-width: 768px) {
+      .hero h1 { font-size: 44px; }
+      .section-head h2 { font-size: 34px; }
+      .steps { grid-template-columns: repeat(2, 1fr); }
+      .features-grid { grid-template-columns: repeat(2, 1fr); }
+      .examples-scroll { grid-auto-columns: 46%; }
+      .pricing-grid { grid-template-columns: repeat(3, 1fr); }
+      .footer-top { grid-template-columns: 2fr 1fr 1fr; }
+      .cta-form { grid-template-columns: 1fr 1fr; }
+      .cta-form .btn { grid-column: 1 / -1; }
+    }
+
+    @media (min-width: 1024px) {
+      .nav-links { display: flex; }
+      .hero-grid { grid-template-columns: 1.1fr .9fr; }
+      .hero h1 { font-size: 50px; }
+      .steps { grid-template-columns: repeat(4, 1fr); }
+      .features-grid { grid-template-columns: repeat(3, 1fr); }
+      .examples-scroll {
+        grid-auto-flow: row;
+        grid-template-columns: repeat(3, 1fr);
+        overflow: visible;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============ HEADER ============ -->
+  <header>
+    <div class="container nav">
+      <a href="#" class="logo" aria-label="Лавка — на головну">
+        <span class="logo-mark" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M9 20v-6h6v6"/></svg>
+        </span>
+        Лавка
+      </a>
+
+      <nav class="nav-links" aria-label="Головне меню">
+        <a href="#how">Як це працює</a>
+        <a href="#features">Можливості</a>
+        <a href="#examples">Приклади</a>
+        <a href="#pricing">Тарифи</a>
+      </nav>
+
+      <div class="nav-actions">
+        <a href="#" class="btn btn-ghost">Увійти</a>
+        <a href="#cta" class="btn btn-primary">Реєстрація</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- ============ HERO ============ -->
+    <section class="hero">
+      <div class="container hero-grid">
+        <div>
+          <span class="badge-time">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            Магазин за 30 хвилин
+          </span>
+          <h1>Створи свій інтернет-магазин <span>з телефону за 30 хвилин</span></h1>
+          <p class="hero-sub">Без знань ІТ, без комп'ютера — просто і логічно. Керуй товарами, замовленнями і продажами прямо зі смартфона.</p>
+
+          <div class="hero-btns">
+            <a href="#cta" class="btn btn-primary">Створити магазин безкоштовно</a>
+            <a href="#examples" class="btn btn-outline">Подивитись приклади</a>
+          </div>
+
+          <div class="social-proof">
+            <div class="avatars" aria-hidden="true">
+              <span style="background:#378ADD">О</span>
+              <span style="background:#639922">K</span>
+              <span style="background:#F0997B">H</span>
+              <span style="background:#2b6db1">S</span>
+            </div>
+            Вже 500+ магазинів працює на Лавці
+          </div>
+        </div>
+
+        <!-- Phone mockup -->
+        <div class="phone-wrap">
+          <div class="phone" role="img" aria-label="Приклад вітрини магазину на телефоні">
+            <div class="phone-screen">
+              <div class="phone-top">
+                <div class="store-name">Смаколики від Олі</div>
+                <div class="store-cat">Домашня випічка · Київ</div>
+              </div>
+              <div class="phone-goods">
+                <div class="good">
+                  <div class="thumb" style="background:#fdeee7" aria-hidden="true">🧁</div>
+                  <div class="g-name">Капкейк</div>
+                  <div class="g-price">65 грн</div>
+                </div>
+                <div class="good">
+                  <div class="thumb" style="background:#edf6e2" aria-hidden="true">🍰</div>
+                  <div class="g-name">Наполеон</div>
+                  <div class="g-price">420 грн</div>
+                </div>
+                <div class="good">
+                  <div class="thumb" style="background:#e6f1fb" aria-hidden="true">🍪</div>
+                  <div class="g-name">Печиво</div>
+                  <div class="g-price">90 грн</div>
+                </div>
+                <div class="good">
+                  <div class="thumb" style="background:#fdeee7" aria-hidden="true">🥐</div>
+                  <div class="g-name">Круасан</div>
+                  <div class="g-price">45 грн</div>
+                </div>
+              </div>
+              <div class="phone-cta">Оформити замовлення</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ HOW IT WORKS ============ -->
+    <section id="how">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="eyebrow">Просто як 1-2-3-4</span>
+          <h2>Як це працює</h2>
+          <p>Від ідеї до першого замовлення — усе з телефону, без сторонньої допомоги.</p>
+        </div>
+
+        <div class="steps">
+          <div class="step reveal">
+            <div class="step-num">1</div>
+            <h3>Реєструєшся за хвилину</h3>
+            <p>Введи назву магазину — і кабінет готовий.</p>
+          </div>
+          <div class="step reveal">
+            <div class="step-num">2</div>
+            <h3>Додаєш товари з телефону</h3>
+            <p>Фото, назва, ціна — і товар вже у вітрині.</p>
+          </div>
+          <div class="step reveal">
+            <div class="step-num">3</div>
+            <h3>Обираєш оформлення</h3>
+            <p>Кольори, фон і стиль під свій бренд.</p>
+          </div>
+          <div class="step reveal">
+            <div class="step-num">4</div>
+            <h3>Отримуєш замовлення</h3>
+            <p>Клієнти замовляють, ти отримуєш сповіщення.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ FEATURES ============ -->
+    <section id="features" class="features">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="eyebrow">Усе в одному місці</span>
+          <h2>Можливості Лавки</h2>
+          <p>Все необхідне, щоб продавати онлайн і не думати про технічні деталі.</p>
+        </div>
+
+        <div class="features-grid">
+          <div class="feature reveal">
+            <div class="icon" style="background:#378ADD" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v4H3z"/><path d="M5 7v13h14V7"/><path d="M9 11h6"/></svg>
+            </div>
+            <h3>Товари та категорії</h3>
+            <p>Зручно додавай, редагуй і сортуй товари за категоріями.</p>
+          </div>
+
+          <div class="feature reveal">
+            <div class="icon" style="background:#639922" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg>
+            </div>
+            <h3>Прийом замовлень</h3>
+            <p>Отримуй і обробляй замовлення в одному зручному списку.</p>
+          </div>
+
+          <div class="feature reveal">
+            <div class="icon" style="background:#F0997B" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+            </div>
+            <h3>Кастомізація дизайну</h3>
+            <p>Змінюй кольори та фон, щоб магазин виглядав своїм.</p>
+          </div>
+
+          <div class="feature reveal">
+            <div class="icon" style="background:#378ADD" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+            </div>
+            <h3>Промокоди</h3>
+            <p>Створюй знижки та акції, щоб клієнти поверталися.</p>
+          </div>
+
+          <div class="feature reveal">
+            <div class="icon" style="background:#639922" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            </div>
+            <h3>Статистика продажів</h3>
+            <p>Бачиш продажі та відвідування в наочних графіках.</p>
+          </div>
+
+          <div class="feature reveal">
+            <div class="icon" style="background:#F0997B" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            </div>
+            <h3>Власний домен</h3>
+            <p>Підключи свою адресу — магазин виглядатиме солідно.</p>
+          </div>
+
+          <div class="feature reveal">
+            <div class="icon" style="background:#378ADD" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </div>
+            <h3>SEO-налаштування</h3>
+            <p>Твій магазин легко знаходять у пошуку Google.</p>
+          </div>
+
+          <div class="feature reveal">
+            <div class="icon" style="background:#639922" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+            </div>
+            <h3>Онлайн-оплата</h3>
+            <p>Приймай оплату картками прямо в магазині.</p>
+          </div>
+
+          <div class="feature reveal">
+            <div class="icon" style="background:#F0997B" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+            </div>
+            <h3>Доставка НП та Укрпошта</h3>
+            <p>Нова Пошта та Укрпошта підключаються в пару кліків.</p>
+          </div>
+
+          <div class="feature reveal">
+            <div class="icon" style="background:#378ADD" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+            </div>
+            <h3>Сповіщення в Telegram</h3>
+            <p>Дізнавайся про кожне замовлення миттєво в Telegram-боті.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ EXAMPLES ============ -->
+    <section id="examples">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="eyebrow">Надихайся</span>
+          <h2>Приклади магазинів</h2>
+          <p>Різні ніші — одна проста платформа. Ось як це виглядає у справжніх власників.</p>
+        </div>
+
+        <div class="examples-scroll">
+          <article class="ex-card reveal">
+            <div class="ex-emoji" aria-hidden="true">🧁</div>
+            <h3>Смаколики від Олі</h3>
+            <p class="ex-type">Домашня випічка</p>
+            <a href="#" class="ex-link">Переглянути магазин →</a>
+          </article>
+
+          <article class="ex-card reveal">
+            <div class="ex-emoji" aria-hidden="true">💐</div>
+            <h3>KvitySvit</h3>
+            <p class="ex-type">Квіти та букети</p>
+            <a href="#" class="ex-link">Переглянути магазин →</a>
+          </article>
+
+          <article class="ex-card reveal">
+            <div class="ex-emoji" aria-hidden="true">🧶</div>
+            <h3>Handmade Corner</h3>
+            <p class="ex-type">Вироби ручної роботи</p>
+            <a href="#" class="ex-link">Переглянути магазин →</a>
+          </article>
+
+          <article class="ex-card reveal">
+            <div class="ex-emoji" aria-hidden="true">👟</div>
+            <h3>SneakerHub</h3>
+            <p class="ex-type">Кросівки</p>
+            <a href="#" class="ex-link">Переглянути магазин →</a>
+          </article>
+
+          <article class="ex-card reveal">
+            <div class="ex-emoji" aria-hidden="true">🌿</div>
+            <h3>ЕкоЛавка</h3>
+            <p class="ex-type">Натуральна косметика</p>
+            <a href="#" class="ex-link">Переглянути магазин →</a>
+          </article>
+
+          <article class="ex-card reveal">
+            <div class="ex-emoji" aria-hidden="true">🐾</div>
+            <h3>PetShop Mini</h3>
+            <p class="ex-type">Товари для тварин</p>
+            <a href="#" class="ex-link">Переглянути магазин →</a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PRICING ============ -->
+    <section id="pricing" class="features">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="eyebrow">Прозорі ціни</span>
+          <h2>Обери свій тариф</h2>
+          <p>Почни безкоштовно, а масштабуйся коли будеш готовий.</p>
+        </div>
+
+        <div class="pricing-grid">
+          <!-- Start -->
+          <div class="plan reveal">
+            <h3>Старт</h3>
+            <div class="price">0 <small>грн / міс</small></div>
+            <p class="plan-desc">Щоб спробувати і зробити перший продаж.</p>
+            <ul>
+              <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> До 20 товарів</li>
+              <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Стандартний дизайн</li>
+              <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Прийом замовлень</li>
+            </ul>
+            <a href="#cta" class="btn btn-outline btn-block">Спробувати безкоштовно</a>
+          </div>
+
+          <!-- Business (popular) -->
+          <div class="plan popular reveal">
+            <span class="plan-tag">Популярний</span>
+            <h3>Бізнес</h3>
+            <div class="price">199 <small>грн / міс</small></div>
+            <p class="plan-desc">Повний функціонал для стабільних продажів.</p>
+            <ul>
+              <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Необмежено товарів</li>
+              <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Кастомізація дизайну</li>
+              <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Промокоди та статистика</li>
+              <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Telegram-сповіщення</li>
+              <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Доставка НП / Укрпошта</li>
+            </ul>
+            <a href="#cta" class="btn btn-primary btn-block">Обрати план</a>
+          </div>
+
+          <!-- Pro -->
+          <div class="plan reveal">
+            <h3>Про</h3>
+            <div class="price">399 <small>грн / міс</small></div>
+            <p class="plan-desc">Максимум можливостей для зростання.</p>
+            <ul>
+              <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Все з тарифу «Бізнес»</li>
+              <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Власний домен</li>
+              <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Розширене SEO</li>
+              <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Онлайн-оплата</li>
+              <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Пріоритетна підтримка</li>
+            </ul>
+            <a href="#cta" class="btn btn-outline btn-block">Обрати план</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ FINAL CTA ============ -->
+    <section id="cta" class="final">
+      <div class="container">
+        <div class="reveal">
+          <span class="badge-time" style="background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.3);color:#fff">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            Запуск за 30 хвилин
+          </span>
+          <h2>Створи свій магазин з телефону вже сьогодні</h2>
+          <p>Без комп'ютера і без знань ІТ. Залиш контакти — і ми допоможемо зробити перші кроки.</p>
+
+          <form class="cta-form" onsubmit="event.preventDefault(); this.reset(); alert('Дякуємо! Ми скоро зв\'яжемось з тобою.');">
+            <label class="sr-only" for="shop-name">Назва магазину</label>
+            <input id="shop-name" name="shop" type="text" placeholder="Назва магазину" required />
+            <label class="sr-only" for="contact">Телефон або email</label>
+            <input id="contact" name="contact" type="text" placeholder="Телефон або email" required />
+            <button type="submit" class="btn btn-coral btn-block">Створити магазин безкоштовно</button>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-top">
+        <div>
+          <a href="#" class="logo" aria-label="Лавка">
+            <span class="logo-mark" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M9 20v-6h6v6"/></svg>
+            </span>
+            Лавка
+          </a>
+          <p>Конструктор міні інтернет-магазинів для малого бізнесу. Продавай онлайн просто.</p>
+        </div>
+
+        <nav class="footer-menu" aria-label="Меню футера">
+          <h4>Продукт</h4>
+          <a href="#features">Можливості</a>
+          <a href="#pricing">Тарифи</a>
+          <a href="#examples">Приклади</a>
+          <a href="#">Контакти</a>
+        </nav>
+
+        <div class="footer-menu">
+          <h4>Соцмережі</h4>
+          <div class="socials">
+            <a href="#" aria-label="Telegram">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+            </a>
+            <a href="#" aria-label="Instagram">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><line x1="17.5" y1="6.5" x2="17.5" y2="6.5"/></svg>
+            </a>
+          </div>
+        </div>
+      </div>
+      <div class="copyright">© 2026 Лавка. Усі права захищено.</div>
+    </div>
+  </footer>
+
+  <style>
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
+  </style>
+
+  <script>
+    // Scroll reveal animation
+    (function () {
+      var els = document.querySelectorAll('.reveal');
+      if (!('IntersectionObserver' in window)) {
+        els.forEach(function (el) { el.classList.add('visible'); });
+        return;
+      }
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+            io.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.12 });
+      els.forEach(function (el) { io.observe(el); });
+    })();
+  </script>
+</body>
+</html>

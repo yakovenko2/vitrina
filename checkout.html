@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Оформлення замовлення — Lavka Keramiky</title>
+<link rel="stylesheet" href="checkout.css">
+</head>
+<body>
+  <main class="checkout-page">
+    <section class="checkout-card">
+      <div class="checkout-head">
+        <a class="back-link" href="index.html" aria-label="Повернутися до вітрини" title="До вітрини">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M15 5L8 12L15 19" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </a>
+        <h1>Оформлення замовлення</h1>
+        <p>Заповніть контактні дані та оберіть спосіб доставки й оплати.</p>
+      </div>
+
+      <form id="checkoutForm" class="checkout-form">
+        <div class="form-grid">
+          <label>
+            ПІБ
+            <input id="customerName" name="customerName" type="text" placeholder="Іваненко Іван Іванович" required>
+          </label>
+
+          <label>
+            Номер телефону
+            <input id="customerPhone" name="customerPhone" type="tel" placeholder="+380XXXXXXXXX" required>
+          </label>
+        </div>
+
+        <fieldset class="choice-group">
+          <legend>Доставка</legend>
+          <div id="shippingOptions" class="options-list"></div>
+          <p id="shippingEmpty" class="empty-hint" hidden>Адміністратор ще не увімкнув жодного способу доставки.</p>
+        </fieldset>
+
+        <fieldset class="choice-group address-group" id="deliveryAddressGroup">
+          <legend>Адреса доставки</legend>
+
+          <div id="addressNovaPost" class="address-layout" hidden>
+            <div class="address-grid two-col">
+              <label class="combo-field">
+                Місто
+                <div id="novaCityCombo" class="combo-shell">
+                  <input id="novaCity" name="novaCity" type="text" class="combo-input" placeholder="Почніть вводити місто" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="novaCityOptions">
+                  <button id="novaCityToggle" type="button" class="combo-toggle" aria-label="Показати список міст">▾</button>
+                  <ul id="novaCityOptions" class="combo-list" role="listbox" hidden></ul>
+                </div>
+              </label>
+              <label class="combo-field">
+                Номер відділення / поштомату
+                <div id="novaBranchCombo" class="combo-shell">
+                  <input id="novaBranch" name="novaBranch" type="text" class="combo-input" placeholder="Почніть вводити відділення/поштомат" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="novaBranchOptions">
+                  <button id="novaBranchToggle" type="button" class="combo-toggle" aria-label="Показати список відділень">▾</button>
+                  <ul id="novaBranchOptions" class="combo-list" role="listbox" hidden></ul>
+                </div>
+              </label>
+            </div>
+            <p id="novaPostStatus" class="address-note" aria-live="polite"></p>
+          </div>
+
+          <div id="addressUkrPost" class="address-layout" hidden>
+            <div class="address-grid two-col">
+              <label>
+                Місто
+                <input id="ukrCity" name="ukrCity" type="text" placeholder="Наприклад: Полтава">
+              </label>
+              <label>
+                Область
+                <input id="ukrRegion" name="ukrRegion" type="text" placeholder="Наприклад: Полтавська">
+              </label>
+              <label>
+                Район
+                <input id="ukrDistrict" name="ukrDistrict" type="text" placeholder="Наприклад: Шевченківський">
+              </label>
+              <label>
+                Індекс
+                <input id="ukrPostalCode" name="ukrPostalCode" type="text" inputmode="numeric" placeholder="Наприклад: 36000">
+              </label>
+            </div>
+          </div>
+
+          <div id="addressCourier" class="address-layout" hidden>
+            <div class="address-grid two-col">
+              <label>
+                Місто
+                <input id="courierCity" name="courierCity" type="text" placeholder="Наприклад: Київ">
+              </label>
+              <label>
+                Адреса для кур'єра
+                <input id="courierAddress" name="courierAddress" type="text" placeholder="Вулиця, будинок, квартира">
+              </label>
+            </div>
+          </div>
+
+          <p id="addressHint" class="empty-hint">Оберіть спосіб доставки, щоб заповнити адресу.</p>
+        </fieldset>
+
+        <fieldset class="choice-group">
+          <legend>Оплата</legend>
+          <div id="paymentOptions" class="options-list"></div>
+          <p id="paymentEmpty" class="empty-hint" hidden>Адміністратор ще не увімкнув жодного способу оплати.</p>
+          <div id="bankTransferInfo" class="bank-transfer-info" hidden>
+            <p class="bank-transfer-label">Реквізити для оплати</p>
+            <p id="bankTransferText" class="bank-transfer-text"></p>
+          </div>
+        </fieldset>
+
+        <label>
+          Коментар до замовлення
+          <textarea id="orderComment" name="orderComment" rows="3" placeholder="За потреби вкажіть деталі"></textarea>
+        </label>
+
+        <section class="cart-summary" aria-labelledby="cartSummaryTitle">
+          <h2 id="cartSummaryTitle" class="cart-summary-title">Склад замовлення</h2>
+          <div id="cartSummaryItems" class="cart-summary-items"></div>
+        </section>
+
+        <section class="promo-box" aria-labelledby="promoTitle">
+          <h2 id="promoTitle" class="promo-title">Промо-код</h2>
+          <div class="promo-row">
+            <input id="promoCodeInput" name="promoCode" type="text" placeholder="Введіть промо-код" autocomplete="off">
+            <button id="applyPromoBtn" type="button" class="promo-apply-btn">Застосувати</button>
+          </div>
+          <p id="promoMessage" class="promo-message" aria-live="polite"></p>
+        </section>
+
+        <div class="summary-box">
+          <p>Товарів у кошику: <strong id="summaryItems">0</strong></p>
+          <p id="summarySubtotalRow">Сума товарів: <strong id="summarySubtotal">0 грн</strong></p>
+          <p id="summaryDiscountRow" hidden>Знижка: <strong id="summaryDiscount">0 грн</strong></p>
+          <p>Сума до сплати: <strong id="summaryTotal">0 грн</strong></p>
+          <p id="summaryPostpayRow" hidden>До сплати при отриманні: <strong id="summaryPostpay">0 грн</strong></p>
+        </div>
+
+        <button id="submitOrderBtn" type="submit" class="submit-btn">Підтвердити замовлення</button>
+        <p id="checkoutMessage" class="saved-message" aria-live="polite"></p>
+      </form>
+    </section>
+  </main>
+
+<script src="checkout.js"></script>
+</body>
+</html>

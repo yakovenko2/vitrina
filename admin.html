@@ -115,12 +115,6 @@
           </span>
           <span class="settings-item-label">Основні</span>
         </button>
-        <button class="settings-item" data-section="personalization">
-          <span class="settings-item-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a9 9 0 1 0 9 9c0-.7-.1-1.4-.3-2H15a3 3 0 1 1-3-3V3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="7.5" cy="9" r="1" fill="currentColor"/><circle cx="9" cy="14.5" r="1" fill="currentColor"/></svg>
-          </span>
-          <span class="settings-item-label">Персоналізація</span>
-        </button>
         <button class="settings-item" data-section="notifications">
           <span class="settings-item-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15 17H5l2-2v-4a5 5 0 1 1 10 0v4l2 2h-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M10 19a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -180,7 +174,7 @@
             </li>
             <li>
               <strong>Оформіть вигляд магазину</strong>
-              <p>У Налаштування → Основні і Персоналізація заповніть назву, опис, аватар, соцмережі та кольори. Охайна вітрина напряму впливає на довіру і конверсію.</p>
+              <p>У Налаштування → Основні заповніть назву, опис, аватар та соцмережі. Охайна вітрина напряму впливає на довіру і конверсію.</p>
             </li>
             <li>
               <strong>Увімкніть сповіщення</strong>
@@ -465,6 +459,53 @@
                   <input id="productPrice" type="number" min="1" step="1" placeholder="Наприклад: 890" required>
                 </label>
 
+                <label>
+                  Одиниця вимірювання
+                  <div id="productUnitSelect" class="custom-unit-select" role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-controls="productUnitOptions">
+                    <input id="productUnit" type="hidden" value="шт">
+                    <button id="productUnitTrigger" type="button" class="custom-unit-trigger" aria-label="Оберіть одиницю вимірювання">
+                      <span id="productUnitLabel">Штуки (шт)</span>
+                      <span class="custom-unit-caret" aria-hidden="true">▾</span>
+                    </button>
+                    <ul id="productUnitOptions" class="custom-unit-options" role="listbox" hidden>
+                      <li><button type="button" class="custom-unit-option" role="option" data-value="шт" data-label="Штуки (шт)">Штуки (шт)</button></li>
+                      <li><button type="button" class="custom-unit-option" role="option" data-value="кг" data-label="Кілограми (кг)">Кілограми (кг)</button></li>
+                      <li><button type="button" class="custom-unit-option" role="option" data-value="г" data-label="Грами (г)">Грами (г)</button></li>
+                      <li><button type="button" class="custom-unit-option" role="option" data-value="л" data-label="Літри (л)">Літри (л)</button></li>
+                      <li><button type="button" class="custom-unit-option" role="option" data-value="мл" data-label="Мілілітри (мл)">Мілілітри (мл)</button></li>
+                      <li><button type="button" class="custom-unit-option" role="option" data-value="м" data-label="Метри (м)">Метри (м)</button></li>
+                      <li><button type="button" class="custom-unit-option" role="option" data-value="см" data-label="Сантиметри (см)">Сантиметри (см)</button></li>
+                      <li><button type="button" class="custom-unit-option" role="option" data-value="м2" data-label="Квадратні метри (м2)">Квадратні метри (м2)</button></li>
+                      <li><button type="button" class="custom-unit-option" role="option" data-value="упаковка" data-label="Упаковка">Упаковка</button></li>
+                      <li><button type="button" class="custom-unit-option" role="option" data-value="пара" data-label="Пара">Пара</button></li>
+                      <li><button type="button" class="custom-unit-option" role="option" data-value="комплект" data-label="Комплект">Комплект</button></li>
+                    </ul>
+                  </div>
+                </label>
+
+                <label class="product-visibility-toggle" for="productIsClothing">
+                  <input id="productIsClothing" type="checkbox">
+                  Це одяг (додати розміри)
+                </label>
+
+                <div id="productSizesWrap" class="product-sizes-wrap" hidden>
+                  <p class="product-sizes-label">Розміри товару</p>
+                  <div id="productSizes" class="product-sizes-chooser">
+                    <label class="product-size-option"><input type="checkbox" value="XS"> <span>XS</span></label>
+                    <label class="product-size-option"><input type="checkbox" value="S"> <span>S</span></label>
+                    <label class="product-size-option"><input type="checkbox" value="M"> <span>M</span></label>
+                    <label class="product-size-option"><input type="checkbox" value="L"> <span>L</span></label>
+                    <label class="product-size-option"><input type="checkbox" value="XL"> <span>XL</span></label>
+                    <label class="product-size-option"><input type="checkbox" value="XXL"> <span>XXL</span></label>
+                    <label class="product-size-option"><input type="checkbox" value="XXXL"> <span>XXXL</span></label>
+                    <label class="product-size-option"><input type="checkbox" value="ONE SIZE"> <span>ONE SIZE</span></label>
+                  </div>
+                  <label>
+                    Додаткові розміри (через кому)
+                    <input id="productSizesCustom" type="text" maxlength="120" placeholder="Наприклад: 42, 44, 46">
+                  </label>
+                </div>
+
                 <div class="product-compare-prices">
                   <p class="product-compare-prices-hint">Для знижки: вкажіть стару і нову ціну, щоб показати порівняння вартості.</p>
                   <div class="product-compare-prices-grid">
@@ -602,10 +643,16 @@
 
                 <p class="stock-product-label">Товар: <strong id="stockProductLabel">-</strong></p>
 
-                <label>
+                <label id="stockQuantityWrap">
                   Кількість в наявності
                   <input id="stockQuantityInput" type="number" min="0" step="1" required>
                 </label>
+
+                <div id="stockSizeFieldsWrap" class="stock-size-fields-wrap" hidden>
+                  <p class="stock-size-fields-title">Залишок по розмірах</p>
+                  <div id="stockSizeFields" class="stock-size-fields"></div>
+                  <p id="stockSizeTotalHint" class="stock-size-total-hint"></p>
+                </div>
 
                 <button class="action-btn" type="submit">Зберегти залишок</button>
                 <p id="stockSavedMessage" class="saved-message" aria-live="polite"></p>
@@ -635,6 +682,22 @@
       </section>
 
       <section class="panel" id="views">
+        <div class="panel-box">
+          <h2>Відвідувачі за власний діапазон</h2>
+          <form id="viewsRangeForm" class="views-range-form">
+            <label>
+              Від
+              <input id="viewsRangeFrom" type="date" required>
+            </label>
+            <label>
+              До
+              <input id="viewsRangeTo" type="date" required>
+            </label>
+            <button type="submit" class="action-btn">Порахувати</button>
+          </form>
+          <p id="viewsRangeResult" class="views-range-result">Оберіть дати, щоб побачити кількість унікальних відвідувачів.</p>
+        </div>
+
         <div class="cards-row">
           <article class="kpi">
             <p>Відвідувачі сьогодні</p>
@@ -657,24 +720,24 @@
             <strong id="viewsThirtyDaysCount">0</strong>
           </article>
         </div>
-        <div class="panel-box">
-          <h2>Відвідувачі за власний діапазон</h2>
-          <form id="viewsRangeForm" class="views-range-form">
-            <label>
-              Від
-              <input id="viewsRangeFrom" type="date" required>
-            </label>
-            <label>
-              До
-              <input id="viewsRangeTo" type="date" required>
-            </label>
-            <button type="submit" class="action-btn">Порахувати</button>
-          </form>
-          <p id="viewsRangeResult" class="views-range-result">Оберіть дати, щоб побачити кількість унікальних відвідувачів.</p>
-        </div>
       </section>
 
       <section class="panel" id="sales">
+        <div class="panel-box">
+          <h2>Оберіть період</h2>
+          <form id="salesRangeForm" class="sales-range-form">
+            <label>
+              Від
+              <input id="salesRangeFrom" type="date" required>
+            </label>
+            <label>
+              До
+              <input id="salesRangeTo" type="date" required>
+            </label>
+            <button type="submit" class="action-btn">Порахувати</button>
+          </form>
+        </div>
+
         <div class="cards-row">
           <article class="kpi">
             <p>Сума продажів</p>
@@ -689,19 +752,9 @@
             <strong id="salesOrdersCount">0</strong>
           </article>
         </div>
+
         <div class="panel-box">
-          <h2>Статистика за період</h2>
-          <form id="salesRangeForm" class="sales-range-form">
-            <label>
-              Від
-              <input id="salesRangeFrom" type="date" required>
-            </label>
-            <label>
-              До
-              <input id="salesRangeTo" type="date" required>
-            </label>
-            <button type="submit" class="action-btn">Порахувати</button>
-          </form>
+          <h2>Результати</h2>
           <p id="salesRangeResult" class="sales-range-result">Оберіть діапазон дат, щоб побачити статистику продажів.</p>
 
           <h2>Топ 5 товарів за кількістю продажів</h2>
@@ -885,6 +938,22 @@
               <small id="descriptionCounter" class="desc-counter">0/140</small>
             </label>
 
+            <label>
+              Валюта магазину
+              <div id="storeCurrencySelect" class="custom-unit-select" role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-controls="storeCurrencyOptions">
+                <input id="storeCurrency" type="hidden" value="uah">
+                <button id="storeCurrencyTrigger" type="button" class="custom-unit-trigger" aria-label="Оберіть валюту магазину">
+                  <span id="storeCurrencyLabel">Гривня (грн)</span>
+                  <span class="custom-unit-caret" aria-hidden="true">▾</span>
+                </button>
+                <ul id="storeCurrencyOptions" class="custom-unit-options" role="listbox" hidden>
+                  <li><button type="button" class="custom-unit-option" role="option" data-value="uah" data-label="Гривня (грн)">Гривня (грн)</button></li>
+                  <li><button type="button" class="custom-unit-option" role="option" data-value="usd" data-label="Долар (USD)">Долар (USD)</button></li>
+                  <li><button type="button" class="custom-unit-option" role="option" data-value="eur" data-label="Євро (EUR)">Євро (EUR)</button></li>
+                </ul>
+              </div>
+            </label>
+
             <fieldset class="social-fieldset">
               <legend>Мінімальна сума замовлення</legend>
               <label class="social-item">
@@ -948,59 +1017,6 @@
 
             <button type="submit" class="action-btn">Зберегти зміни</button>
             <p id="settingsSavedMessage" class="saved-message" aria-live="polite"></p>
-          </form>
-        </div>
-      </section>
-
-      <section class="panel" id="personalization">
-        <div class="panel-box">
-          <h2>Персоналізація</h2>
-          <form id="personalizationForm" class="settings-form">
-            <fieldset class="color-fieldset">
-              <legend>Налаштування кольорів</legend>
-              <div class="color-grid">
-                <label>
-                  Колір іконки "Кошик"
-                  <input id="cartIconColor" type="color" value="#2b4c85">
-                </label>
-                <label>
-                  Основний колір сайту
-                  <input id="siteColor" type="color" value="#2b4c85">
-                </label>
-              </div>
-            </fieldset>
-
-            <fieldset class="color-fieldset">
-              <legend>Фон сайту</legend>
-              <div class="background-grid">
-                <label>
-                  Режим фону
-                  <select id="siteBackgroundType">
-                    <option value="color">Колір</option>
-                    <option value="image">Власне фото</option>
-                  </select>
-                </label>
-                <label>
-                  Колір фону
-                  <input id="siteBackgroundColor" type="color" value="#eef1f4">
-                </label>
-                <label>
-                  URL фото фону
-                  <input id="siteBackgroundImage" type="url" placeholder="https://example.com/background.jpg">
-                </label>
-                <label>
-                  Або завантаж фото
-                  <input id="siteBackgroundImageFile" type="file" accept="image/*">
-                </label>
-              </div>
-              <div class="background-tools">
-                <button id="clearBackgroundImage" type="button" class="action-btn ghost">Прибрати фото</button>
-              </div>
-              <div id="backgroundPreview" class="background-preview" aria-label="Попередній перегляд фону"></div>
-            </fieldset>
-
-            <button type="submit" class="action-btn">Зберегти кольори</button>
-            <p id="personalizationSavedMessage" class="saved-message" aria-live="polite"></p>
           </form>
         </div>
       </section>

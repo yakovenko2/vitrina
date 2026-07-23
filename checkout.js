@@ -75,6 +75,19 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  const normalizeCurrencyCode = (value) => {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (normalized === "usd") return "usd";
+    if (normalized === "eur") return "eur";
+    return "uah";
+  };
+
+  const getCurrencyLabel = (code) => {
+    if (code === "usd") return "USD";
+    if (code === "eur") return "EUR";
+    return "грн";
+  };
+
   const isHexColor = (value) => /^#[0-9a-fA-F]{6}$/.test(String(value || "").trim());
 
   const hexToRgb = (hex) => {
@@ -175,7 +188,11 @@ document.addEventListener("DOMContentLoaded", () => {
     localStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
   };
 
-  const formatPrice = (value) => `${Math.max(0, Number(value) || 0)} грн`;
+  const formatPrice = (value) => {
+    const amount = Math.round((Math.max(0, Number(value) || 0)) * 100) / 100;
+    const currency = normalizeCurrencyCode(settings?.currency || "uah");
+    return `${amount} ${getCurrencyLabel(currency)}`;
+  };
   const escapeHtml = (value) => String(value || "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")

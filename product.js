@@ -99,6 +99,19 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  const normalizeCurrencyCode = (value) => {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (normalized === "usd") return "usd";
+    if (normalized === "eur") return "eur";
+    return "uah";
+  };
+
+  const getCurrencyLabel = (code) => {
+    if (code === "usd") return "USD";
+    if (code === "eur") return "EUR";
+    return "грн";
+  };
+
   const readVisitEvents = () => {
     try {
       const raw = localStorage.getItem(VISITOR_EVENTS_KEY);
@@ -159,6 +172,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const savedSettings = readSettings();
+  const activeCurrency = normalizeCurrencyCode(savedSettings?.currency || "uah");
   if (savedSettings) {
     const backgroundType = savedSettings.siteBackgroundType === "image" ? "image" : "color";
     const backgroundColor = isHexColor(savedSettings.siteBackgroundColor) ? savedSettings.siteBackgroundColor : "#eef1f4";
@@ -208,7 +222,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   productName.textContent = product.name;
   productSku.textContent = product.sku;
-  productPrice.textContent = `${product.price} грн`;
+  productPrice.textContent = `${product.price} ${getCurrencyLabel(activeCurrency)}`;
   productDescription.textContent = product.description;
   mainImage.src = product.images[0];
   mainImage.alt = product.name;

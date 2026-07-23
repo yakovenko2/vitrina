@@ -28,6 +28,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const cartCountBadge = document.getElementById("cartCountBadge");
   const clearCartBtn = document.getElementById("clearCartBtn");
   const checkoutCartBtn = document.getElementById("checkoutCartBtn");
+  const cartMinimumHint = document.getElementById("cartMinimumHint");
   const photoViewer = document.getElementById("photoViewer");
   const photoViewerImage = document.getElementById("photoViewerImage");
   const photoViewerCaption = document.getElementById("photoViewerCaption");
@@ -111,7 +112,59 @@ document.addEventListener("DOMContentLoaded", () => {
     ].join("");
   };
 
-  const toCurrency = (value) => `${Math.max(0, Number(value) || 0)} грн`;
+  const normalizeCurrencyCode = (value) => {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (normalized === "usd") return "usd";
+    if (normalized === "eur") return "eur";
+    return "uah";
+  };
+
+  const getCurrencyLabel = (code) => {
+    if (code === "usd") return "USD";
+    if (code === "eur") return "EUR";
+    return "грн";
+  };
+
+  const readSettings = () => {
+    try {
+      const raw = localStorage.getItem(SETTINGS_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const getMinimumOrderRequirement = () => {
+    const settings = readSettings() || {};
+    const enabled = Boolean(settings.minimumOrderEnabled);
+    const rawAmount = Number(settings.minimumOrderAmount);
+    const minimumAmount = Number.isFinite(rawAmount) && rawAmount > 0
+      ? Math.round(rawAmount * 100) / 100
+      : 0;
+    return {
+      enabled,
+      minimumAmount
+    };
+  };
+
+  const toCurrency = (value) => {
+    const settings = readSettings() || {};
+    const amount = Math.round((Math.max(0, Number(value) || 0)) * 100) / 100;
+    const formatter = new Intl.NumberFormat("uk-UA", {
+      minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+      maximumFractionDigits: 2
+    });
+    return `${formatter.format(amount)} ${getCurrencyLabel(normalizeCurrencyCode(settings.currency || "uah"))}`;
+  };
+
+  const applyStorefrontCurrencyLabels = () => {
+    document.querySelectorAll(".p-price").forEach((priceNode) => {
+      const raw = String(priceNode.textContent || "");
+      const numeric = Number.parseFloat(raw.replace(/[^\d.,]/g, "").replace(",", "."));
+      if (!Number.isFinite(numeric)) return;
+      priceNode.textContent = toCurrency(numeric);
+    });
+  };
 
   const setCartOpen = (open) => {
     if (!cartDrawer || !cartOverlay) return;
@@ -188,8 +241,9 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
       cartItems.innerHTML = cartState.map((item) => `
         <article class="cart-item" data-cart-id="${item.id}">
+          <button type="button" class="cart-item-remove" aria-label="Видалити товар з кошика" title="Видалити">×</button>
           <img src="${item.image}" alt="${item.name}">
-          <div>
+          <div class="cart-item-meta">
             <p class="cart-item-name">${item.name}</p>
             <p class="cart-item-price">${toCurrency(item.price)}</p>
           </div>
@@ -204,13 +258,29 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const totalItems = cartState.reduce((sum, item) => sum + item.qty, 0);
     const totalAmount = cartState.reduce((sum, item) => sum + (item.price * item.qty), 0);
+    const minimumRequirement = getMinimumOrderRequirement();
+    const isMinimumActive = minimumRequirement.enabled && minimumRequirement.minimumAmount > 0;
+    const minimumLeft = Math.max(0, minimumRequirement.minimumAmount - totalAmount);
+    const minimumReached = !isMinimumActive || minimumLeft <= 0;
 
     cartCountBadge.textContent = String(totalItems);
     cartTotal.textContent = toCurrency(totalAmount);
 
+    if (cartMinimumHint) {
+      if (isMinimumActive && totalItems > 0 && !minimumReached) {
+        cartMinimumHint.hidden = false;
+        cartMinimumHint.textContent = `До мінімальної суми замовлення залишилось ${toCurrency(minimumLeft)}.`;
+      } else {
+        cartMinimumHint.hidden = true;
+        cartMinimumHint.textContent = "";
+      }
+    }
+
     if (checkoutCartBtn) {
-      checkoutCartBtn.disabled = totalItems === 0;
-      checkoutCartBtn.setAttribute("aria-disabled", totalItems === 0 ? "true" : "false");
+      const blockedByMinimum = totalItems > 0 && !minimumReached;
+      const shouldDisableCheckout = totalItems === 0 || blockedByMinimum;
+      checkoutCartBtn.disabled = shouldDisableCheckout;
+      checkoutCartBtn.setAttribute("aria-disabled", shouldDisableCheckout ? "true" : "false");
     }
   };
 
@@ -236,15 +306,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     saveCart(cartState);
     renderCart();
-  };
-
-  const readSettings = () => {
-    try {
-      const raw = localStorage.getItem(SETTINGS_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
   };
 
   const readVisitEvents = () => {
@@ -394,6 +455,8 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  applyStorefrontCurrencyLabels();
+
   const applyCategoryFilter = (category) => {
     const selected = resolveCategoryToken(category);
     products.forEach((product) => {
@@ -506,9 +569,23 @@ document.addEventListener("DOMContentLoaded", () => {
   if (checkoutCartBtn) {
     checkoutCartBtn.addEventListener("click", () => {
       if (!cartState.length) return;
+      const { enabled, minimumAmount } = getMinimumOrderRequirement();
+      if (enabled && minimumAmount > 0) {
+        const totalAmount = cartState.reduce((sum, item) => sum + ((Number(item.price) || 0) * (Number(item.qty) || 0)), 0);
+        if (totalAmount < minimumAmount) {
+          renderCart();
+          return;
+        }
+      }
       window.location.href = "checkout.html";
     });
   }
+
+  window.addEventListener("storage", (event) => {
+    if (event.key !== SETTINGS_KEY && event.key !== CART_KEY) return;
+    cartState = readCart();
+    renderCart();
+  });
 
   if (photoViewerClose) {
     photoViewerClose.addEventListener("click", () => setPhotoViewerOpen(false));
@@ -541,6 +618,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (event.target.closest(".cart-qty-minus")) {
         item.qty -= 1;
+      }
+
+      if (event.target.closest(".cart-item-remove")) {
+        item.qty = 0;
       }
 
       cartState = cartState.filter((entry) => entry.qty > 0);

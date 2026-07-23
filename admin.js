@@ -56,14 +56,13 @@ document.addEventListener("DOMContentLoaded", () => {
     billing: "Тарифний план",
     promocodes: "Промо-коди",
     settings: "Налаштування",
-    personalization: "Персоналізація",
     notifications: "Сповіщення",
     payments: "Оплата",
     shipping: "Доставка",
     logout: "Вихід"
   };
 
-  const settingsSections = ["settings", "personalization", "notifications", "payments", "shipping"];
+  const settingsSections = ["settings", "notifications", "payments", "shipping"];
   let currentSection = "home";
 
   const isMobileViewport = () => window.matchMedia("(max-width: 640px)").matches;
@@ -203,6 +202,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const storeDescription = document.getElementById("storeDescription");
   const storeAvatar = document.getElementById("storeAvatar");
   const storeAvatarFile = document.getElementById("storeAvatarFile");
+  const storeCurrencySelect = document.getElementById("storeCurrencySelect");
+  const storeCurrencyTrigger = document.getElementById("storeCurrencyTrigger");
+  const storeCurrencyLabel = document.getElementById("storeCurrencyLabel");
+  const storeCurrencyOptions = document.getElementById("storeCurrencyOptions");
+  const storeCurrencyOptionButtons = Array.from(document.querySelectorAll("#storeCurrencyOptions .custom-unit-option"));
+  const storeCurrency = document.getElementById("storeCurrency");
   const avatarPreview = document.getElementById("avatarPreview");
   const socialInstagram = document.getElementById("socialInstagram");
   const socialFacebook = document.getElementById("socialFacebook");
@@ -288,6 +293,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const productCategories = document.getElementById("productCategories");
   const productDescription = document.getElementById("productDescription");
   const productPrice = document.getElementById("productPrice");
+  const productUnitSelect = document.getElementById("productUnitSelect");
+  const productUnitTrigger = document.getElementById("productUnitTrigger");
+  const productUnitLabel = document.getElementById("productUnitLabel");
+  const productUnitOptions = document.getElementById("productUnitOptions");
+  const productUnitOptionButtons = Array.from(document.querySelectorAll("#productUnitOptions .custom-unit-option"));
+  const productUnit = document.getElementById("productUnit");
+  const productIsClothing = document.getElementById("productIsClothing");
+  const productSizesWrap = document.getElementById("productSizesWrap");
+  const productSizes = document.getElementById("productSizes");
+  const productSizesCustom = document.getElementById("productSizesCustom");
   const productOldPrice = document.getElementById("productOldPrice");
   const productNewPrice = document.getElementById("productNewPrice");
   const productVisible = document.getElementById("productVisible");
@@ -373,7 +388,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const closeStockModal = document.getElementById("closeStockModal");
   const stockUpdateForm = document.getElementById("stockUpdateForm");
   const stockEditingProductId = document.getElementById("stockEditingProductId");
+  const stockQuantityWrap = document.getElementById("stockQuantityWrap");
   const stockQuantityInput = document.getElementById("stockQuantityInput");
+  const stockSizeFieldsWrap = document.getElementById("stockSizeFieldsWrap");
+  const stockSizeFields = document.getElementById("stockSizeFields");
+  const stockSizeTotalHint = document.getElementById("stockSizeTotalHint");
   const stockProductLabel = document.getElementById("stockProductLabel");
   const stockSavedMessage = document.getElementById("stockSavedMessage");
   const viewsTodayCount = document.getElementById("viewsTodayCount");
@@ -847,7 +866,7 @@ document.addEventListener("DOMContentLoaded", () => {
       `Клієнт: ${customerName}`,
       `Телефон: ${customerPhone}`,
       `Доставка: ${deliveryMethod}`,
-      `Сума: ${total} грн`
+      `Сума: ${total} ${getCurrencyLabel(getCurrentCurrency())}`
     ];
 
     if (itemsSummary) {
@@ -1001,8 +1020,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (toDate.getTime() < fromDate.getTime()) {
       salesRangeResult.textContent = "Дата завершення має бути не раніше за дату початку.";
       salesRangeResult.classList.add("error");
-      salesRevenue.textContent = "0 грн";
-      salesAverageCheck.textContent = "0 грн";
+      salesRevenue.textContent = `0 ${getCurrencyLabel(getCurrentCurrency())}`;
+      salesAverageCheck.textContent = `0 ${getCurrencyLabel(getCurrentCurrency())}`;
       salesOrdersCount.textContent = "0";
       renderSalesTopProducts([]);
       return;
@@ -1036,8 +1055,8 @@ document.addEventListener("DOMContentLoaded", () => {
       })
       .slice(0, 5);
 
-    salesRevenue.textContent = `${formatNumber(Math.round(totalRevenue))} грн`;
-    salesAverageCheck.textContent = `${formatNumber(Math.round(averageCheck))} грн`;
+    salesRevenue.textContent = `${formatNumber(Math.round(totalRevenue))} ${getCurrencyLabel(getCurrentCurrency())}`;
+    salesAverageCheck.textContent = `${formatNumber(Math.round(averageCheck))} ${getCurrencyLabel(getCurrentCurrency())}`;
     salesOrdersCount.textContent = formatNumber(ordersCount);
     salesRangeResult.classList.remove("error");
     salesRangeResult.textContent = `Період ${fromValue} - ${toValue}: ${formatNumber(ordersCount)} ${formatOrdersLabel(ordersCount)}.`;
@@ -1165,7 +1184,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <h3 class="billing-plan-name">${plan.name}</h3>
             ${currentPlan?.id === plan.id ? '<span class="billing-badge">Поточний</span>' : ""}
           </div>
-          <p class="billing-plan-price">${formatNumber(plan.price)} грн / ${plan.periodMonths} міс.</p>
+          <p class="billing-plan-price">${formatNumber(plan.price)} ${getCurrencyLabel(getCurrentCurrency())} / ${plan.periodMonths} міс.</p>
           <p class="billing-plan-desc">${plan.description}</p>
           <button type="button" class="action-btn billing-pay-btn" data-plan-id="${plan.id}">Оплатити</button>
         `;
@@ -1187,7 +1206,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <td>${formatDateLong(payment.paidAt)}</td>
             <td>${String(payment.planName || "-")}</td>
             <td>${Number(payment.periodMonths) || 1} міс.</td>
-            <td>${formatNumber(Number(payment.amount) || 0)} грн</td>
+            <td>${formatNumber(Number(payment.amount) || 0)} ${getCurrencyLabel(getCurrentCurrency())}</td>
             <td><span class="status paid">Оплачено</span></td>
           `;
           billingHistoryBody.append(row);
@@ -1201,7 +1220,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!selectedPlan) return;
 
     const confirmed = window.confirm(
-      `Підтвердьте оплату тарифу ${selectedPlan.name} на ${selectedPlan.periodMonths} міс. за ${formatNumber(selectedPlan.price)} грн.`
+      `Підтвердьте оплату тарифу ${selectedPlan.name} на ${selectedPlan.periodMonths} міс. за ${formatNumber(selectedPlan.price)} ${getCurrencyLabel(getCurrentCurrency())}.`
     );
     if (!confirmed) return;
 
@@ -1333,7 +1352,25 @@ document.addEventListener("DOMContentLoaded", () => {
       .filter(Boolean);
   };
 
-  const formatPrice = (value) => `${value} грн`;
+  const normalizeCurrencyCode = (value) => {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (normalized === "usd") return "usd";
+    if (normalized === "eur") return "eur";
+    return "uah";
+  };
+
+  const getCurrencyLabel = (code) => {
+    if (code === "usd") return "USD";
+    if (code === "eur") return "EUR";
+    return "грн";
+  };
+
+  const getCurrentCurrency = () => normalizeCurrencyCode(readSettings()?.currency || "uah");
+
+  const formatPrice = (value) => {
+    const amount = Math.round((Math.max(0, Number(value) || 0)) * 100) / 100;
+    return `${amount} ${getCurrencyLabel(getCurrentCurrency())}`;
+  };
 
   const getOrderStatusClass = (status) => {
     const normalized = String(status || "").toLowerCase();
@@ -1501,7 +1538,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return "-";
     }
     return promoCode.discountType === "uah"
-      ? `${promoCode.discountValue} грн`
+      ? `${promoCode.discountValue} ${getCurrencyLabel(getCurrentCurrency())}`
       : `${promoCode.discountValue}%`;
   };
 
@@ -1519,8 +1556,8 @@ document.addEventListener("DOMContentLoaded", () => {
     promoCodes.forEach((promoCode) => {
       const row = document.createElement("tr");
       const charsetLabel = promoCode.charset === "digits" ? "Цифри" : "Букви";
-      const minOrder = Number.isFinite(promoCode.minOrderAmount) ? `${promoCode.minOrderAmount} грн` : "Без обмежень";
-      const maxDiscount = Number.isFinite(promoCode.maxDiscountPerOrder) ? `${promoCode.maxDiscountPerOrder} грн` : "Без ліміту";
+      const minOrder = Number.isFinite(promoCode.minOrderAmount) ? `${promoCode.minOrderAmount} ${getCurrencyLabel(getCurrentCurrency())}` : "Без обмежень";
+      const maxDiscount = Number.isFinite(promoCode.maxDiscountPerOrder) ? `${promoCode.maxDiscountPerOrder} ${getCurrencyLabel(getCurrentCurrency())}` : "Без ліміту";
       const managerCommentText = promoCode.managerComment || "-";
 
       row.innerHTML = `
@@ -1572,7 +1609,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const categoryList = Array.isArray(product.categories) && product.categories.length
         ? product.categories.join(", ")
         : String(product.category || "-");
-      const stockValue = Number.isFinite(Number(product.stock)) ? Math.max(0, Number(product.stock)) : 0;
+      const stockValue = getProductTotalStock(product);
       const stockClassName = stockValue <= 1 ? "stock-pill low-stock" : "stock-pill";
 
       row.innerHTML = `
@@ -1684,9 +1721,33 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       matchedItemsCount += 1;
-      const currentStock = Number.isFinite(Number(nextProducts[targetIndex].stock))
-        ? Math.max(0, Number(nextProducts[targetIndex].stock))
-        : 0;
+      const targetProduct = nextProducts[targetIndex];
+      const currentStock = getProductTotalStock(targetProduct);
+
+      if (hasSizedStockAccounting(targetProduct)) {
+        const sizeStockMap = { ...(targetProduct.sizeStocks || {}) };
+        let remainingToSubtract = qty;
+
+        const orderedSizeKey = String(item?.size || "").trim().toUpperCase();
+        if (orderedSizeKey && Object.prototype.hasOwnProperty.call(sizeStockMap, orderedSizeKey)) {
+          const currentByOrderedSize = Math.max(0, Number.parseInt(sizeStockMap[orderedSizeKey], 10) || 0);
+          const subtractByOrderedSize = Math.min(currentByOrderedSize, remainingToSubtract);
+          sizeStockMap[orderedSizeKey] = currentByOrderedSize - subtractByOrderedSize;
+          remainingToSubtract -= subtractByOrderedSize;
+        }
+
+        targetProduct.sizes.forEach((size) => {
+          if (remainingToSubtract <= 0) return;
+          const key = String(size || "").trim().toUpperCase();
+          if (orderedSizeKey && key === orderedSizeKey) return;
+          const current = Math.max(0, Number.parseInt(sizeStockMap[key], 10) || 0);
+          const subtract = Math.min(current, remainingToSubtract);
+          sizeStockMap[key] = current - subtract;
+          remainingToSubtract -= subtract;
+        });
+        nextProducts[targetIndex].sizeStocks = sizeStockMap;
+      }
+
       nextProducts[targetIndex].stock = Math.max(0, currentStock - qty);
       nextProducts[targetIndex].updatedAt = new Date().toISOString();
     });
@@ -1853,12 +1914,31 @@ document.addEventListener("DOMContentLoaded", () => {
       ? Math.round(normalizedPrice * 100) / 100
       : 1;
     const parsedStock = Number.parseInt(product?.stock, 10);
+    const normalizedUnit = String(product?.unit || "шт").trim() || "шт";
+    const normalizedSizes = Array.isArray(product?.sizes)
+      ? product.sizes.map((size) => String(size || "").trim().toUpperCase()).filter(Boolean)
+      : [];
+    const normalizedSizeStocks = normalizedSizes.reduce((acc, size) => {
+      const raw = product?.sizeStocks?.[size];
+      const parsed = Number.parseInt(raw, 10);
+      acc[size] = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+      return acc;
+    }, {});
+    const hasSizes = normalizedSizes.length > 0;
+    const sizeBasedStock = normalizedSizes.reduce((sum, size) => sum + (normalizedSizeStocks[size] || 0), 0);
+    const isClothing = Boolean(product?.isClothing);
 
     return {
       ...product,
       category: normalizedCategories[0] || "",
       categories: normalizedCategories,
-      stock: Number.isFinite(parsedStock) ? Math.max(0, parsedStock) : 0,
+      unit: normalizedUnit,
+      isClothing,
+      sizes: normalizedSizes,
+      sizeStocks: normalizedSizeStocks,
+      stock: hasSizes
+        ? Math.max(0, sizeBasedStock)
+        : (Number.isFinite(parsedStock) ? Math.max(0, parsedStock) : 0),
       visible: product?.visible !== false,
       discount: normalizedDiscount,
       oldPrice: normalizedOldPrice,
@@ -1874,7 +1954,58 @@ document.addEventListener("DOMContentLoaded", () => {
     if (discount.type === "percent") {
       return `${Math.round(discount.value * 100) / 100}%`;
     }
-    return `${Math.round(discount.value * 100) / 100} грн`;
+    return `${Math.round(discount.value * 100) / 100} ${getCurrencyLabel(getCurrentCurrency())}`;
+  };
+
+  const hasSizedStockAccounting = (product) => Boolean(Array.isArray(product?.sizes) && product.sizes.length);
+
+  const getProductTotalStock = (product) => {
+    if (!hasSizedStockAccounting(product)) {
+      return Number.isFinite(Number(product?.stock)) ? Math.max(0, Number(product.stock)) : 0;
+    }
+    return product.sizes.reduce((sum, size) => {
+      const key = String(size || "").trim().toUpperCase();
+      const value = Number.parseInt(product?.sizeStocks?.[key], 10);
+      return sum + (Number.isFinite(value) && value > 0 ? value : 0);
+    }, 0);
+  };
+
+  const setStockSizeTotalHint = () => {
+    if (!stockSizeTotalHint || !stockSizeFields) return;
+    const total = Array.from(stockSizeFields.querySelectorAll('input[data-size-stock-input="1"]')).reduce((sum, input) => {
+      const parsed = Number.parseInt(input.value || "", 10);
+      return sum + (Number.isFinite(parsed) && parsed > 0 ? parsed : 0);
+    }, 0);
+    stockSizeTotalHint.textContent = `Загальний залишок: ${total}`;
+  };
+
+  const renderStockSizeFields = (product) => {
+    if (!stockSizeFieldsWrap || !stockSizeFields || !stockQuantityWrap || !stockQuantityInput) return;
+    const useSizeAccounting = hasSizedStockAccounting(product);
+
+    stockQuantityWrap.hidden = useSizeAccounting;
+    stockQuantityInput.required = !useSizeAccounting;
+    stockSizeFieldsWrap.hidden = !useSizeAccounting;
+    stockSizeFields.innerHTML = "";
+
+    if (!useSizeAccounting) {
+      stockSizeTotalHint.textContent = "";
+      return;
+    }
+
+    const sizeStocks = product?.sizeStocks || {};
+    product.sizes.forEach((size) => {
+      const key = String(size || "").trim().toUpperCase();
+      const row = document.createElement("label");
+      row.className = "stock-size-field";
+      row.innerHTML = `
+        <span>${key}</span>
+        <input type="number" min="0" step="1" data-size-stock-input="1" data-size-key="${key}" value="${Math.max(0, Number.parseInt(sizeStocks[key], 10) || 0)}">
+      `;
+      stockSizeFields.append(row);
+    });
+
+    setStockSizeTotalHint();
   };
 
   const selectedProductIds = new Set();
@@ -2323,7 +2454,100 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!productModal) return;
     productModal.classList.toggle("open", open);
     productModal.setAttribute("aria-hidden", open ? "false" : "true");
+    if (!open && productUnitSelect && productUnitOptions) {
+      productUnitSelect.classList.remove("open");
+      productUnitSelect.setAttribute("aria-expanded", "false");
+      productUnitOptions.hidden = true;
+    }
     updateModalScrollLock();
+  };
+
+  const applyProductUnitValue = (value) => {
+    const normalizedValue = String(value || "").trim();
+    const fallbackOption = productUnitOptionButtons[0] || null;
+    const matchedOption = productUnitOptionButtons.find((option) => String(option.dataset.value || "").trim() === normalizedValue) || fallbackOption;
+    if (!matchedOption) return;
+
+    if (productUnit) {
+      productUnit.value = String(matchedOption.dataset.value || "шт");
+    }
+    if (productUnitLabel) {
+      productUnitLabel.textContent = String(matchedOption.dataset.label || matchedOption.textContent || "Штуки (шт)").trim();
+    }
+    productUnitOptionButtons.forEach((option) => {
+      option.classList.toggle("active", option === matchedOption);
+      option.setAttribute("aria-selected", option === matchedOption ? "true" : "false");
+    });
+  };
+
+  const applyStoreCurrencyValue = (value) => {
+    const normalizedValue = normalizeCurrencyCode(value);
+    const fallbackOption = storeCurrencyOptionButtons[0] || null;
+    const matchedOption = storeCurrencyOptionButtons.find((option) => String(option.dataset.value || "").trim() === normalizedValue) || fallbackOption;
+    if (!matchedOption) return;
+
+    if (storeCurrency) {
+      storeCurrency.value = String(matchedOption.dataset.value || "uah");
+    }
+    if (storeCurrencyLabel) {
+      storeCurrencyLabel.textContent = String(matchedOption.dataset.label || matchedOption.textContent || "Гривня (грн)").trim();
+    }
+
+    storeCurrencyOptionButtons.forEach((option) => {
+      option.classList.toggle("active", option === matchedOption);
+      option.setAttribute("aria-selected", option === matchedOption ? "true" : "false");
+    });
+  };
+
+  const setStoreCurrencyOpen = (open) => {
+    if (!storeCurrencySelect || !storeCurrencyOptions) return;
+    storeCurrencyOptions.hidden = !open;
+    storeCurrencySelect.classList.toggle("open", open);
+    storeCurrencySelect.setAttribute("aria-expanded", open ? "true" : "false");
+  };
+
+  const syncProductSizesVisibility = () => {
+    if (!productIsClothing || !productSizesWrap) return;
+    productSizesWrap.hidden = !productIsClothing.checked;
+  };
+
+  const clearProductSizesSelection = () => {
+    Array.from(productSizes?.querySelectorAll('input[type="checkbox"]') || []).forEach((checkbox) => {
+      checkbox.checked = false;
+    });
+    if (productSizesCustom) {
+      productSizesCustom.value = "";
+    }
+  };
+
+  const collectProductSizes = () => {
+    const selected = Array.from(productSizes?.querySelectorAll('input[type="checkbox"]:checked') || [])
+      .map((checkbox) => String(checkbox.value || "").trim().toUpperCase())
+      .filter(Boolean);
+    const custom = String(productSizesCustom?.value || "")
+      .split(",")
+      .map((item) => item.trim().toUpperCase())
+      .filter(Boolean);
+    return Array.from(new Set([...selected, ...custom]));
+  };
+
+  const applyProductSizes = (sizes) => {
+    const normalized = Array.isArray(sizes)
+      ? sizes.map((size) => String(size || "").trim().toUpperCase()).filter(Boolean)
+      : [];
+    const selectedSet = new Set(normalized);
+    const knownValues = new Set(
+      Array.from(productSizes?.querySelectorAll('input[type="checkbox"]') || []).map((checkbox) => String(checkbox.value || "").trim().toUpperCase())
+    );
+
+    Array.from(productSizes?.querySelectorAll('input[type="checkbox"]') || []).forEach((checkbox) => {
+      checkbox.checked = selectedSet.has(String(checkbox.value || "").trim().toUpperCase());
+    });
+
+    const customOnly = normalized.filter((size) => !knownValues.has(size));
+    if (productSizesCustom) {
+      productSizesCustom.value = customOnly.join(", ");
+    }
   };
 
   const setProductFormMode = (mode, product = null) => {
@@ -2343,6 +2567,12 @@ document.addEventListener("DOMContentLoaded", () => {
       productSku.value = product.sku || "";
       productDescription.value = product.description || "";
       productPrice.value = product.price || "";
+      applyProductUnitValue(String(product.unit || "шт"));
+      if (productIsClothing) {
+        productIsClothing.checked = Boolean(product.isClothing);
+      }
+      syncProductSizesVisibility();
+      applyProductSizes(product.sizes || []);
       productOldPrice.value = product.oldPrice || "";
       productNewPrice.value = product.newPrice || "";
       productVisible.checked = product.visible !== false;
@@ -2361,6 +2591,12 @@ document.addEventListener("DOMContentLoaded", () => {
     productEditingId.value = "";
     productModalTitle.textContent = "Створення товару";
     productSubmitButton.textContent = "Створити товар";
+    applyProductUnitValue("шт");
+    if (productIsClothing) {
+      productIsClothing.checked = false;
+    }
+    syncProductSizesVisibility();
+    clearProductSizesSelection();
     productOldPrice.value = "";
     productNewPrice.value = "";
     productVisible.checked = true;
@@ -2416,11 +2652,22 @@ document.addEventListener("DOMContentLoaded", () => {
         : "";
     }
     syncMinimumOrderControls();
-    cartIconColor.value = settings.cartIconColor || "#2b4c85";
-    siteColor.value = settings.siteColor || "#2b4c85";
-    siteBackgroundType.value = settings.siteBackgroundType === "image" ? "image" : "color";
-    siteBackgroundColor.value = isHexColor(settings.siteBackgroundColor) ? settings.siteBackgroundColor : "#eef1f4";
-    siteBackgroundImage.value = String(settings.siteBackgroundImage || "").trim();
+    if (cartIconColor) {
+      cartIconColor.value = settings.cartIconColor || "#2b4c85";
+    }
+    if (siteColor) {
+      siteColor.value = settings.siteColor || "#2b4c85";
+    }
+    if (siteBackgroundType) {
+      siteBackgroundType.value = settings.siteBackgroundType === "image" ? "image" : "color";
+    }
+    if (siteBackgroundColor) {
+      siteBackgroundColor.value = isHexColor(settings.siteBackgroundColor) ? settings.siteBackgroundColor : "#eef1f4";
+    }
+    if (siteBackgroundImage) {
+      siteBackgroundImage.value = String(settings.siteBackgroundImage || "").trim();
+    }
+    applyStoreCurrencyValue(settings.currency || "uah");
     if (telegramOrderNotifyEnabled) {
       telegramOrderNotifyEnabled.checked = Boolean(settings.telegramOrderNotifyEnabled);
     }
@@ -2487,6 +2734,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   applySettings(readSettings());
   mergeAndSaveSettings({
+    currency: normalizeCurrencyCode(readSettings()?.currency || "uah"),
     telegramBotUsername: TELEGRAM_BOT_USERNAME,
     telegramApiBaseUrl: String((readSettings() || {}).telegramApiBaseUrl || "http://localhost:8787").trim(),
     shippingNovaPostEnabled: readSettings()?.shippingNovaPostEnabled ?? true,
@@ -3086,9 +3334,10 @@ document.addEventListener("DOMContentLoaded", () => {
         stockProductLabel.textContent = `${product.name} (${product.sku})`;
       }
       if (stockQuantityInput) {
-        const stockValue = Number.isFinite(Number(product.stock)) ? Math.max(0, Number(product.stock)) : 0;
+        const stockValue = getProductTotalStock(product);
         stockQuantityInput.value = String(stockValue);
       }
+      renderStockSizeFields(product);
       if (stockSavedMessage) {
         stockSavedMessage.textContent = "";
         stockSavedMessage.classList.remove("error");
@@ -3112,12 +3361,75 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  if (stockSizeFields) {
+    stockSizeFields.addEventListener("input", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) return;
+      if (target.dataset.sizeStockInput !== "1") return;
+      const parsed = Number.parseInt(target.value || "", 10);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        target.value = "0";
+      }
+      setStockSizeTotalHint();
+    });
+  }
+
   if (stockUpdateForm) {
     stockUpdateForm.addEventListener("submit", (event) => {
       event.preventDefault();
 
       const editingId = String(stockEditingProductId?.value || "").trim();
       if (!editingId) return;
+
+      const editingProduct = products.find((product) => product.id === editingId);
+      if (!editingProduct) return;
+
+      if (hasSizedStockAccounting(editingProduct)) {
+        const sizeInputs = Array.from(stockSizeFields?.querySelectorAll('input[data-size-stock-input="1"]') || []);
+        const nextSizeStocks = {};
+        let hasInvalidValue = false;
+        sizeInputs.forEach((input) => {
+          const sizeKey = String(input.dataset.sizeKey || "").trim().toUpperCase();
+          const parsed = Number.parseInt(input.value || "", 10);
+          if (!sizeKey || !Number.isFinite(parsed) || parsed < 0) {
+            hasInvalidValue = true;
+            return;
+          }
+          nextSizeStocks[sizeKey] = parsed;
+        });
+
+        if (hasInvalidValue) {
+          if (stockSavedMessage) {
+            stockSavedMessage.classList.add("error");
+            stockSavedMessage.textContent = "Вкажіть коректний залишок по кожному розміру (0 або більше).";
+          }
+          return;
+        }
+
+        const totalStock = Object.values(nextSizeStocks).reduce((sum, value) => sum + value, 0);
+        products = products.map((product) => {
+          if (product.id !== editingId) return product;
+          return {
+            ...product,
+            sizeStocks: nextSizeStocks,
+            stock: totalStock,
+            updatedAt: new Date().toISOString()
+          };
+        });
+
+        saveProducts(products);
+        renderProductsTable(products);
+
+        if (stockSavedMessage) {
+          stockSavedMessage.classList.remove("error");
+          stockSavedMessage.textContent = "Залишок по розмірах оновлено";
+        }
+
+        setTimeout(() => {
+          setStockModalOpen(false);
+        }, 300);
+        return;
+      }
 
       const parsedQty = Number.parseInt(stockQuantityInput?.value || "", 10);
       if (!Number.isFinite(parsedQty) || parsedQty < 0) {
@@ -3202,6 +3514,70 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   if (productCreateForm) {
+    applyProductUnitValue(productUnit?.value || "шт");
+
+
+  if (storeCurrencyTrigger && storeCurrencyOptions) {
+    storeCurrencyTrigger.addEventListener("click", () => {
+      const shouldOpen = storeCurrencyOptions.hidden;
+      setStoreCurrencyOpen(shouldOpen);
+    });
+  }
+
+  if (storeCurrencyOptions) {
+    storeCurrencyOptions.addEventListener("click", (event) => {
+      const option = event.target.closest(".custom-unit-option");
+      if (!option) return;
+      const value = String(option.dataset.value || "").trim();
+      applyStoreCurrencyValue(value);
+      setStoreCurrencyOpen(false);
+    });
+  }
+
+  document.addEventListener("mousedown", (event) => {
+    if (!storeCurrencySelect) return;
+    if (storeCurrencySelect.contains(event.target)) return;
+    setStoreCurrencyOpen(false);
+  });
+    if (productUnitTrigger && productUnitSelect && productUnitOptions) {
+      productUnitTrigger.addEventListener("click", () => {
+        const shouldOpen = productUnitOptions.hidden;
+        productUnitOptions.hidden = !shouldOpen;
+        productUnitSelect.classList.toggle("open", shouldOpen);
+        productUnitSelect.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+      });
+    }
+
+    if (productUnitOptions && productUnitSelect) {
+      productUnitOptions.addEventListener("click", (event) => {
+        const option = event.target.closest(".custom-unit-option");
+        if (!option) return;
+        const value = String(option.dataset.value || "").trim();
+        applyProductUnitValue(value);
+        productUnitOptions.hidden = true;
+        productUnitSelect.classList.remove("open");
+        productUnitSelect.setAttribute("aria-expanded", "false");
+      });
+    }
+
+    if (productIsClothing) {
+      productIsClothing.addEventListener("change", () => {
+        syncProductSizesVisibility();
+        if (!productIsClothing.checked) {
+          clearProductSizesSelection();
+        }
+      });
+      syncProductSizesVisibility();
+    }
+
+    document.addEventListener("mousedown", (event) => {
+      if (!productUnitSelect || !productUnitOptions) return;
+      if (productUnitSelect.contains(event.target)) return;
+      productUnitOptions.hidden = true;
+      productUnitSelect.classList.remove("open");
+      productUnitSelect.setAttribute("aria-expanded", "false");
+    });
+
     productName.addEventListener("input", () => {
       if (productName.value.length > MAX_PRODUCT_NAME_LENGTH) {
         productName.value = productName.value.slice(0, MAX_PRODUCT_NAME_LENGTH);
@@ -3241,6 +3617,9 @@ document.addEventListener("DOMContentLoaded", () => {
         .map((checkbox) => normalizeCategoryName(checkbox.value))
         .filter(Boolean);
       const parsedPrice = Number.parseInt(productPrice.value, 10);
+      const normalizedUnit = String(productUnit?.value || "шт").trim() || "шт";
+      const isClothing = Boolean(productIsClothing?.checked);
+      const selectedSizes = isClothing ? collectProductSizes() : [];
       const parsedOldPrice = productOldPrice.value.trim() ? Number.parseFloat(productOldPrice.value) : null;
       const parsedNewPrice = productNewPrice.value.trim() ? Number.parseFloat(productNewPrice.value) : null;
       const isVisible = Boolean(productVisible.checked);
@@ -3293,6 +3672,12 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      if (isClothing && !selectedSizes.length) {
+        productSavedMessage.textContent = "Для одягу оберіть хоча б один розмір.";
+        productSavedMessage.classList.add("error");
+        return;
+      }
+
       const skuExists = products.some((product) => product.sku.toUpperCase() === normalizedSku && product.id !== editingId);
       if (skuExists) {
         productSavedMessage.textContent = "Товар з таким артикулом вже існує.";
@@ -3315,6 +3700,15 @@ document.addEventListener("DOMContentLoaded", () => {
           }))
         : existingProduct?.photos || [];
 
+      const preservedSizeStocks = isClothing
+        ? selectedSizes.reduce((acc, sizeKey) => {
+            const current = Number.parseInt(existingProduct?.sizeStocks?.[sizeKey], 10);
+            acc[sizeKey] = Number.isFinite(current) && current > 0 ? current : 0;
+            return acc;
+          }, {})
+        : {};
+      const totalStockFromSizes = Object.values(preservedSizeStocks).reduce((sum, value) => sum + value, 0);
+
       const nextProduct = {
         id: editingId || `product-${Date.now()}`,
         sku: normalizedSku,
@@ -3323,9 +3717,13 @@ document.addEventListener("DOMContentLoaded", () => {
         categories: normalizedCategories,
         description: normalizedDescription,
         price: normalizedNewPrice || parsedPrice,
+        unit: normalizedUnit,
+        isClothing,
+        sizes: selectedSizes,
+        sizeStocks: preservedSizeStocks,
         oldPrice: normalizedOldPrice,
         newPrice: normalizedNewPrice,
-        stock: existingProduct?.stock ?? 0,
+        stock: isClothing ? totalStockFromSizes : (existingProduct?.stock ?? 0),
         discount: existingProduct?.discount || null,
         visible: isVisible,
         photos: nextPhotos,
@@ -3728,6 +4126,7 @@ document.addEventListener("DOMContentLoaded", () => {
         name: normalizedName,
         description: normalizedDescription,
         avatar: storeAvatar.value.trim(),
+        currency: normalizeCurrencyCode(storeCurrency?.value || "uah"),
         minimumOrderEnabled: minimumEnabled,
         minimumOrderAmount: minimumEnabled ? minimumValue : null,
         instagram: socialInstagram.value.trim(),

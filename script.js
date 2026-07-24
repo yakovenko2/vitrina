@@ -38,6 +38,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const photoNextBtn = document.getElementById("photoNextBtn");
   const params = new URLSearchParams(window.location.search);
   const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const shouldOpenCartFromHash = hashParams.get("openCart") === "1";
   const galleryItems = [...products].map((product, index) => ({
     index,
     node: product,
@@ -244,7 +245,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <button type="button" class="cart-item-remove" aria-label="Видалити товар з кошика" title="Видалити">×</button>
           <img src="${item.image}" alt="${item.name}">
           <div class="cart-item-meta">
-            <p class="cart-item-name">${item.name}</p>
+            <p class="cart-item-name">${item.name}${item.size ? ` (${item.size})` : ""}</p>
             <p class="cart-item-price">${toCurrency(item.price)}</p>
           </div>
           <div class="cart-item-controls">
@@ -530,11 +531,6 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      if (event.target.closest(".thumb")) {
-        openPhotoViewerByProduct(product);
-        return;
-      }
-
       openProduct();
     });
 
@@ -647,4 +643,8 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   renderCart();
+
+  if (shouldOpenCartFromHash) {
+    setCartOpen(true);
+  }
 });

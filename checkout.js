@@ -1065,6 +1065,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const qty = Math.max(1, Number(item.qty) || 1);
       const unitPrice = Math.max(0, Number(item.price) || 0);
       const lineTotal = unitPrice * qty;
+      const selectedSize = String(item.size || "").trim().toUpperCase();
       const cartId = String(item.id || `${name}-${index}`).trim();
       const photo = String(item.image || "https://picsum.photos/seed/lavka-order-item/80/80").trim();
       const encodedCartId = encodeURIComponent(cartId);
@@ -1075,7 +1076,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <img class="cart-line-photo" src="${escapeHtml(photo)}" alt="${escapeHtml(name)}">
             <div>
               <p class="cart-line-name">${escapeHtml(name)}</p>
-              <p class="cart-line-meta">${formatPrice(unitPrice)} × ${qty}</p>
+              <p class="cart-line-meta">${formatPrice(unitPrice)} × ${qty}${selectedSize ? ` · Розмір ${escapeHtml(selectedSize)}` : ""}</p>
             </div>
           </div>
           <p class="cart-line-total">${formatPrice(lineTotal)}</p>
@@ -1113,7 +1114,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (!shippingMethods.length) {
       checkoutMessage.textContent = "Немає доступних способів доставки. Увімкніть їх в адмін-панелі.";
     } else if (!paymentMethods.length) {
-      checkoutMessage.textContent = "Немає доступних способів оплати. Увімкніть їх в адмін-панелі.";
+      checkoutMessage.textContent = "";
     }
   };
 

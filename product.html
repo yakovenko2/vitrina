@@ -4,14 +4,30 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Товар — Lavka Keramiky</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="product.css">
 </head>
 <body>
   <main class="product-page">
-    <a id="backToCategory" class="back-btn" href="index.html">
-      <span aria-hidden="true">←</span>
-      Повернутись в категорію
+    <a id="backToCategory" class="back-btn" href="index.html" aria-label="Повернутися в категорію" title="Повернутися в категорію">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+        <path d="M15 5 8 12l7 7" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
     </a>
+
+    <button id="openCartLinkBtn" class="product-cart-fab" type="button" aria-label="Відкрити кошик">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M2 3h2l2.2 11.4a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L20 7H5.2"/></svg>
+      <span id="productCartCountBadge" class="product-cart-fab-badge" aria-live="polite">0</span>
+    </button>
+
+    <button id="copyProductLinkBtn" class="product-link-fab" type="button" aria-label="Скопіювати посилання на товар" title="Скопіювати посилання на товар">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M10 14a4 4 0 0 0 5.66 0l2.83-2.83a4 4 0 1 0-5.66-5.66L11 7" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M14 10a4 4 0 0 0-5.66 0l-2.83 2.83a4 4 0 1 0 5.66 5.66L13 17" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
 
     <section class="product-card" id="productCard">
       <div class="main-image-wrap">
@@ -27,6 +43,12 @@
         <p id="productPrice" class="price"></p>
       </div>
 
+      <section id="productSizesBlock" class="sizes-block" hidden>
+        <h2>Оберіть розмір</h2>
+        <div id="productSizesList" class="sizes-list"></div>
+        <p id="productSizesHint" class="sizes-hint" hidden>Оберіть розмір перед додаванням у кошик.</p>
+      </section>
+
       <div class="buy-row">
         <div class="qty-control" aria-label="Вибір кількості">
           <button id="minusQty" type="button" class="qty-btn" aria-label="Зменшити кількість">−</button>
@@ -41,11 +63,36 @@
         <p id="productDescription"></p>
       </section>
 
-      <section class="details-block">
-        <h2>Детальні фото</h2>
-        <div id="detailGallery" class="detail-gallery"></div>
-      </section>
     </section>
+
+    <div class="product-cart-overlay" id="productCartOverlay" aria-hidden="true"></div>
+    <aside class="product-cart-drawer" id="productCartDrawer" aria-hidden="true" aria-label="Кошик">
+      <div class="product-cart-head">
+        <h2>Кошик</h2>
+        <button class="product-cart-close" id="closeProductCartBtn" type="button" aria-label="Закрити кошик">×</button>
+      </div>
+
+      <div class="product-cart-items" id="productCartItems"></div>
+
+      <div class="product-cart-footer">
+        <p class="product-cart-total">Разом: <strong id="productCartTotal">0 грн</strong></p>
+        <p class="product-cart-minimum-hint" id="productCartMinimumHint" hidden></p>
+        <button class="product-cart-checkout-btn" id="productCheckoutCartBtn" type="button">Оформити замовлення</button>
+        <button class="product-cart-clear-btn" id="productClearCartBtn" type="button">Очистити кошик</button>
+      </div>
+    </aside>
+
+    <div class="photo-fullscreen" id="photoFullscreen" aria-hidden="true" role="dialog" aria-label="Повноекранний перегляд фото">
+      <div class="photo-fullscreen-backdrop" id="photoFullscreenBackdrop"></div>
+      <div class="photo-fullscreen-body">
+        <button type="button" class="photo-fullscreen-close" id="photoFullscreenClose" aria-label="Закрити перегляд">×</button>
+        <img id="photoFullscreenImage" class="photo-fullscreen-image" src="" alt="Фото товару у повному екрані">
+        <div class="photo-fullscreen-zoom-controls">
+          <button type="button" id="zoomOutBtn" aria-label="Зменшити фото">−</button>
+          <button type="button" id="zoomInBtn" aria-label="Збільшити фото">+</button>
+        </div>
+      </div>
+    </div>
   </main>
 
 <script src="product.js"></script>

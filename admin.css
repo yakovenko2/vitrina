@@ -1866,9 +1866,25 @@ th {
 
 .settings-form {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+
+.settings-form > * {
+  min-width: 0;
+}
+
+#settings .settings-form {
+  align-items: start;
+}
+
+#settings .settings-form > label,
+#settings .settings-form > .avatar-row,
+#settings .settings-form > .social-fieldset,
+#settings .settings-form > .action-btn,
+#settings .settings-form > .saved-message {
+  width: 100%;
+  max-width: 760px;
+}
 .settings-form label {
   display: grid;
   gap: 6px;
@@ -1914,7 +1930,7 @@ th {
   display: grid;
   grid-template-columns: 96px 1fr;
   gap: 12px;
-  align-items: start;
+  align-items: center;
 }
 
 .avatar-preview {
@@ -1983,8 +1999,6 @@ th {
   justify-content: flex-end;
 }
 
-  line-height: 1.15;
-  overflow-wrap: anywhere;
 .background-preview {
   margin-top: 10px;
   min-height: 140px;
@@ -1998,7 +2012,6 @@ th {
   gap: 6px;
   font-size: 13px;
   font-weight: 700;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 
 #sales .sales-range-form > * {

@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Авторизація — Лавка</title>
+  <meta name="description" content="Авторизація в Лавці: номер телефону та код підтвердження." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --blue: #378add;
+      --blue-dark: #2b6db1;
+      --bg-soft: #e6f1fb;
+      --ink: #1b2a3d;
+      --gray: #667487;
+      --line: #d7e3f2;
+      --radius: 16px;
+      --radius-sm: 12px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Nunito", system-ui, -apple-system, sans-serif;
+      font-weight: 600;
+      color: var(--ink);
+      background: var(--bg-soft);
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page {
+      width: 100%;
+      max-width: 460px;
+      margin: 0 auto;
+      padding: 16px 14px 32px;
+      min-height: 100vh;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      height: 44px;
+      color: var(--blue);
+      text-decoration: none;
+      padding: 0;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #ffffff;
+      box-shadow: 0 6px 14px rgba(36, 77, 126, 0.14);
+      transition: transform 0.16s ease, background-color 0.16s ease, border-color 0.16s ease;
+      flex: 0 0 44px;
+    }
+
+    .back-btn svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .back-btn:hover {
+      transform: translateY(-1px);
+      background: #f5f9ff;
+      border-color: #bfd6ef;
+    }
+
+    .back-btn:active {
+      transform: scale(0.95);
+    }
+
+    h1 {
+      margin: 0 0 4px;
+      font-size: 22px;
+      line-height: 1.2;
+      font-weight: 800;
+    }
+
+    .subhead {
+      margin: 0 0 16px;
+      color: var(--gray);
+      font-size: 14px;
+    }
+
+    .tips-card {
+      position: relative;
+      overflow: hidden;
+      border-radius: var(--radius);
+      padding: 16px 16px 14px;
+      margin-bottom: 14px;
+      background: linear-gradient(135deg, var(--blue) 0%, #4a9be5 100%);
+      color: #fff;
+      box-shadow: 0 10px 24px rgba(55, 138, 221, 0.24);
+    }
+
+    .tips-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 100% 0%, rgba(255,255,255,0.16), transparent 45%),
+        radial-gradient(circle at 0% 120%, rgba(240,153,123,0.30), transparent 50%);
+      pointer-events: none;
+    }
+
+    .tips-top {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .tips-icon {
+      width: 26px;
+      height: 26px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.2);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 26px;
+    }
+
+    .tips-label {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      opacity: 0.85;
+    }
+
+    .tips-body {
+      position: relative;
+      min-height: 40px;
+    }
+
+    .tip-text {
+      position: absolute;
+      inset: 0;
+      margin: 0;
+      font-size: 14.5px;
+      font-weight: 700;
+      line-height: 1.4;
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity .45s ease, transform .45s ease;
+    }
+
+    .tip-text.show {
+      position: relative;
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .tips-dots {
+      position: relative;
+      display: flex;
+      gap: 5px;
+      margin-top: 12px;
+    }
+
+    .tips-dots span {
+      height: 4px;
+      flex: 1;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.28);
+      overflow: hidden;
+    }
+
+    .tips-dots span i {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: #fff;
+      border-radius: 999px;
+    }
+
+    .tips-dots span.filled i {
+      width: 100%;
+      transition: none;
+    }
+
+    .tips-dots span.running i {
+      width: 100%;
+      transition: width linear;
+    }
+
+    .auth-card {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 18px;
+    }
+
+    .progress {
+      display: flex;
+      align-items: flex-start;
+      margin-bottom: 22px;
+    }
+
+    .progress-step {
+      flex: 1;
+      min-width: 0;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .progress-track {
+      position: absolute;
+      top: 14px;
+      left: -50%;
+      width: 100%;
+      height: 3px;
+      background: #dde8f5;
+      z-index: 0;
+    }
+
+    .progress-step:first-child .progress-track {
+      display: none;
+    }
+
+    .progress-step.done .progress-track,
+    .progress-step.active .progress-track {
+      background: var(--blue);
+    }
+
+    .progress-dot {
+      position: relative;
+      z-index: 1;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background: #fff;
+      border: 2.5px solid #dde8f5;
+      color: #9fb2c8;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 800;
+      transition: border-color .2s ease, background-color .2s ease, color .2s ease;
+    }
+
+    .progress-step.active .progress-dot {
+      border-color: var(--blue);
+      color: var(--blue);
+      background: #eaf3ff;
+    }
+
+    .progress-step.done .progress-dot {
+      border-color: var(--blue);
+      background: var(--blue);
+      color: #fff;
+    }
+
+    .progress-caption {
+      margin: 7px 0 0;
+      font-size: 11.5px;
+      font-weight: 700;
+      color: #9fb2c8;
+      line-height: 1.25;
+      padding: 0 2px;
+    }
+
+    .progress-step.active .progress-caption {
+      color: var(--blue);
+      font-weight: 800;
+    }
+
+    .progress-step.done .progress-caption {
+      color: #6c8aab;
+    }
+
+    .step-panel {
+      display: none;
+    }
+
+    .step-panel.active {
+      display: block;
+    }
+
+    .step-title {
+      margin: 0 0 14px;
+      font-size: 19px;
+      line-height: 1.25;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+
+    .field label {
+      font-size: 13px;
+      font-weight: 800;
+      color: #3d4f66;
+    }
+
+    .field input {
+      width: 100%;
+      min-height: 48px;
+      border-radius: 11px;
+      border: 1px solid #ceddee;
+      background: #fff;
+      padding: 10px 14px;
+      font: inherit;
+      font-size: 16px;
+      color: var(--ink);
+      outline: none;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+
+    .field input:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(55, 138, 221, 0.16);
+    }
+
+    .btn {
+      border: 0;
+      border-radius: 12px;
+      min-height: 48px;
+      width: 100%;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      padding: 12px 18px;
+      transition: transform .14s ease, filter .16s ease;
+    }
+
+    .btn:active {
+      transform: scale(.985);
+    }
+
+    .btn-primary {
+      background: var(--blue);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: var(--blue-dark);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--gray);
+      font-weight: 700;
+      font-size: 13px;
+      min-height: 34px;
+      margin-top: 4px;
+    }
+
+    .code-hint {
+      border: 1px dashed #c6d8ef;
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: #f5faff;
+      margin: -2px 0 12px;
+      display: none;
+      color: #27476f;
+      font-size: 13px;
+    }
+
+    .status {
+      margin-top: 10px;
+      min-height: 18px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #46607f;
+    }
+
+    .status.error {
+      color: #b33b47;
+    }
+
+    .status.success {
+      color: #487518;
+    }
+
+    .auth-time-note {
+      margin: 14px 0 0;
+      text-align: center;
+      color: rgba(72, 89, 112, 0.58);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+
+    @media (min-width: 560px) {
+      .page {
+        padding-top: 24px;
+        padding-bottom: 24px;
+      }
+
+      h1 {
+        font-size: 26px;
+      }
+
+      .auth-card {
+        padding: 24px;
+      }
+
+      .tips-card {
+        padding: 20px 22px 18px;
+      }
+
+      .tip-text {
+        font-size: 15.5px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <a class="back-btn" href="landing.html" aria-label="Повернутися назад" title="Повернутися назад">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+          <path d="M15 5 8 12l7 7" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </a>
+    </header>
+
+    <h1>Увійти в кабінет</h1>
+    <p class="subhead">Два кроки — і ви в адмін-панелі</p>
+
+    <div class="tips-card" aria-label="Поради щодо входу">
+      <div class="tips-top">
+        <span class="tips-icon" aria-hidden="true">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/><circle cx="12" cy="12" r="4"/></svg>
+        </span>
+        <span class="tips-label">Порада</span>
+      </div>
+      <div class="tips-body" id="tipsBody"></div>
+      <div class="tips-dots" id="tipsDots"></div>
+    </div>
+
+    <section class="auth-card" aria-label="Форма авторизації">
+      <div class="progress" aria-label="Прогрес авторизації">
+        <div class="progress-step active" data-progress="1">
+          <span class="progress-track" aria-hidden="true"></span>
+          <span class="progress-dot">1</span>
+          <p class="progress-caption">Телефон</p>
+        </div>
+        <div class="progress-step" data-progress="2">
+          <span class="progress-track" aria-hidden="true"></span>
+          <span class="progress-dot">2</span>
+          <p class="progress-caption">Код підтвердження</p>
+        </div>
+      </div>
+
+      <form id="loginForm" novalidate>
+        <div class="step-panel active" data-step="1">
+          <h2 class="step-title">Введіть номер телефону</h2>
+
+          <div class="field">
+            <label for="phoneInput">Телефон</label>
+            <input id="phoneInput" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+380XXXXXXXXX" maxlength="16" required />
+          </div>
+
+          <button type="button" class="btn btn-primary" id="sendCodeBtn">Отримати код</button>
+          <p class="status" id="step1Status" aria-live="polite"></p>
+        </div>
+
+        <div class="step-panel" data-step="2">
+          <h2 class="step-title">Код із SMS</h2>
+
+          <div class="code-hint" id="codeBox" aria-live="polite"></div>
+
+          <div class="field">
+            <label for="codeInput">Код підтвердження</label>
+            <input id="codeInput" name="code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="4 цифри" required />
+          </div>
+
+          <button type="submit" class="btn btn-primary">Увійти</button>
+          <button type="button" class="btn btn-ghost" id="backToStep1Btn">Назад</button>
+
+          <p class="status" id="step2Status" aria-live="polite"></p>
+        </div>
+      </form>
+      <p class="auth-time-note">Авторизація триває не більше 30 сек</p>
+    </section>
+  </div>
+
+  <script>
+    (function () {
+      var AUTH_KEY = "lavkaAuth";
+      var currentStep = 1;
+      var generatedCode = "";
+
+      var tips = [
+        "Тримайте телефон під рукою: код діє лише 2 хвилини.",
+        "Перевірте правильність номера, щоб уникнути затримок.",
+        "Після входу ви одразу потрапите в адмін-панель."
+      ];
+      var tipIndex = 0;
+      var TIP_INTERVAL = 3500;
+
+      var progressItems = Array.from(document.querySelectorAll(".progress-step"));
+      var stepPanels = Array.from(document.querySelectorAll(".step-panel"));
+
+      var tipsBody = document.getElementById("tipsBody");
+      var tipsDots = document.getElementById("tipsDots");
+
+      var phoneInput = document.getElementById("phoneInput");
+      var codeInput = document.getElementById("codeInput");
+      var codeBox = document.getElementById("codeBox");
+      var sendCodeBtn = document.getElementById("sendCodeBtn");
+      var backToStep1Btn = document.getElementById("backToStep1Btn");
+      var loginForm = document.getElementById("loginForm");
+
+      var step1Status = document.getElementById("step1Status");
+      var step2Status = document.getElementById("step2Status");
+
+      function renderTipsSkeleton() {
+        tipsDots.innerHTML = "";
+        tips.forEach(function () {
+          var dot = document.createElement("span");
+          var inner = document.createElement("i");
+          dot.append(inner);
+          tipsDots.append(dot);
+        });
+      }
+
+      function renderTip(index) {
+        tipsBody.innerHTML = "";
+
+        var tipEl = document.createElement("p");
+        tipEl.className = "tip-text";
+        tipEl.textContent = tips[index];
+        tipsBody.append(tipEl);
+
+        requestAnimationFrame(function () {
+          tipEl.classList.add("show");
+        });
+
+        var dots = Array.from(tipsDots.children);
+        dots.forEach(function (dot, i) {
+          dot.classList.remove("filled", "running");
+          dot.firstElementChild.style.transitionDuration = "0ms";
+          dot.firstElementChild.style.width = "0%";
+
+          if (i < index) {
+            dot.classList.add("filled");
+            dot.firstElementChild.style.width = "100%";
+          }
+          if (i === index) {
+            dot.classList.add("running");
+            dot.firstElementChild.style.transitionDuration = TIP_INTERVAL + "ms";
+            requestAnimationFrame(function () {
+              dot.firstElementChild.style.width = "100%";
+            });
+          }
+        });
+      }
+
+      function startTipsRotation() {
+        renderTipsSkeleton();
+        renderTip(tipIndex);
+
+        setInterval(function () {
+          tipIndex = (tipIndex + 1) % tips.length;
+          renderTip(tipIndex);
+        }, TIP_INTERVAL);
+      }
+
+      function updateProgress() {
+        progressItems.forEach(function (item) {
+          var step = Number(item.getAttribute("data-progress"));
+          var isDone = step < currentStep;
+          item.classList.toggle("active", step === currentStep);
+          item.classList.toggle("done", isDone);
+
+          var dot = item.querySelector(".progress-dot");
+          dot.textContent = isDone ? "✓" : String(step);
+        });
+
+        stepPanels.forEach(function (panel) {
+          var panelStep = Number(panel.getAttribute("data-step"));
+          panel.classList.toggle("active", panelStep === currentStep);
+        });
+      }
+
+      function setStatus(el, text, kind) {
+        el.textContent = text || "";
+        el.classList.remove("error", "success");
+        if (kind) {
+          el.classList.add(kind);
+        }
+      }
+
+      function normalizePhone(raw) {
+        var value = String(raw || "").trim();
+        return value.replace(/[^0-9+]/g, "");
+      }
+
+      function isValidPhone(phone) {
+        return /^\+?\d{10,14}$/.test(phone);
+      }
+
+      function goToStep(step) {
+        currentStep = step;
+        updateProgress();
+        if (step === 1) {
+          phoneInput.focus();
+        }
+        if (step === 2) {
+          codeInput.focus();
+        }
+      }
+
+      sendCodeBtn.addEventListener("click", function () {
+        setStatus(step1Status, "", "");
+        var phone = normalizePhone(phoneInput.value);
+        phoneInput.value = phone;
+
+        if (!isValidPhone(phone)) {
+          setStatus(step1Status, "Введи коректний номер телефону.", "error");
+          phoneInput.focus();
+          return;
+        }
+
+        generatedCode = String(Math.floor(1000 + Math.random() * 9000));
+        codeBox.style.display = "block";
+        codeBox.textContent = "Демо-код: " + generatedCode;
+        goToStep(2);
+      });
+
+      backToStep1Btn.addEventListener("click", function () {
+        goToStep(1);
+      });
+
+      loginForm.addEventListener("submit", function (event) {
+        event.preventDefault();
+        setStatus(step2Status, "", "");
+
+        var enteredCode = String(codeInput.value || "").trim();
+        if (enteredCode.length !== 4) {
+          setStatus(step2Status, "Код має містити 4 цифри.", "error");
+          return;
+        }
+
+        if (enteredCode !== generatedCode) {
+          setStatus(step2Status, "Невірний код. Спробуй ще раз.", "error");
+          return;
+        }
+
+        localStorage.setItem(AUTH_KEY, JSON.stringify({
+          phone: normalizePhone(phoneInput.value),
+          authorizedAt: new Date().toISOString()
+        }));
+
+        setStatus(step2Status, "Успішно! Переходимо в адмін-панель...", "success");
+        setTimeout(function () {
+          window.location.href = "admin.html";
+        }, 650);
+      });
+
+      startTipsRotation();
+      updateProgress();
+      phoneInput.focus();
+    })();
+  </script>
+</body>
+</html>

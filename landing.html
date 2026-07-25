@@ -81,6 +81,28 @@
 
     .btn-block { width: 100%; }
 
+    .btn-cta-blink {
+      animation: ctaSoftBlink 2.2s ease-in-out infinite;
+    }
+
+    @keyframes ctaSoftBlink {
+      0%,
+      100% {
+        box-shadow: 0 0 0 0 rgba(55, 138, 221, 0);
+        filter: brightness(1);
+      }
+      50% {
+        box-shadow: 0 0 0 6px rgba(55, 138, 221, 0.16);
+        filter: brightness(1.05);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .btn-cta-blink {
+        animation: none;
+      }
+    }
+
     /* ---------- Header ---------- */
     header {
       position: sticky;
@@ -159,43 +181,12 @@
     }
     .avatars span:first-child { margin-left: 0; }
 
-    /* Phone mockup */
+    /* Hero phone screenshot */
     .phone-wrap { display: flex; justify-content: center; }
-    .phone {
-      width: 260px;
-      background: #0f1c2e;
-      border-radius: 34px;
-      padding: 12px;
-      box-shadow: 0 0 0 2px #0f1c2e;
-    }
-    .phone-screen {
-      background: #fff;
-      border-radius: 24px;
-      overflow: hidden;
-    }
-    .phone-top {
-      background: var(--blue);
-      color: #fff;
-      padding: 16px 16px 20px;
-    }
-    .phone-top .store-name { font-weight: 800; font-size: 17px; }
-    .phone-top .store-cat { font-size: 12px; opacity: .85; font-weight: 700; }
-    .phone-goods {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
-      padding: 14px;
-    }
-    .good {
-      background: #f5f8fc; border-radius: 12px; padding: 10px;
-    }
-    .good .thumb {
-      height: 60px; border-radius: 8px; margin-bottom: 8px;
-      display: flex; align-items: center; justify-content: center; font-size: 26px;
-    }
-    .good .g-name { font-size: 12px; font-weight: 800; }
-    .good .g-price { font-size: 12px; color: var(--green); font-weight: 800; }
-    .phone-cta {
-      margin: 4px 14px 16px; background: var(--coral); color: #5a2c17;
-      text-align: center; padding: 12px; border-radius: 12px; font-weight: 800; font-size: 14px;
+    .phone-shot {
+      width: min(100%, 400px);
+      height: auto;
+      filter: drop-shadow(0 16px 26px rgba(28, 55, 96, 0.18));
     }
 
     /* ---------- Steps ---------- */
@@ -288,11 +279,6 @@
     .cta-form {
       display: grid; gap: 12px; max-width: 440px; margin: 0 auto;
     }
-    .cta-form input {
-      height: 50px; border-radius: 12px; border: none; padding: 0 16px;
-      font-family: inherit; font-weight: 700; font-size: 16px; color: var(--ink);
-    }
-    .cta-form input:focus { outline: 3px solid var(--coral); }
 
     /* ---------- Footer ---------- */
     footer { background: #0f1c2e; color: #b7c2d0; padding: 48px 0 32px; }
@@ -329,23 +315,24 @@
       .features-grid { grid-template-columns: repeat(2, 1fr); }
       .examples-scroll { grid-auto-columns: 46%; }
       .pricing-grid { grid-template-columns: repeat(3, 1fr); }
-      .footer-top { grid-template-columns: 2fr 1fr 1fr; }
-      .cta-form { grid-template-columns: 1fr 1fr; }
-      .cta-form .btn { grid-column: 1 / -1; }
+      .footer-top { grid-template-columns: repeat(2, 1fr); }
+      .cta-form { max-width: 360px; }
     }
 
     @media (min-width: 1024px) {
       .nav-links { display: flex; }
       .hero-grid { grid-template-columns: 1.1fr .9fr; }
       .hero h1 { font-size: 50px; }
-      .steps { grid-template-columns: repeat(4, 1fr); }
+      .steps { grid-template-columns: repeat(3, 1fr); }
       .features-grid { grid-template-columns: repeat(3, 1fr); }
       .examples-scroll {
         grid-auto-flow: row;
         grid-template-columns: repeat(3, 1fr);
         overflow: visible;
       }
+      .footer-top { grid-template-columns: 2fr 1fr 1fr 1fr; }
     }
+
   </style>
 </head>
 <body>
@@ -368,8 +355,8 @@
       </nav>
 
       <div class="nav-actions">
-        <a href="#" class="btn btn-ghost">Увійти</a>
-        <a href="#cta" class="btn btn-primary">Реєстрація</a>
+        <a href="login.html" class="btn btn-ghost">Увійти</a>
+        <a href="registration.html" class="btn btn-primary">Реєстрація</a>
       </div>
     </div>
   </header>
@@ -379,15 +366,11 @@
     <section class="hero">
       <div class="container hero-grid">
         <div>
-          <span class="badge-time">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-            Магазин за 30 хвилин
-          </span>
-          <h1>Створи свій інтернет-магазин <span>з телефону за 30 хвилин</span></h1>
-          <p class="hero-sub">Без знань ІТ, без комп'ютера — просто і логічно. Керуй товарами, замовленнями і продажами прямо зі смартфона.</p>
+          <h1>Почни продавати вже сьогодні — <span>створи магазин з телефону за 30 хвилин</span></h1>
+          <p class="hero-sub">Без знань ІТ, без комп'ютера. Додай товари, налаштуй оплату й отримуй перше замовлення вже завтра.</p>
 
           <div class="hero-btns">
-            <a href="#cta" class="btn btn-primary">Створити магазин безкоштовно</a>
+            <a href="registration.html" class="btn btn-primary btn-cta-blink">Створити магазин безкоштовно</a>
             <a href="#examples" class="btn btn-outline">Подивитись приклади</a>
           </div>
 
@@ -402,39 +385,9 @@
           </div>
         </div>
 
-        <!-- Phone mockup -->
+        <!-- Phone screenshot -->
         <div class="phone-wrap">
-          <div class="phone" role="img" aria-label="Приклад вітрини магазину на телефоні">
-            <div class="phone-screen">
-              <div class="phone-top">
-                <div class="store-name">Смаколики від Олі</div>
-                <div class="store-cat">Домашня випічка · Київ</div>
-              </div>
-              <div class="phone-goods">
-                <div class="good">
-                  <div class="thumb" style="background:#fdeee7" aria-hidden="true">🧁</div>
-                  <div class="g-name">Капкейк</div>
-                  <div class="g-price">65 грн</div>
-                </div>
-                <div class="good">
-                  <div class="thumb" style="background:#edf6e2" aria-hidden="true">🍰</div>
-                  <div class="g-name">Наполеон</div>
-                  <div class="g-price">420 грн</div>
-                </div>
-                <div class="good">
-                  <div class="thumb" style="background:#e6f1fb" aria-hidden="true">🍪</div>
-                  <div class="g-name">Печиво</div>
-                  <div class="g-price">90 грн</div>
-                </div>
-                <div class="good">
-                  <div class="thumb" style="background:#fdeee7" aria-hidden="true">🥐</div>
-                  <div class="g-name">Круасан</div>
-                  <div class="g-price">45 грн</div>
-                </div>
-              </div>
-              <div class="phone-cta">Оформити замовлення</div>
-            </div>
-          </div>
+          <img class="phone-shot" src="image/phone-scr.png" alt="Приклад вітрини магазину на телефоні">
         </div>
       </div>
     </section>
@@ -443,31 +396,25 @@
     <section id="how">
       <div class="container">
         <div class="section-head reveal">
-          <span class="eyebrow">Просто як 1-2-3-4</span>
           <h2>Як це працює</h2>
-          <p>Від ідеї до першого замовлення — усе з телефону, без сторонньої допомоги.</p>
+          <p>Усього 3 прості кроки: зареєструйся, додай товари та приймай замовлення.</p>
         </div>
 
         <div class="steps">
           <div class="step reveal">
             <div class="step-num">1</div>
-            <h3>Реєструєшся за хвилину</h3>
-            <p>Введи назву магазину — і кабінет готовий.</p>
+            <h3>Реєструєшся за 1 хвилину</h3>
+            <p>Вкажи номер телефону, підтверди код і створи магазин.</p>
           </div>
           <div class="step reveal">
             <div class="step-num">2</div>
             <h3>Додаєш товари з телефону</h3>
-            <p>Фото, назва, ціна — і товар вже у вітрині.</p>
+            <p>Додай фото, назву та ціну — і вітрина одразу готова до продажу.</p>
           </div>
           <div class="step reveal">
             <div class="step-num">3</div>
-            <h3>Обираєш оформлення</h3>
-            <p>Кольори, фон і стиль під свій бренд.</p>
-          </div>
-          <div class="step reveal">
-            <div class="step-num">4</div>
             <h3>Отримуєш замовлення</h3>
-            <p>Клієнти замовляють, ти отримуєш сповіщення.</p>
+            <p>Клієнти оформлюють покупки, а ти бачиш заявки в адмінці.</p>
           </div>
         </div>
       </div>
@@ -477,7 +424,6 @@
     <section id="features" class="features">
       <div class="container">
         <div class="section-head reveal">
-          <span class="eyebrow">Усе в одному місці</span>
           <h2>Можливості Лавки</h2>
           <p>Все необхідне, щоб продавати онлайн і не думати про технічні деталі.</p>
         </div>
@@ -497,14 +443,6 @@
             </div>
             <h3>Прийом замовлень</h3>
             <p>Отримуй і обробляй замовлення в одному зручному списку.</p>
-          </div>
-
-          <div class="feature reveal">
-            <div class="icon" style="background:#F0997B" aria-hidden="true">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
-            </div>
-            <h3>Кастомізація дизайну</h3>
-            <p>Змінюй кольори та фон, щоб магазин виглядав своїм.</p>
           </div>
 
           <div class="feature reveal">
@@ -570,7 +508,6 @@
     <section id="examples">
       <div class="container">
         <div class="section-head reveal">
-          <span class="eyebrow">Надихайся</span>
           <h2>Приклади магазинів</h2>
           <p>Різні ніші — одна проста платформа. Ось як це виглядає у справжніх власників.</p>
         </div>
@@ -625,7 +562,6 @@
     <section id="pricing" class="features">
       <div class="container">
         <div class="section-head reveal">
-          <span class="eyebrow">Прозорі ціни</span>
           <h2>Обери свій тариф</h2>
           <p>Почни безкоштовно, а масштабуйся коли будеш готовий.</p>
         </div>
@@ -641,7 +577,7 @@
               <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Стандартний дизайн</li>
               <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Прийом замовлень</li>
             </ul>
-            <a href="#cta" class="btn btn-outline btn-block">Спробувати безкоштовно</a>
+            <a href="registration.html" class="btn btn-outline btn-block">Спробувати безкоштовно</a>
           </div>
 
           <!-- Business (popular) -->
@@ -657,7 +593,7 @@
               <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Telegram-сповіщення</li>
               <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Доставка НП / Укрпошта</li>
             </ul>
-            <a href="#cta" class="btn btn-primary btn-block">Обрати план</a>
+            <a href="registration.html" class="btn btn-primary btn-block">Обрати план</a>
           </div>
 
           <!-- Pro -->
@@ -672,7 +608,7 @@
               <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Онлайн-оплата</li>
               <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Пріоритетна підтримка</li>
             </ul>
-            <a href="#cta" class="btn btn-outline btn-block">Обрати план</a>
+            <a href="registration.html" class="btn btn-outline btn-block">Обрати план</a>
           </div>
         </div>
       </div>
@@ -682,20 +618,12 @@
     <section id="cta" class="final">
       <div class="container">
         <div class="reveal">
-          <span class="badge-time" style="background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.3);color:#fff">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-            Запуск за 30 хвилин
-          </span>
           <h2>Створи свій магазин з телефону вже сьогодні</h2>
-          <p>Без комп'ютера і без знань ІТ. Залиш контакти — і ми допоможемо зробити перші кроки.</p>
+          <p>Реєстрація займає до 45 секунд: номер телефону, код і назва магазину.</p>
 
-          <form class="cta-form" onsubmit="event.preventDefault(); this.reset(); alert('Дякуємо! Ми скоро зв\'яжемось з тобою.');">
-            <label class="sr-only" for="shop-name">Назва магазину</label>
-            <input id="shop-name" name="shop" type="text" placeholder="Назва магазину" required />
-            <label class="sr-only" for="contact">Телефон або email</label>
-            <input id="contact" name="contact" type="text" placeholder="Телефон або email" required />
-            <button type="submit" class="btn btn-coral btn-block">Створити магазин безкоштовно</button>
-          </form>
+          <div class="cta-form">
+            <a href="registration.html" class="btn btn-coral btn-block">Перейти до реєстрації</a>
+          </div>
         </div>
       </div>
     </section>
@@ -723,6 +651,12 @@
           <a href="#">Контакти</a>
         </nav>
 
+        <nav class="footer-menu" aria-label="Юридичні документи">
+          <h4>Документи</h4>
+          <a href="terms.html">Умови використання</a>
+          <a href="offer.html">Публічна оферта</a>
+        </nav>
+
         <div class="footer-menu">
           <h4>Соцмережі</h4>
           <div class="socials">
@@ -731,6 +665,9 @@
             </a>
             <a href="#" aria-label="Instagram">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><line x1="17.5" y1="6.5" x2="17.5" y2="6.5"/></svg>
+            </a>
+            <a href="#" aria-label="TikTok">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.6 5.82c1.05.75 2.31 1.2 3.7 1.22v3.02a8.16 8.16 0 0 1-3.7-.93v5.66a5.73 5.73 0 1 1-4.95-5.67v3.12a2.66 2.66 0 1 0 1.83 2.55V2h3.12c.03 1.54.74 2.95 1.83 3.82z"/></svg>
             </a>
           </div>
         </div>

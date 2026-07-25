@@ -67,6 +67,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const isMobileViewport = () => window.matchMedia("(max-width: 640px)").matches;
 
+  const getLandingUrl = () => {
+    const baseOrigin = window.location.origin;
+    const pathname = window.location.pathname || "/";
+
+    if (pathname.endsWith("/admin.html")) {
+      return `${baseOrigin}${pathname.replace(/admin\.html$/, "landing.html")}`;
+    }
+
+    if (pathname.endsWith("/admin")) {
+      return `${baseOrigin}${pathname.slice(0, -"/admin".length) || "/"}landing.html`;
+    }
+
+    return `${baseOrigin}/landing.html`;
+  };
+
   const getStorefrontUrl = () => {
     const baseOrigin = window.location.origin;
     const pathname = window.location.pathname || "/";
@@ -153,6 +168,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   primaryMenuItems.forEach((item) => {
     item.addEventListener("click", () => {
+      if (item.dataset.section === "logout") {
+        window.location.href = getLandingUrl();
+        return;
+      }
+
       if (item.dataset.section === "settings") {
         const nextSection = settingsSections.includes(currentSection) ? currentSection : "settings";
         activateSection(nextSection);
@@ -280,6 +300,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const paymentBankRequisites = document.getElementById("paymentBankRequisites");
   const paymentsSavedMessage = document.getElementById("paymentsSavedMessage");
   const shippingMethodsForm = document.getElementById("shippingMethodsForm");
+  const logoutActionButton = document.querySelector("#logout .action-btn.danger");
   const shippingNovaPostEnabled = document.getElementById("shippingNovaPostEnabled");
   const shippingUkrPostEnabled = document.getElementById("shippingUkrPostEnabled");
   const shippingNovaCourierEnabled = document.getElementById("shippingNovaCourierEnabled");
@@ -4437,6 +4458,12 @@ document.addEventListener("DOMContentLoaded", () => {
     salesRangeForm.addEventListener("submit", (event) => {
       event.preventDefault();
       renderSalesFromForm();
+    });
+  }
+
+  if (logoutActionButton) {
+    logoutActionButton.addEventListener("click", () => {
+      window.location.href = getLandingUrl();
     });
   }
 

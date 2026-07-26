@@ -569,14 +569,29 @@
     </section>
   </div>
 
+  <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
+  <script src="firebase-sync.js"></script>
   <script>
     (function () {
       var STORE_SETTINGS_KEY = "lavkaStoreSettings";
       var REGISTRATION_KEY = "lavkaRegistration";
+      var PENDING_PHONE_KEY = "lavkaPendingRegistrationPhone";
+      var FIREBASE_CONFIG = {
+        apiKey: "AIzaSyDzJ3zOCHvuAnZQA-90va3xZxoBSVqnwLs",
+        authDomain: "lavka-shop.firebaseapp.com",
+        projectId: "lavka-shop",
+        storageBucket: "lavka-shop.firebasestorage.app",
+        messagingSenderId: "437450554587",
+        appId: "1:437450554587:web:2448c9e6fa0cd9c0d520fe"
+      };
       var MAX_STORE_NAME_LENGTH = 60;
+      var MIN_SUBDOMAIN_LENGTH = 1;
+      var SUBDOMAIN_PATTERN = /^[a-z0-9-]{1,32}$/;
       var currentStep = 1;
       var generatedCode = "";
       var phoneVerified = false;
+      var isSubmitting = false;
 
       var progressItems = Array.from(document.querySelectorAll(".progress-step"));
       var stepPanels = Array.from(document.querySelectorAll(".step-panel"));
@@ -599,6 +614,19 @@
       var toStep3Btn = document.getElementById("toStep3Btn");
       var backToStep2Btn = document.getElementById("backToStep2Btn");
       var registrationForm = document.getElementById("registrationForm");
+      var submitBtn = registrationForm.querySelector("button[type='submit']");
+
+      function getFirestore() {
+        if (!window.firebase) {
+          return null;
+        }
+
+        if (!firebase.apps.length) {
+          firebase.initializeApp(FIREBASE_CONFIG);
+        }
+
+        return firebase.firestore();
+      }
 
       function updateProgress() {
         progressItems.forEach(function (item) {
@@ -630,6 +658,19 @@
         return value.replace(/[^0-9+]/g, "");
       }
 
+      function getIncomingPhoneFromUrl() {
+        var params = new URLSearchParams(window.location.search || "");
+        return normalizePhone(params.get("phone") || "");
+      }
+
+      function getIncomingPhoneFromSession() {
+        try {
+          return normalizePhone(sessionStorage.getItem(PENDING_PHONE_KEY) || "");
+        } catch (error) {
+          return "";
+        }
+      }
+
       function isValidPhone(phone) {
         return /^\+?\d{10,14}$/.test(phone);
       }
@@ -652,6 +693,106 @@
         return String(raw || "").trim().slice(0, MAX_STORE_NAME_LENGTH);
       }
 
+      function isValidSubdomain(subdomain) {
+        return SUBDOMAIN_PATTERN.test(subdomain);
+      }
+
+      function setSubmittingState(loading) {
+        isSubmitting = loading;
+        submitBtn.disabled = loading;
+        backToStep2Btn.disabled = loading;
+        submitBtn.textContent = loading ? "Реєструємо..." : "Завершити";
+      }
+
+      function reserveSubdomainInFirestore(payload) {
+        var db = getFirestore();
+        if (!db) {
+          return Promise.reject(new Error("firestore-unavailable"));
+        }
+
+        var fieldValue = firebase.firestore.FieldValue;
+        var subdomainRef = db.collection("store_subdomains").doc(payload.subdomain);
+        var registryRef = db.collection("stores_registry").doc(payload.subdomain);
+        var registrationRef = db.collection("stores").doc(payload.subdomain).collection("data").doc(REGISTRATION_KEY);
+        var settingsRef = db.collection("stores").doc(payload.subdomain).collection("data").doc(STORE_SETTINGS_KEY);
+
+        return subdomainRef
+          .create({
+            subdomain: payload.subdomain,
+            storeId: payload.subdomain,
+            domain: payload.domain,
+            storeName: payload.storeName,
+            phone: payload.phone,
+            status: "active",
+            createdAt: fieldValue.serverTimestamp(),
+            updatedAt: fieldValue.serverTimestamp()
+          })
+          .then(function () {
+            var batch = db.batch();
+            batch.set(registryRef, {
+              storeId: payload.subdomain,
+              storeName: payload.storeName,
+              domain: payload.domain,
+              phone: payload.phone,
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+
+            batch.set(registrationRef, {
+              key: REGISTRATION_KEY,
+              value: {
+                phone: payload.phone,
+                storeName: payload.storeName,
+                subdomain: payload.subdomain,
+                domain: payload.domain,
+                registeredAt: payload.registeredAt
+              },
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+
+            batch.set(settingsRef, {
+              key: STORE_SETTINGS_KEY,
+              value: {
+                storeName: payload.storeName,
+                domain: payload.domain
+              },
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+
+            return batch.commit();
+          })
+          .catch(function (error) {
+            var code = String((error && error.code) || "").toLowerCase();
+            if (code === "already-exists") {
+              var takenError = new Error("subdomain-taken");
+              takenError.code = "subdomain-taken";
+              throw takenError;
+            }
+            throw error;
+          });
+      }
+
+      function wait(ms) {
+        return new Promise(function (resolve) {
+          setTimeout(resolve, ms);
+        });
+      }
+
+      async function reserveSubdomainWithRetry(payload, retries) {
+        var attemptsLeft = typeof retries === "number" ? retries : 2;
+        try {
+          await reserveSubdomainInFirestore(payload);
+        } catch (error) {
+          var code = String((error && error.code) || "").toLowerCase();
+          var isRetriable = code === "aborted" || code === "unavailable" || code === "deadline-exceeded" || code === "resource-exhausted";
+          if (attemptsLeft > 0 && isRetriable) {
+            var retryNumber = retries - attemptsLeft + 1;
+            await wait(500 * retryNumber);
+            return reserveSubdomainWithRetry(payload, attemptsLeft - 1);
+          }
+          throw error;
+        }
+      }
+
       function goToStep(step) {
         currentStep = step;
         updateProgress();
@@ -663,6 +804,28 @@
         }
         if (step === 3) {
           subdomainInput.focus();
+        }
+      }
+
+      function bootstrapPhoneFromLanding() {
+        var incomingPhone = getIncomingPhoneFromUrl() || getIncomingPhoneFromSession();
+        if (!incomingPhone || !isValidPhone(incomingPhone)) {
+          return;
+        }
+
+        phoneInput.value = incomingPhone;
+
+        try {
+          sessionStorage.removeItem(PENDING_PHONE_KEY);
+        } catch (error) {
+          // Ignore sessionStorage cleanup errors in private browsing modes.
+        }
+
+        // Auto-start code flow so user can immediately enter SMS code.
+        sendCodeBtn.click();
+
+        if (codeInput && codeField.style.display !== "none") {
+          codeInput.focus();
         }
       }
 
@@ -749,8 +912,11 @@
         updateSubdomainPreview();
       });
 
-      registrationForm.addEventListener("submit", function (event) {
+      registrationForm.addEventListener("submit", async function (event) {
         event.preventDefault();
+        if (isSubmitting) {
+          return;
+        }
         setStatus(step3Status, "", "");
 
         if (!phoneVerified) {
@@ -770,9 +936,43 @@
           return;
         }
 
-        if (subdomain.length < 3) {
-          setStatus(step3Status, "Піддомен має містити щонайменше 3 символи.", "error");
+        if (subdomain.length < MIN_SUBDOMAIN_LENGTH) {
+          setStatus(step3Status, "Вкажи піддомен.", "error");
           subdomainInput.focus();
+          return;
+        }
+
+        if (!isValidSubdomain(subdomain)) {
+          setStatus(step3Status, "Піддомен може містити латиницю, цифри та дефіс.", "error");
+          subdomainInput.focus();
+          return;
+        }
+
+        var domain = "https://" + subdomain + ".lavka.shop";
+        var registeredAt = new Date().toISOString();
+        var payload = {
+          phone: phone,
+          storeName: storeName,
+          subdomain: subdomain,
+          domain: domain,
+          registeredAt: registeredAt
+        };
+
+        try {
+          setSubmittingState(true);
+          setStatus(step3Status, "Перевіряємо і реєструємо піддомен...", "");
+          await reserveSubdomainWithRetry(payload, 3);
+        } catch (error) {
+          if (error && error.code === "subdomain-taken") {
+            setStatus(step3Status, "Цей піддомен вже зайнятий. Спробуй інший.", "error");
+          } else if (error && /permission-denied/i.test(String(error.code || ""))) {
+            setStatus(step3Status, "Немає доступу до реєстрації піддомену. Перевір правила Firestore.", "error");
+          } else if (error && /unavailable|deadline-exceeded/i.test(String(error.code || ""))) {
+            setStatus(step3Status, "Тимчасова проблема з підключенням до бази. Спробуй ще раз через кілька секунд.", "error");
+          } else {
+            setStatus(step3Status, "Не вдалося зареєструвати піддомен. Спробуй ще раз.", "error");
+          }
+          setSubmittingState(false);
           return;
         }
 
@@ -784,7 +984,7 @@
         }
 
         settings.storeName = storeName;
-        settings.domain = "https://" + subdomain + ".lavka.shop";
+        settings.domain = domain;
 
         localStorage.setItem(STORE_SETTINGS_KEY, JSON.stringify(settings));
         localStorage.setItem(REGISTRATION_KEY, JSON.stringify({
@@ -792,19 +992,22 @@
           storeName: storeName,
           subdomain: subdomain,
           domain: settings.domain,
-          registeredAt: new Date().toISOString()
+          registeredAt: registeredAt
         }));
 
         setStatus(step3Status, "Готово! Переходимо в адмін-панель...", "success");
 
         setTimeout(function () {
-          window.location.href = "admin.html";
+          window.location.href = "admin.html?store=" + encodeURIComponent(subdomain);
         }, 700);
       });
 
       updateSubdomainPreview();
       updateProgress();
-      phoneInput.focus();
+      bootstrapPhoneFromLanding();
+      if (codeField.style.display === "none") {
+        phoneInput.focus();
+      }
     })();
 
     // --- Ротація порад ---

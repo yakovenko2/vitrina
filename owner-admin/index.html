@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Головна - Адмінка власника | Лавка</title>
+  <link rel="stylesheet" href="/owner-admin/styles.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <a class="brand" href="/owner-admin/index.html" aria-label="Адмінка власника - головна">
+        <span class="brand-mark">L</span>
+        <span>
+          <strong>Лавка</strong>
+          <small>Owner Admin</small>
+        </span>
+      </a>
+
+      <nav class="menu" aria-label="Розділи адмінки власника">
+        <a class="active" href="/owner-admin/index.html">Головна (дашборд)</a>
+        <a href="/owner-admin/users.html">Користувачі</a>
+        <a href="/owner-admin/stores.html">Магазини</a>
+        <a href="/owner-admin/orders.html">Замовлення</a>
+        <a href="/owner-admin/plans.html">Тарифи та підписки</a>
+        <a href="/owner-admin/finance.html">Платежі та фінанси</a>
+        <a href="/owner-admin/support.html">Підтримка / звернення</a>
+        <a href="/owner-admin/analytics.html">Аналітика</a>
+        <a href="/owner-admin/notifications.html">Сповіщення / розсилки</a>
+        <a href="/owner-admin/system-settings.html">Налаштування системи</a>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <div>
+          <h1>Головна (дашборд)</h1>
+          <p>Огляд платформи в реальному часі: ключові метрики, тривоги та активність.</p>
+        </div>
+        <span class="badge">Оновлено: щойно</span>
+      </header>
+
+      <section class="grid grid-4">
+        <article class="card kpi">
+          <div class="label">Активні магазини</div>
+          <div class="value">248</div>
+          <div class="meta"><span class="status-ok">+12</span> за останні 7 днів</div>
+        </article>
+        <article class="card kpi">
+          <div class="label">Дохід платформи (міс.)</div>
+          <div class="value">₴184 320</div>
+          <div class="meta"><span class="status-ok">+9.4%</span> до минулого місяця</div>
+        </article>
+        <article class="card kpi">
+          <div class="label">Нові реєстрації (24 год)</div>
+          <div class="value">37</div>
+          <div class="meta">Конверсія в активацію: 62%</div>
+        </article>
+        <article class="card kpi">
+          <div class="label">Тривожні індикатори</div>
+          <div class="value">5</div>
+          <div class="meta"><span class="status-bad">2 критичні</span>, 3 помірні</div>
+        </article>
+      </section>
+
+      <section class="grid grid-2">
+        <article class="card">
+          <h2>Критичні події</h2>
+          <ul class="list">
+            <li>Збій webhook-платежів у 2 магазинах.</li>
+            <li>Підозріла активність входів з нового регіону.</li>
+            <li>Ріст відмов у кроці підтвердження коду реєстрації.</li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <h2>Швидкі переходи</h2>
+          <ul class="list">
+            <li><a href="/owner-admin/users.html">Перевірити нових користувачів та блокування</a></li>
+            <li><a href="/owner-admin/stores.html">Відкрити модерацію нових магазинів</a></li>
+            <li><a href="/owner-admin/finance.html">Переглянути прострочені оплати</a></li>
+            <li><a href="/owner-admin/support.html">Обробити звернення зі статусом "Терміново"</a></li>
+          </ul>
+        </article>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

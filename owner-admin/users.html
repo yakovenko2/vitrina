@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Користувачі - Адмінка власника | Лавка</title>
+  <link rel="stylesheet" href="/owner-admin/styles.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <a class="brand" href="/owner-admin/index.html" aria-label="Адмінка власника - головна"><span class="brand-mark">L</span><span><strong>Лавка</strong><small>Owner Admin</small></span></a>
+      <nav class="menu" aria-label="Розділи адмінки власника">
+        <a href="/owner-admin/index.html">Головна (дашборд)</a>
+        <a class="active" href="/owner-admin/users.html">Користувачі</a>
+        <a href="/owner-admin/stores.html">Магазини</a>
+        <a href="/owner-admin/orders.html">Замовлення</a>
+        <a href="/owner-admin/plans.html">Тарифи та підписки</a>
+        <a href="/owner-admin/finance.html">Платежі та фінанси</a>
+        <a href="/owner-admin/support.html">Підтримка / звернення</a>
+        <a href="/owner-admin/analytics.html">Аналітика</a>
+        <a href="/owner-admin/notifications.html">Сповіщення / розсилки</a>
+        <a href="/owner-admin/system-settings.html">Налаштування системи</a>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <div>
+          <h1>Користувачі</h1>
+          <p>Власники магазинів, їх статуси, тарифи та доступ.</p>
+        </div>
+        <span class="badge">4 192 користувачі</span>
+      </header>
+
+      <section class="grid grid-3">
+        <article class="card kpi"><div class="label">Активні</div><div class="value">3 801</div><div class="meta"><span class="status-ok">90.7%</span> від загалу</div></article>
+        <article class="card kpi"><div class="label">Заблоковані</div><div class="value">117</div><div class="meta"><span class="status-bad">+8</span> за тиждень</div></article>
+        <article class="card kpi"><div class="label">На пробному тарифі</div><div class="value">274</div><div class="meta">Потенціал апсейлу</div></article>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <h2>Список користувачів</h2>
+          <table class="table" aria-label="Таблиця користувачів">
+            <thead>
+              <tr><th>ID</th><th>Ім'я</th><th>Контакт</th><th>Тариф</th><th>Статус</th><th>Дія</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>U-1042</td><td>Олена І.</td><td>+380 67 000 11 22</td><td>Бізнес</td><td><span class="pill green">Активний</span></td><td>Переглянути</td></tr>
+              <tr><td>U-1043</td><td>Марко К.</td><td>marko@email.com</td><td>Старт</td><td><span class="pill orange">Пробний</span></td><td>Нагадати</td></tr>
+              <tr><td>U-1044</td><td>Анна Л.</td><td>+380 96 333 00 44</td><td>Преміум</td><td><span class="pill red">Заблоковано</span></td><td>Розблокувати</td></tr>
+            </tbody>
+          </table>
+        </article>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

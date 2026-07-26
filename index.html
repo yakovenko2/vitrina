@@ -14,14 +14,13 @@
 
     <!-- Профіль -->
     <section class="profile">
-      <img class="avatar" src="https://picsum.photos/seed/lavka-keramiky/200/200" alt="Lavka Keramiky">
-      <h1 class="name">Lavka Keramiky</h1>
+      <img class="avatar is-empty" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" alt="Аватар магазину">
+      <h1 class="name">Магазин</h1>
       <p class="description">
-        Ручна кераміка та посуд для дому.<br>
-        Виготовляємо кожен виріб з любов'ю в невеликій майстерні.
+        Власник магазину ще не заповнив інформацію профілю.
       </p>
 
-      <div class="socials">
+      <div class="socials" style="display:none">
         <a href="#" class="social-btn" aria-label="Instagram" data-social="instagram">
           <img src="image/insta.png" alt="Instagram" loading="lazy">
         </a>
@@ -39,114 +38,10 @@
     </section>
 
     <!-- Категорії -->
-    <nav class="categories">
-      <button class="cat-btn active" data-cat="all">Все</button>
-      <button class="cat-btn" data-cat="cups">Чашки</button>
-      <button class="cat-btn" data-cat="plates">Тарілки</button>
-      <button class="cat-btn" data-cat="vases">Вази</button>
-      <button class="cat-btn" data-cat="decor">Декор</button>
-    </nav>
+    <nav class="categories" aria-label="Категорії товарів"></nav>
 
     <!-- Товари -->
-    <section class="products">
-
-      <article class="product" data-cat="cups" data-product-id="terra" tabindex="0" role="button" aria-label="Відкрити товар Чашка Терра">
-        <div class="thumb">
-          <img src="https://picsum.photos/seed/terra-cup/500/500" alt="Чашка Терра" loading="lazy">
-        </div>
-        <div class="p-info">
-          <h3 class="p-name">Чашка "Терра"</h3>
-          <p class="p-stock">В наявності</p>
-          <div class="p-footer">
-            <p class="p-price">420 грн</p>
-            <button class="cart-btn" aria-label="Додати в кошик">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M2 3h2l2.2 11.4a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L20 7H5.2"/></svg>
-            </button>
-          </div>
-        </div>
-      </article>
-
-      <article class="product" data-cat="plates" data-product-id="hvylia" tabindex="0" role="button" aria-label="Відкрити товар Тарілка Хвиля">
-        <div class="thumb">
-          <img src="https://picsum.photos/seed/hvylia-plate/500/500" alt="Тарілка Хвиля" loading="lazy">
-        </div>
-        <div class="p-info">
-          <h3 class="p-name">Тарілка "Хвиля"</h3>
-          <p class="p-stock">В наявності</p>
-          <div class="p-footer">
-            <p class="p-price">560 грн</p>
-            <button class="cart-btn" aria-label="Додати в кошик">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M2 3h2l2.2 11.4a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L20 7H5.2"/></svg>
-            </button>
-          </div>
-        </div>
-      </article>
-
-      <article class="product" data-cat="vases" data-product-id="hai" tabindex="0" role="button" aria-label="Відкрити товар Ваза Гай">
-        <div class="thumb">
-          <img src="https://picsum.photos/seed/gai-vase/500/500" alt="Ваза Гай" loading="lazy">
-        </div>
-        <div class="p-info">
-          <h3 class="p-name">Ваза "Гай"</h3>
-          <p class="p-stock">В наявності</p>
-          <div class="p-footer">
-            <p class="p-price">890 грн</p>
-            <button class="cart-btn" aria-label="Додати в кошик">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M2 3h2l2.2 11.4a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L20 7H5.2"/></svg>
-            </button>
-          </div>
-        </div>
-      </article>
-
-      <article class="product" data-cat="cups decor" data-product-id="duet" tabindex="0" role="button" aria-label="Відкрити товар Набір Дует">
-        <div class="thumb">
-          <img src="https://picsum.photos/seed/duet-set/500/500" alt="Набір Дует" loading="lazy">
-        </div>
-        <div class="p-info">
-          <h3 class="p-name">Набір "Дует"</h3>
-          <p class="p-stock">В наявності</p>
-          <div class="p-footer">
-            <p class="p-price">1250 грн</p>
-            <button class="cart-btn" aria-label="Додати в кошик">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M2 3h2l2.2 11.4a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L20 7H5.2"/></svg>
-            </button>
-          </div>
-        </div>
-      </article>
-
-      <article class="product" data-cat="plates decor" data-product-id="sonce" tabindex="0" role="button" aria-label="Відкрити товар Декоративна тарілка Сонце">
-        <div class="thumb">
-          <img src="https://picsum.photos/seed/sonce-plate/500/500" alt="Декоративна тарілка Сонце" loading="lazy">
-        </div>
-        <div class="p-info">
-          <h3 class="p-name">Декоративна тарілка "Сонце"</h3>
-          <p class="p-stock">В наявності</p>
-          <div class="p-footer">
-            <p class="p-price">640 грн</p>
-            <button class="cart-btn" aria-label="Додати в кошик">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M2 3h2l2.2 11.4a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L20 7H5.2"/></svg>
-            </button>
-          </div>
-        </div>
-      </article>
-
-      <article class="product" data-cat="vases decor" data-product-id="kraplia" tabindex="0" role="button" aria-label="Відкрити товар Ваза Крапля">
-        <div class="thumb">
-          <img src="https://picsum.photos/seed/krapla-vase/500/500" alt="Ваза Крапля" loading="lazy">
-        </div>
-        <div class="p-info">
-          <h3 class="p-name">Ваза "Крапля"</h3>
-          <p class="p-stock">В наявності</p>
-          <div class="p-footer">
-            <p class="p-price">760 грн</p>
-            <button class="cart-btn" aria-label="Додати в кошик">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M2 3h2l2.2 11.4a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L20 7H5.2"/></svg>
-            </button>
-          </div>
-        </div>
-      </article>
-
-    </section>
+    <section class="products" id="productsGrid"></section>
 
     <button class="cart-fab" id="openCartBtn" type="button" aria-label="Відкрити кошик">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M2 3h2l2.2 11.4a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L20 7H5.2"/></svg>
@@ -187,6 +82,9 @@
 
   </main>
 
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
+<script src="firebase-sync.js"></script>
 <script src="script.js"></script>
 </body>
 </html>

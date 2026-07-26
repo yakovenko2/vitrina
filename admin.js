@@ -9,7 +9,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const homeStoreDomainInput = document.getElementById("homeStoreDomainInput");
   const copyHomeStoreDomain = document.getElementById("copyHomeStoreDomain");
   const homeDomainCopyMessage = document.getElementById("homeDomainCopyMessage");
+  const storefrontHeadLink = document.querySelector(".store-link.store-link-head");
   const SETTINGS_KEY = "lavkaStoreSettings";
+  const REGISTRATION_KEY = "lavkaRegistration";
   const CHECKOUT_SETTINGS_KEY = "lavkaCheckoutSettings";
   const PRODUCTS_KEY = "lavkaProducts";
   const CATEGORIES_KEY = "lavkaCategories";
@@ -67,6 +69,47 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const isMobileViewport = () => window.matchMedia("(max-width: 640px)").matches;
 
+  const sanitizeStoreId = (value) => {
+    return String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "")
+      .slice(0, 64);
+  };
+
+  const readJsonFromStorage = (key) => {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const extractSubdomainFromDomain = (domainValue) => {
+    const domain = String(domainValue || "").trim();
+    if (!domain) return "";
+    try {
+      const parsed = new URL(domain);
+      const first = parsed.hostname.split(".")[0] || "";
+      return sanitizeStoreId(first);
+    } catch {
+      return "";
+    }
+  };
+
+  const getCurrentStoreContext = () => {
+    const registration = readJsonFromStorage(REGISTRATION_KEY) || {};
+    const settings = readJsonFromStorage(SETTINGS_KEY) || {};
+    const subdomain = sanitizeStoreId(registration.subdomain || extractSubdomainFromDomain(registration.domain) || extractSubdomainFromDomain(settings.domain));
+    const registeredDomain = String(registration.domain || settings.domain || "").trim();
+
+    return {
+      subdomain,
+      registeredDomain
+    };
+  };
+
   const getLandingUrl = () => {
     const baseOrigin = window.location.origin;
     const pathname = window.location.pathname || "/";
@@ -83,18 +126,34 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const getStorefrontUrl = () => {
+    const context = getCurrentStoreContext();
+    if (context.registeredDomain) {
+      return context.registeredDomain;
+    }
+
     const baseOrigin = window.location.origin;
     const pathname = window.location.pathname || "/";
 
+    const withStoreParam = (urlValue) => {
+      if (!context.subdomain) return urlValue;
+      try {
+        const url = new URL(urlValue, baseOrigin);
+        url.searchParams.set("store", context.subdomain);
+        return url.toString();
+      } catch {
+        return urlValue;
+      }
+    };
+
     if (pathname.endsWith("/admin.html")) {
-      return `${baseOrigin}${pathname.replace(/admin\.html$/, "index.html")}`;
+      return withStoreParam(`${baseOrigin}${pathname.replace(/admin\.html$/, "index.html")}`);
     }
 
     if (pathname.endsWith("/admin")) {
-      return `${baseOrigin}${pathname.slice(0, -"/admin".length) || "/"}`;
+      return withStoreParam(`${baseOrigin}${pathname.slice(0, -"/admin".length) || "/"}`);
     }
 
-    return `${baseOrigin}/`;
+    return withStoreParam(`${baseOrigin}/`);
   };
 
   const copyTextToClipboard = async (value) => {
@@ -250,9 +309,27 @@ document.addEventListener("DOMContentLoaded", () => {
   const savedMessage = document.getElementById("settingsSavedMessage");
   const personalizationSavedMessage = document.getElementById("personalizationSavedMessage");
 
-  if (homeStoreDomainInput) {
-    homeStoreDomainInput.value = getStorefrontUrl();
-  }
+  const applyStorefrontContextUi = () => {
+    const storefrontUrl = getStorefrontUrl();
+
+    if (homeStoreDomainInput) {
+      homeStoreDomainInput.value = storefrontUrl;
+    }
+
+    if (storefrontHeadLink) {
+      storefrontHeadLink.href = storefrontUrl;
+    }
+  };
+
+  applyStorefrontContextUi();
+  window.setTimeout(applyStorefrontContextUi, 900);
+  window.setTimeout(applyStorefrontContextUi, 2500);
+  window.addEventListener("storage", function (event) {
+    if (!event) return;
+    if (event.key === REGISTRATION_KEY || event.key === SETTINGS_KEY) {
+      applyStorefrontContextUi();
+    }
+  });
 
   if (copyHomeStoreDomain) {
     copyHomeStoreDomain.addEventListener("click", async () => {
@@ -1373,6 +1450,64 @@ document.addEventListener("DOMContentLoaded", () => {
       .filter(Boolean);
   };
 
+  const DEMO_PRODUCT_SKUS = new Set([
+    "LK-CUP-001",
+    "LK-PLT-002",
+    "LK-VAS-003"
+  ]);
+
+  const DEMO_PRODUCT_NAMES = new Set([
+    "чашка \"терра\"",
+    "тарілка \"хвиля\"",
+    "ваза \"гай\""
+  ]);
+
+  const DEMO_CATEGORY_NAMES = new Set([
+    "чашки",
+    "тарілки",
+    "вази"
+  ]);
+
+  const DEMO_ORDER_IDS = new Set([
+    "#1024",
+    "#1023",
+    "#1022"
+  ]);
+
+  const DEMO_PROMO_CODES = new Set([
+    "SUMMER10",
+    "WELCOME",
+    "2026"
+  ]);
+
+  const isDemoProduct = (product) => {
+    const sku = String(product?.sku || "").trim().toUpperCase();
+    const name = String(product?.name || "").trim().toLowerCase();
+    return DEMO_PRODUCT_SKUS.has(sku) || DEMO_PRODUCT_NAMES.has(name);
+  };
+
+  const isDemoOrder = (order) => {
+    const orderId = String(order?.id || "").trim();
+    if (DEMO_ORDER_IDS.has(orderId)) return true;
+
+    const items = Array.isArray(order?.items) ? order.items : [];
+    return items.some((item) => {
+      const name = String(item?.name || "").trim().toLowerCase();
+      return DEMO_PRODUCT_NAMES.has(name);
+    });
+  };
+
+  const isDemoPromoCode = (promoCode) => {
+    const code = String(promoCode?.code || "").trim().toUpperCase();
+    const id = String(promoCode?.id || "").trim().toLowerCase();
+    return DEMO_PROMO_CODES.has(code) || id.startsWith("promo-default-");
+  };
+
+  const isDemoCategory = (category) => {
+    const name = String(category?.name || "").trim().toLowerCase();
+    return DEMO_CATEGORY_NAMES.has(name);
+  };
+
   const normalizeCurrencyCode = (value) => {
     const normalized = String(value || "").trim().toLowerCase();
     if (normalized === "usd") return "usd";
@@ -1423,16 +1558,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const items = Array.isArray(order?.items) ? order.items.map((item) => normalizeOrderItem(item)) : [];
     const total = Number.isFinite(Number(order?.total)) ? Math.max(0, Number(order.total)) : 0;
     const discount = Number.isFinite(Number(order?.discount)) ? Math.max(0, Number(order.discount)) : 0;
-    const fallbackPromoByOrderId = {
-      "#1024": { promoCode: "SUMMER10", promoDiscount: 40 },
-      "#1022": { promoCode: "WELCOME", promoDiscount: 80 }
-    };
-    const fallbackPromo = fallbackPromoByOrderId[String(order?.id || "")] || { promoCode: "", promoDiscount: 0 };
     const normalizedPromoCode = String(order?.promoCode || "").trim();
     const normalizedPromoDiscountValue = Number(order?.promoDiscount);
-    const hasPromoCode = normalizedPromoCode.length > 0;
-    const hasPromoDiscount = Number.isFinite(normalizedPromoDiscountValue) && normalizedPromoDiscountValue > 0;
-    const shouldUseFallbackPromo = !hasPromoCode && !hasPromoDiscount && (fallbackPromo.promoCode || fallbackPromo.promoDiscount > 0);
     return {
       id: String(order?.id || `#${Date.now()}`),
       createdAt: String(order?.createdAt || new Date().toISOString()),
@@ -1449,10 +1576,8 @@ document.addEventListener("DOMContentLoaded", () => {
       trackingNumber: String(order?.trackingNumber || ""),
       total,
       discount,
-      promoCode: shouldUseFallbackPromo ? fallbackPromo.promoCode : normalizedPromoCode,
-      promoDiscount: shouldUseFallbackPromo
-        ? fallbackPromo.promoDiscount
-        : (Number.isFinite(normalizedPromoDiscountValue) ? Math.max(0, normalizedPromoDiscountValue) : 0),
+      promoCode: normalizedPromoCode,
+      promoDiscount: Number.isFinite(normalizedPromoDiscountValue) ? Math.max(0, normalizedPromoDiscountValue) : 0,
       inventoryApplied: Boolean(order?.inventoryApplied),
       items
     };
@@ -2768,106 +2893,18 @@ document.addEventListener("DOMContentLoaded", () => {
   updateNameCounter();
   updateDescriptionCounter();
 
-  const defaultOrders = [
-    {
-      id: "#1024",
-      customerName: "Марія Ковальчук",
-      customerPhone: "+380671112233",
-      deliveryMethod: "Нова Пошта, відділення",
-      deliveryAddress: "м. Львів, вул. Шевченка, 12, відділення №14",
-      comment: "Будь ласка, подзвоніть перед відправкою.",
-      managerComment: "",
-      total: 840,
-      discount: 60,
-      promoCode: "SUMMER10",
-      promoDiscount: 40,
-      status: "Очікує",
-      paymentStatus: "Не оплачено",
-      trackingNumber: "",
-      createdAt: (() => {
-        const date = new Date();
-        date.setDate(date.getDate() - 1);
-        return date.toISOString();
-      })(),
-      items: [
-        {
-          photo: "https://picsum.photos/seed/lavka-order-1024-1/80/80",
-          sku: "LK-CUP-010",
-          name: "Чашка \"Терра\"",
-          price: 420,
-          qty: 2
-        }
-      ]
-    },
-    {
-      id: "#1023",
-      customerName: "Олег Петренко",
-      customerPhone: "+380501234567",
-      deliveryMethod: "Кур'єр по місту",
-      deliveryAddress: "м. Київ, вул. Антоновича, 31, кв. 18",
-      comment: "Доставка після 18:00.",
-      managerComment: "",
-      total: 890,
-      discount: 0,
-      promoCode: "",
-      promoDiscount: 0,
-      status: "В обробці",
-      paymentStatus: "Частково оплачено",
-      trackingNumber: "",
-      createdAt: new Date().toISOString(),
-      items: [
-        {
-          photo: "https://picsum.photos/seed/lavka-order-1023-1/80/80",
-          sku: "LK-VASE-003",
-          name: "Ваза \"Гай\"",
-          price: 890,
-          qty: 1
-        }
-      ]
-    },
-    {
-      id: "#1022",
-      customerName: "Ірина Лисенко",
-      customerPhone: "+380931998877",
-      deliveryMethod: "Нова Пошта, поштомат",
-      deliveryAddress: "м. Дніпро, просп. Поля, 24, поштомат 3571",
-      comment: "Коментар відсутній",
-      managerComment: "",
-      total: 1250,
-      discount: 120,
-      promoCode: "WELCOME",
-      promoDiscount: 80,
-      status: "Відправлено",
-      paymentStatus: "Оплачено",
-      trackingNumber: "59000999888776",
-      createdAt: (() => {
-        const date = new Date();
-        date.setDate(date.getDate() - 3);
-        return date.toISOString();
-      })(),
-      items: [
-        {
-          photo: "https://picsum.photos/seed/lavka-order-1022-1/80/80",
-          sku: "LK-SET-021",
-          name: "Набір \"Дует\"",
-          price: 1250,
-          qty: 1
-        }
-      ]
-    }
-  ];
-
   let orders = readOrders();
   let currentOrdersSearch = "";
   let currentOrderStatusFilter = "all";
   let currentOrderPaymentFilter = "all";
   let currentOrdersAmountFrom = null;
   let currentOrdersAmountTo = null;
-  if (!orders || !orders.length) {
-    orders = defaultOrders;
-    saveOrders(orders);
+  if (!Array.isArray(orders)) {
+    orders = [];
   }
-  orders = orders.map((order) => normalizeOrder(order));
+  orders = orders
+    .map((order) => normalizeOrder(order))
+    .filter((order) => !isDemoOrder(order));
   saveOrders(orders);
   renderOrdersTable(orders);
 
@@ -3001,41 +3038,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  const defaultPromoCodes = [
-    {
-      id: "promo-default-1",
-      code: "SUMMER10",
-      charset: "letters",
-      discountType: "percent",
-      discountValue: 10,
-      minOrderAmount: 500,
-      maxDiscountPerOrder: 300,
-      maxUsesPerClient: 1,
-      maxUsesTotal: 200,
-      usedTotal: 0,
-      managerComment: "Літня акція для нових клієнтів"
-    },
-    {
-      id: "promo-default-2",
-      code: "2026",
-      charset: "digits",
-      discountType: "uah",
-      discountValue: 120,
-      minOrderAmount: 800,
-      maxDiscountPerOrder: 120,
-      maxUsesPerClient: 2,
-      maxUsesTotal: 300,
-      usedTotal: 0,
-      managerComment: "Швидка знижка у гривнях"
-    }
-  ];
-
   let promoCodes = readPromoCodes();
-  if (!promoCodes || !promoCodes.length) {
-    promoCodes = defaultPromoCodes;
-    savePromoCodes(promoCodes);
+  if (!Array.isArray(promoCodes)) {
+    promoCodes = [];
   }
-  promoCodes = promoCodes.map((promoCode) => normalizePromoCode(promoCode));
+  promoCodes = promoCodes
+    .map((promoCode) => normalizePromoCode(promoCode))
+    .filter((promoCode) => !isDemoPromoCode(promoCode));
   savePromoCodes(promoCodes);
   renderPromoCodesTable(promoCodes);
 
@@ -3212,16 +3221,33 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentStockPage = 1;
 
   let products = readProducts();
-  if (!products || !products.length) {
-    products = extractProductsFromTable();
-    saveProducts(products);
+  if (!Array.isArray(products)) {
+    products = [];
   }
-  products = products.map((product) => normalizeProduct(product));
+  products = products
+    .map((product) => normalizeProduct(product))
+    .filter((product) => !isDemoProduct(product));
   saveProducts(products);
 
   applyInventoryForPendingOrders();
 
   let categories = readCategories();
+  if (!Array.isArray(categories)) {
+    categories = [];
+  }
+
+  categories = categories.filter((category) => {
+    if (!isDemoCategory(category)) return true;
+
+    const categoryName = String(category?.name || "").trim().toLowerCase();
+    const usedInProducts = products.some((product) => {
+      const list = Array.isArray(product.categories) ? product.categories : [product.category];
+      return list.some((value) => String(value || "").trim().toLowerCase() === categoryName);
+    });
+
+    return usedInProducts;
+  });
+
   if (!categories || !categories.length) {
     categories = extractCategoriesFromProducts(products);
     saveCategories(categories);

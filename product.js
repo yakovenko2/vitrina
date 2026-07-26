@@ -88,7 +88,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const VISITOR_EVENT_RETENTION_DAYS = 180;
   const params = new URLSearchParams(window.location.search);
   const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-  const productId = hashParams.get("id") || params.get("id") || "terra";
+  const productId = hashParams.get("id") || params.get("id") || "";
   const fromCategory = hashParams.get("cat") || params.get("cat") || "all";
   const readProducts = () => {
     try {
@@ -100,29 +100,53 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
-  const findProductFromAdmin = (id, fallbackProduct) => {
+  const findProductFromAdmin = (id) => {
+    const normalizedId = String(id || "").trim();
+    if (!normalizedId) return null;
+
     const products = readProducts();
-    const byId = products.find((item) => String(item?.id || "").trim() === String(id || "").trim());
+    const byId = products.find((item) => String(item?.id || "").trim() === normalizedId);
     if (byId) return byId;
 
-    const fallbackSku = String(fallbackProduct?.sku || "").trim().toUpperCase();
-    if (!fallbackSku) return null;
-    return products.find((item) => String(item?.sku || "").trim().toUpperCase() === fallbackSku) || null;
+    return products.find((item) => String(item?.sku || "").trim().toUpperCase() === normalizedId.toUpperCase()) || null;
   };
 
-  const fallbackProduct = PRODUCTS[productId] || PRODUCTS.terra;
-  const adminProduct = findProductFromAdmin(productId, fallbackProduct);
+  const adminProduct = findProductFromAdmin(productId);
+  if (!adminProduct || adminProduct.visible === false) {
+    window.location.replace(`index.html#cat=${encodeURIComponent(fromCategory)}`);
+    return;
+  }
+
+  const normalizeProductImages = (rawProduct) => {
+    const source = Array.isArray(rawProduct?.photos) ? rawProduct.photos : [];
+    const normalized = source
+      .map((entry) => {
+        if (typeof entry === "string") return entry.trim();
+        if (!entry || typeof entry !== "object") return "";
+        return String(entry.src || entry.url || entry.dataUrl || entry.path || "").trim();
+      })
+      .filter(Boolean);
+
+    if (normalized.length) return normalized;
+    const seed = String(rawProduct?.id || rawProduct?.sku || rawProduct?.name || "lavka-product").toLowerCase();
+    return [
+      `https://picsum.photos/seed/${encodeURIComponent(seed)}-1/900/900`,
+      `https://picsum.photos/seed/${encodeURIComponent(seed)}-2/900/900`,
+      `https://picsum.photos/seed/${encodeURIComponent(seed)}-3/900/900`
+    ];
+  };
+
   const product = {
-    ...fallbackProduct,
-    name: String(adminProduct?.name || fallbackProduct.name || "Товар").trim(),
-    sku: String(adminProduct?.sku || fallbackProduct.sku || "").trim(),
-    price: Number.isFinite(Number(adminProduct?.price)) ? Number(adminProduct.price) : fallbackProduct.price,
-    description: String(adminProduct?.description || fallbackProduct.description || "").trim(),
+    id: String(adminProduct.id || "").trim(),
+    name: String(adminProduct.name || "Товар").trim(),
+    sku: String(adminProduct.sku || "").trim(),
+    price: Number.isFinite(Number(adminProduct.price)) ? Number(adminProduct.price) : 0,
+    description: String(adminProduct.description || "").trim(),
     sizes: Array.isArray(adminProduct?.sizes)
       ? adminProduct.sizes.map((size) => String(size || "").trim().toUpperCase()).filter(Boolean)
       : [],
-    isClothing: Boolean(adminProduct?.isClothing),
-    images: Array.isArray(fallbackProduct.images) ? fallbackProduct.images : []
+    isClothing: Boolean(adminProduct.isClothing),
+    images: normalizeProductImages(adminProduct)
   };
 
   const readSettings = () => {

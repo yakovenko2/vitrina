@@ -1,5 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
   const SETTINGS_KEY = "lavkaStoreSettings";
+  const PRODUCTS_KEY = "lavkaProducts";
   const CATEGORIES_KEY = "lavkaCategories";
   const CART_KEY = "lavkaCart";
   const VISITOR_ID_KEY = "lavkaVisitorId";
@@ -18,7 +19,7 @@ document.addEventListener("DOMContentLoaded", () => {
     /shit/i
   ];
   const categoriesNav = document.querySelector(".categories");
-  const products = document.querySelectorAll(".product");
+  const productsGrid = document.getElementById("productsGrid");
   const openCartBtn = document.getElementById("openCartBtn");
   const closeCartBtn = document.getElementById("closeCartBtn");
   const cartOverlay = document.getElementById("cartOverlay");
@@ -39,12 +40,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const params = new URLSearchParams(window.location.search);
   const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
   const shouldOpenCartFromHash = hashParams.get("openCart") === "1";
-  const galleryItems = [...products].map((product, index) => ({
-    index,
-    node: product,
-    image: product.querySelector(".thumb img")?.src || "",
-    name: String(product.querySelector(".p-name")?.textContent || "Товар").trim()
-  })).filter((item) => item.image);
+  let products = [];
+  let galleryItems = [];
   let activePhotoIndex = -1;
 
   const readCart = () => {
@@ -62,6 +59,119 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   let cartState = readCart();
+
+  const DEMO_PRODUCT_SKUS = new Set(["LK-CUP-001", "LK-PLT-002", "LK-VAS-003", "LK-SET-004", "LK-DEC-005", "LK-VAS-006"]);
+
+  const readProducts = () => {
+    try {
+      const raw = localStorage.getItem(PRODUCTS_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const getProductPhoto = (product) => {
+    const list = Array.isArray(product?.photos) ? product.photos : [];
+    if (!list.length) {
+      const seed = String(product?.id || product?.sku || product?.name || "lavka-product").toLowerCase();
+      return `https://picsum.photos/seed/${encodeURIComponent(seed)}/500/500`;
+    }
+
+    const first = list[0];
+    if (typeof first === "string" && first.trim()) return first.trim();
+    if (first && typeof first === "object") {
+      const direct = String(first.src || first.url || first.dataUrl || first.path || "").trim();
+      if (direct) return direct;
+    }
+
+    const seed = String(product?.id || product?.sku || product?.name || "lavka-product").toLowerCase();
+    return `https://picsum.photos/seed/${encodeURIComponent(seed)}/500/500`;
+  };
+
+  const normalizeStorefrontProduct = (product) => {
+    const id = String(product?.id || product?.sku || "").trim();
+    const name = String(product?.name || "").trim();
+    const sku = String(product?.sku || "").trim().toUpperCase();
+    const visible = product?.visible !== false;
+    const price = Number(product?.price);
+    const stock = Number.parseInt(product?.stock, 10);
+    const categories = Array.isArray(product?.categories) && product.categories.length
+      ? product.categories.map((value) => String(value || "").trim()).filter(Boolean)
+      : [String(product?.category || "").trim()].filter(Boolean);
+
+    if (!id || !name || !visible) return null;
+    if (DEMO_PRODUCT_SKUS.has(sku)) return null;
+
+    return {
+      id,
+      name,
+      sku,
+      price: Number.isFinite(price) && price > 0 ? price : 0,
+      stock: Number.isFinite(stock) ? stock : 0,
+      categories,
+      photo: getProductPhoto(product)
+    };
+  };
+
+  const buildGalleryItems = () => {
+    galleryItems = products
+      .map((product, index) => ({
+        index,
+        node: product,
+        image: product.querySelector(".thumb img")?.src || "",
+        name: String(product.querySelector(".p-name")?.textContent || "Товар").trim()
+      }))
+      .filter((item) => item.image);
+  };
+
+  const renderStorefrontProducts = () => {
+    if (!productsGrid) return [];
+
+    const storedProducts = readProducts()
+      .map((item) => normalizeStorefrontProduct(item))
+      .filter(Boolean);
+
+    if (!storedProducts.length) {
+      productsGrid.innerHTML = `
+        <article class="store-empty" aria-live="polite">
+          <h3>Поки що немає товарів</h3>
+          <p>Власник магазину ще не додав товари. Зайдіть трохи пізніше.</p>
+        </article>
+      `;
+      products = [];
+      galleryItems = [];
+      return [];
+    }
+
+    productsGrid.innerHTML = storedProducts.map((product) => {
+      const tokenizedCategories = product.categories.map((value) => resolveCategoryToken(value)).filter(Boolean);
+      const categoryToken = tokenizedCategories.join(" ") || "all";
+      const stockLabel = product.stock > 0 ? "В наявності" : "Немає в наявності";
+      return `
+        <article class="product" data-cat="${categoryToken}" data-product-id="${product.id}" tabindex="0" role="button" aria-label="Відкрити товар ${product.name}">
+          <div class="thumb">
+            <img src="${product.photo}" alt="${product.name}" loading="lazy">
+          </div>
+          <div class="p-info">
+            <h3 class="p-name">${product.name}</h3>
+            <p class="p-stock">${stockLabel}</p>
+            <div class="p-footer">
+              <p class="p-price">${Math.round(product.price)} грн</p>
+              <button class="cart-btn" aria-label="Додати в кошик">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M2 3h2l2.2 11.4a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L20 7H5.2"/></svg>
+              </button>
+            </div>
+          </div>
+        </article>
+      `;
+    }).join("");
+
+    products = [...productsGrid.querySelectorAll(".product")];
+    buildGalleryItems();
+    return storedProducts;
+  };
 
   const resolveCategoryToken = (value) => {
     const normalized = String(value || "").trim().toLowerCase();
@@ -96,8 +206,21 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!categoriesNav) return;
 
     const categoryNames = readCategories();
-    const fallback = ["Чашки", "Тарілки", "Вази", "Декор"];
-    const names = categoryNames.length ? categoryNames : fallback;
+    const storefrontProducts = readProducts()
+      .map((item) => normalizeStorefrontProduct(item))
+      .filter(Boolean);
+    const derivedNames = storefrontProducts.flatMap((product) => product.categories);
+    const names = categoryNames.length
+      ? categoryNames
+      : Array.from(new Set(derivedNames.map((name) => String(name || "").trim()).filter(Boolean)));
+
+    if (!names.length) {
+      categoriesNav.hidden = true;
+      categoriesNav.innerHTML = "";
+      return;
+    }
+
+    categoriesNav.hidden = false;
     const usedTokens = new Set(["all"]);
 
     const items = names.map((name) => {
@@ -358,26 +481,32 @@ document.addEventListener("DOMContentLoaded", () => {
   trackVisit();
 
   const savedSettings = readSettings();
+  const containsProfanity = (value) => {
+    const text = (value || "").toLowerCase();
+    return profanityPatterns.some((pattern) => pattern.test(text));
+  };
+
+  const profileName = document.querySelector(".name");
+  const profileDescription = document.querySelector(".description");
+  const profileAvatar = document.querySelector(".avatar");
+  const socialsWrap = document.querySelector(".socials");
+
   if (savedSettings) {
-    const containsProfanity = (value) => {
-      const text = (value || "").toLowerCase();
-      return profanityPatterns.some((pattern) => pattern.test(text));
-    };
+    const normalizedName = String(savedSettings.name || "").trim();
+    const normalizedDescription = String(savedSettings.description || "").trim();
+    const normalizedAvatar = String(savedSettings.avatar || "").trim();
 
-    const profileName = document.querySelector(".name");
-    const profileDescription = document.querySelector(".description");
-    const profileAvatar = document.querySelector(".avatar");
-
-    if (savedSettings.name && profileName && !containsProfanity(savedSettings.name)) {
-      profileName.textContent = savedSettings.name;
+    if (profileName && normalizedName && !containsProfanity(normalizedName)) {
+      profileName.textContent = normalizedName;
     }
 
-    if (savedSettings.description && profileDescription && !containsProfanity(savedSettings.description)) {
-      profileDescription.textContent = savedSettings.description.slice(0, MAX_DESCRIPTION_LENGTH);
+    if (profileDescription && normalizedDescription && !containsProfanity(normalizedDescription)) {
+      profileDescription.textContent = normalizedDescription.slice(0, MAX_DESCRIPTION_LENGTH);
     }
 
-    if (savedSettings.avatar && profileAvatar) {
-      profileAvatar.src = savedSettings.avatar;
+    if (profileAvatar && normalizedAvatar) {
+      profileAvatar.src = normalizedAvatar;
+      profileAvatar.classList.remove("is-empty");
     }
 
     const isHexColor = (value) => /^#[0-9a-fA-F]{6}$/.test(value || "");
@@ -442,18 +571,32 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const socialKeys = ["instagram", "facebook", "telegram", "tiktok"];
+    let visibleSocialsCount = 0;
     socialKeys.forEach((key) => {
       const node = document.querySelector(`[data-social="${key}"]`);
       if (!node) return;
-      const enabled = savedSettings[`${key}Enabled`] ?? true;
+      const href = String(savedSettings[key] || "").trim();
+      const enabled = Boolean(savedSettings[`${key}Enabled`]) && href.length > 0;
       node.style.display = enabled ? "inline-flex" : "none";
-      const href = savedSettings[key];
-      if (href) {
+      if (enabled) {
+        visibleSocialsCount += 1;
         node.href = href;
         node.target = "_blank";
         node.rel = "noopener noreferrer";
+      } else {
+        node.removeAttribute("href");
+        node.removeAttribute("target");
+        node.removeAttribute("rel");
       }
     });
+
+    if (socialsWrap) {
+      socialsWrap.style.display = visibleSocialsCount > 0 ? "flex" : "none";
+    }
+  } else {
+    if (socialsWrap) {
+      socialsWrap.style.display = "none";
+    }
   }
 
   applyStorefrontCurrencyLabels();
@@ -480,6 +623,7 @@ document.addEventListener("DOMContentLoaded", () => {
     applyCategoryFilter(target.dataset.cat);
   };
 
+  renderStorefrontProducts();
   buildCategoryButtons();
 
   if (categoriesNav) {
@@ -499,48 +643,46 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  document.querySelectorAll(".cart-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const productNode = btn.closest(".product");
-      if (productNode) {
+  const openProductCard = (productNode) => {
+    const productId = String(productNode?.dataset?.productId || "").trim();
+    if (!productId) return;
+    const firstCategory = String(productNode.dataset.cat || "all").split(" ")[0] || "all";
+    window.location.href = `product.html#id=${encodeURIComponent(productId)}&cat=${encodeURIComponent(firstCategory)}`;
+  };
+
+  if (productsGrid) {
+    productsGrid.addEventListener("click", (event) => {
+      const productNode = event.target.closest(".product");
+      if (!productNode) return;
+
+      const cartButton = event.target.closest(".cart-btn");
+      if (cartButton) {
         addProductToCart(productNode, 1);
         animateAddToCart(productNode);
-      }
 
-      if (btn.classList.contains("added")) return;
-      btn.classList.add("added");
-      const original = btn.innerHTML;
-      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L19 7"/></svg>';
-      setTimeout(() => {
-        btn.classList.remove("added");
-        btn.innerHTML = original;
-      }, 1200);
-    });
-  });
-
-  products.forEach((product) => {
-    const openProduct = () => {
-      const productId = product.dataset.productId;
-      if (!productId) return;
-      const firstCategory = product.dataset.cat.split(" ")[0] || "all";
-      window.location.href = `product.html#id=${encodeURIComponent(productId)}&cat=${encodeURIComponent(firstCategory)}`;
-    };
-
-    product.addEventListener("click", (event) => {
-      if (event.target.closest(".cart-btn")) {
+        if (cartButton.classList.contains("added")) return;
+        cartButton.classList.add("added");
+        const original = cartButton.innerHTML;
+        cartButton.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L19 7"/></svg>';
+        setTimeout(() => {
+          cartButton.classList.remove("added");
+          cartButton.innerHTML = original;
+        }, 1200);
         return;
       }
 
-      openProduct();
+      openProductCard(productNode);
     });
 
-    product.addEventListener("keydown", (event) => {
+    productsGrid.addEventListener("keydown", (event) => {
+      const productNode = event.target.closest(".product");
+      if (!productNode) return;
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        openProduct();
+        openProductCard(productNode);
       }
     });
-  });
+  }
 
   if (openCartBtn) {
     openCartBtn.addEventListener("click", () => setCartOpen(true));
@@ -578,7 +720,12 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   window.addEventListener("storage", (event) => {
-    if (event.key !== SETTINGS_KEY && event.key !== CART_KEY) return;
+    if (event.key !== SETTINGS_KEY && event.key !== CART_KEY && event.key !== PRODUCTS_KEY && event.key !== CATEGORIES_KEY) return;
+    if (event.key === PRODUCTS_KEY || event.key === CATEGORIES_KEY) {
+      renderStorefrontProducts();
+      buildCategoryButtons();
+      activateCategoryButton(hashParams.get("cat") || params.get("cat") || "all");
+    }
     cartState = readCart();
     renderCart();
   });

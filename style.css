@@ -91,6 +91,10 @@ body {
   object-fit: cover;
 }
 
+.avatar.is-empty {
+  border: 1px dashed #bfd0e5;
+}
+
 .name {
   margin: 0 0 8px;
   font-size: 20px;
@@ -219,6 +223,30 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+}
+
+.store-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  border: 1px dashed #c8d9ee;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 22px 16px;
+  text-align: center;
+}
+
+.store-empty h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #21324a;
+}
+
+.store-empty p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-muted);
 }
 
 .product {

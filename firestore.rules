@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Demo/prototype mode: open access for client-side app.
+    // Before production launch, replace with Firebase Auth + role checks.
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

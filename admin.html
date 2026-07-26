@@ -194,15 +194,15 @@
         <div class="cards-row">
           <article class="kpi">
             <p>Нові сьогодні</p>
-            <strong>12</strong>
+            <strong>0</strong>
           </article>
           <article class="kpi">
             <p>В обробці</p>
-            <strong>8</strong>
+            <strong>0</strong>
           </article>
           <article class="kpi">
             <p>Відправлено</p>
-            <strong>5</strong>
+            <strong>0</strong>
           </article>
         </div>
 
@@ -553,51 +553,6 @@
                 </tr>
               </thead>
               <tbody id="productsTableBody">
-                <tr>
-                  <td class="products-select-col"><input type="checkbox" aria-label="Вибрати товар LK-CUP-001"></td>
-                  <td>LK-CUP-001</td>
-                  <td>Чашка "Терра"</td>
-                  <td>Чашки</td>
-                  <td>420 грн</td>
-                  <td>Без знижки</td>
-                  <td>0</td>
-                  <td>Керамічна чашка ручної роботи.</td>
-                  <td><span class="visibility-pill is-visible">Видимий</span></td>
-                  <td>
-                    <button type="button" class="mini-btn">Редагувати</button>
-                    <button type="button" class="mini-btn warn">Приховати</button>
-                  </td>
-                </tr>
-                <tr>
-                  <td class="products-select-col"><input type="checkbox" aria-label="Вибрати товар LK-PLT-002"></td>
-                  <td>LK-PLT-002</td>
-                  <td>Тарілка "Хвиля"</td>
-                  <td>Тарілки</td>
-                  <td>560 грн</td>
-                  <td>Без знижки</td>
-                  <td>0</td>
-                  <td>Тарілка з м'якою хвилястою формою краю.</td>
-                  <td><span class="visibility-pill is-visible">Видимий</span></td>
-                  <td>
-                    <button type="button" class="mini-btn">Редагувати</button>
-                    <button type="button" class="mini-btn warn">Приховати</button>
-                  </td>
-                </tr>
-                <tr>
-                  <td class="products-select-col"><input type="checkbox" aria-label="Вибрати товар LK-VAS-003"></td>
-                  <td>LK-VAS-003</td>
-                  <td>Ваза "Гай"</td>
-                  <td>Вази</td>
-                  <td>890 грн</td>
-                  <td>Без знижки</td>
-                  <td>0</td>
-                  <td>Ваза для сухоцвітів та інтер'єрного декору.</td>
-                  <td><span class="visibility-pill is-visible">Видимий</span></td>
-                  <td>
-                    <button type="button" class="mini-btn">Редагувати</button>
-                    <button type="button" class="mini-btn warn">Приховати</button>
-                  </td>
-                </tr>
               </tbody>
             </table>
           </div>
@@ -1321,6 +1276,83 @@
     </main>
   </div>
 
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
+<script src="firebase-sync.js"></script>
 <script src="admin.js"></script>
+<script>
+  (function () {
+    var REGISTRATION_KEY = "lavkaRegistration";
+    var SETTINGS_KEY = "lavkaStoreSettings";
+
+    function readJson(key) {
+      try {
+        var raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function sanitizeStoreId(value) {
+      return String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, "")
+        .slice(0, 64);
+    }
+
+    function extractSubdomainFromDomain(domainValue) {
+      var domain = String(domainValue || "").trim();
+      if (!domain) return "";
+      try {
+        var parsed = new URL(domain);
+        var first = parsed.hostname.split(".")[0] || "";
+        return sanitizeStoreId(first);
+      } catch (error) {
+        return "";
+      }
+    }
+
+    function buildFallbackStorefrontUrl(subdomain) {
+      var url = new URL("index.html", window.location.href);
+      if (subdomain) {
+        url.searchParams.set("store", subdomain);
+      }
+      return url.toString();
+    }
+
+    function resolveStorefrontUrl() {
+      var reg = readJson(REGISTRATION_KEY) || {};
+      var settings = readJson(SETTINGS_KEY) || {};
+      var registeredDomain = String(reg.domain || settings.domain || "").trim();
+      if (registeredDomain) {
+        return registeredDomain;
+      }
+
+      var fromSearch = sanitizeStoreId(new URLSearchParams(window.location.search).get("store"));
+      var fallbackSubdomain = sanitizeStoreId(reg.subdomain || fromSearch || extractSubdomainFromDomain(settings.domain));
+      return buildFallbackStorefrontUrl(fallbackSubdomain);
+    }
+
+    function bindStorefrontUrl() {
+      var storefrontUrl = resolveStorefrontUrl();
+      var domainInput = document.getElementById("homeStoreDomainInput");
+      var storeLink = document.querySelector(".store-link.store-link-head");
+
+      if (domainInput) {
+        domainInput.value = storefrontUrl;
+      }
+
+      if (storeLink) {
+        storeLink.href = storefrontUrl;
+      }
+    }
+
+    bindStorefrontUrl();
+    window.setTimeout(bindStorefrontUrl, 600);
+    window.setTimeout(bindStorefrontUrl, 1800);
+  })();
+</script>
 </body>
 </html>

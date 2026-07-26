@@ -156,6 +156,59 @@
   .card h3 { font-size: 19px; }
   .card p { color: var(--muted); font-size: 15px; margin-top: 10px; }
 
+  .card-logos {
+    margin-top: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .card-logos img {
+    height: 26px;
+    width: auto;
+    object-fit: contain;
+    border-radius: 8px;
+    background: #fff;
+    padding: 3px 8px;
+    border: 1px solid #e7eef7;
+  }
+
+  .icon-box.icon-logos {
+    width: auto;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    gap: 12px;
+    justify-content: flex-start;
+    background: transparent;
+    border-radius: 0;
+  }
+
+  .icon-box.icon-logos img {
+    height: 34px;
+    width: auto;
+    object-fit: contain;
+    max-width: none;
+    flex: 0 0 auto;
+  }
+
+  .icon-box.icon-telegram img {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+  }
+
+  .icon-box.icon-telegram {
+    width: auto;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    background: transparent;
+    border-radius: 0;
+    justify-content: flex-start;
+  }
+
   /* Steps */
   .steps { display: grid; grid-template-columns: 1fr; gap: 20px; }
   .step { display: flex; gap: 16px; align-items: flex-start; }
@@ -172,7 +225,23 @@
   .step p { color: var(--muted); font-size: 15px; margin-top: 4px; }
 
   /* Audience */
-  .audience .icon-box { background: var(--bg-soft); }
+  .audience .icon-box {
+    width: 88px;
+    height: 88px;
+    border-radius: 999px;
+    margin-bottom: 22px;
+    box-shadow: 0 16px 30px rgba(20, 45, 80, 0.18);
+  }
+  .audience .icon-box svg { width: 36px; height: 36px; }
+  .audience .icon-instagram {
+    background: linear-gradient(145deg, #5f95ff 0%, #3f57c7 100%);
+  }
+  .audience .icon-digital {
+    background: linear-gradient(145deg, #ffd46f 0%, #f39a31 100%);
+  }
+  .audience .icon-services {
+    background: linear-gradient(145deg, #79d2be 0%, #4da06d 100%);
+  }
 
   /* Pricing */
   .pricing { background: var(--bg-soft); }
@@ -342,34 +411,86 @@
     </div>
   </section>
 
-  <!-- 4. Why Vitryna -->
+  <!-- 4. Features -->
   <section class="pad" id="features">
     <div class="container">
       <div class="section-head">
-        <h2 class="text-balance">Чому Вітрина</h2>
-        <p>Все, що потрібно для продажів — одразу з коробки</p>
+        <h2 class="text-balance">Можливості Лавки</h2>
+        <p>Все необхідне, щоб продавати онлайн і не думати про технічні деталі.</p>
       </div>
       <div class="cards-3">
         <div class="card">
           <div class="icon-box">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><rect x="2" y="5" width="20" height="14" rx="3" stroke="#378ADD" stroke-width="2"/><path d="M2 9h20" stroke="#378ADD" stroke-width="2"/><path d="M6 15h4" stroke="#378ADD" stroke-width="2" stroke-linecap="round"/></svg>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5" stroke="#378ADD" stroke-width="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5" stroke="#378ADD" stroke-width="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5" stroke="#378ADD" stroke-width="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5" stroke="#378ADD" stroke-width="2"/></svg>
           </div>
-          <h3>Приймай оплату миттєво</h3>
-          <p>Картка, Apple Pay, Google Pay — все вже підключено.</p>
+          <h3>Товари та категорії</h3>
+          <p>Зручно додавай, редагуй і сортуй товари за категоріями.</p>
         </div>
+
         <div class="card">
           <div class="icon-box">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#378ADD" stroke-width="2"/><path d="M12 7v5l3 2" stroke="#378ADD" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5h6" stroke="#378ADD" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 4h10a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" stroke="#378ADD" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 10h8M8 14h8M8 18h5" stroke="#378ADD" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
-          <h3>Заощаджуй час</h3>
-          <p>Магазин працює сам, поки ти займаєшся товаром.</p>
+          <h3>Прийом замовлень</h3>
+          <p>Отримуй і обробляй замовлення в одному зручному списку.</p>
         </div>
+
         <div class="card">
           <div class="icon-box">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M12 3l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 8.7l5.4-.8L12 3z" stroke="#378ADD" stroke-width="2" stroke-linejoin="round"/></svg>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 9a2 2 0 0 1 2-2h11.5a2 2 0 0 1 1.4.6l1.5 1.5a2 2 0 0 1 .6 1.4V15a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9Z" stroke="#378ADD" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 10l4 4M14 10l-4 4" stroke="#378ADD" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
-          <h3>Стильний дизайн з коробки</h3>
-          <p>Готовий мінімалістичний шаблон, який не соромно показати.</p>
+          <h3>Промокоди</h3>
+          <p>Створюй знижки та акції, щоб клієнти поверталися.</p>
+        </div>
+
+        <div class="card">
+          <div class="icon-box">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20h16" stroke="#378ADD" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 16v-5" stroke="#378ADD" stroke-width="2" stroke-linecap="round"/><path d="M12 16V8" stroke="#378ADD" stroke-width="2" stroke-linecap="round"/><path d="M17 16V5" stroke="#378ADD" stroke-width="2" stroke-linecap="round"/><path d="M5 9l4-3 4 2 6-4" stroke="#378ADD" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <h3>Статистика продажів</h3>
+          <p>Бачиш продажі та відвідування в наочних графіках.</p>
+        </div>
+
+        <div class="card">
+          <div class="icon-box">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="#378ADD" stroke-width="2"/><path d="M4 12h16" stroke="#378ADD" stroke-width="2" stroke-linecap="round"/><path d="M12 4a12 12 0 0 1 0 16" stroke="#378ADD" stroke-width="2" stroke-linecap="round"/><path d="M12 4a12 12 0 0 0 0 16" stroke="#378ADD" stroke-width="2" stroke-linecap="round"/><path d="M9 12h6" stroke="#378ADD" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <h3>Власний домен</h3>
+          <p>Підключи свою адресу — магазин виглядатиме солідно.</p>
+        </div>
+
+        <div class="card">
+          <div class="icon-box">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="6" stroke="#378ADD" stroke-width="2"/><path d="M16 16l4 4" stroke="#378ADD" stroke-width="2" stroke-linecap="round"/><path d="M8.5 11.5l1.7 1.7 3.3-3.3" stroke="#378ADD" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <h3>SEO-налаштування</h3>
+          <p>Твій магазин легко знаходять у пошуку Google.</p>
+        </div>
+
+        <div class="card">
+          <div class="icon-box icon-logos" aria-label="Платіжні системи">
+            <img src="plata-by-mono.png" alt="mono">
+            <img src="liqpay.png" alt="LiqPay">
+          </div>
+          <h3>Онлайн-оплата</h3>
+          <p>Приймай оплату картками прямо в магазині.</p>
+        </div>
+
+        <div class="card">
+          <div class="icon-box icon-logos" aria-label="Служби доставки">
+            <img src="nova-poshta.png" alt="Нова Пошта">
+            <img src="ukr-poshta.png" alt="Укрпошта">
+          </div>
+          <h3>Доставка НП та Укрпошта</h3>
+          <p>Нова Пошта та Укрпошта підключаються в пару кліків.</p>
+        </div>
+
+        <div class="card">
+          <div class="icon-box icon-telegram">
+            <img src="image/telegram.png" alt="Telegram">
+          </div>
+          <h3>Сповіщення в Telegram</h3>
+          <p>Дізнавайся про кожне замовлення миттєво в Telegram-боті.</p>
         </div>
       </div>
     </div>
@@ -380,13 +501,13 @@
     <div class="container">
       <div class="section-head">
         <h2 class="text-balance">Як це працює</h2>
-        <p>Чотири прості кроки до першого продажу</p>
+        <p>Запускаєш свою вітрину за вечір і приймаєш замовлення вже сьогодні</p>
       </div>
       <div class="steps">
-        <div class="step"><div class="step-num">1</div><div><h3>Реєструєшся</h3><p>За номером телефону — швидко і без паролів.</p></div></div>
-        <div class="step"><div class="step-num">2</div><div><h3>Додаєш товари</h3><p>З фото, описами та цінами.</p></div></div>
-        <div class="step"><div class="step-num">3</div><div><h3>Підключаєш оплату</h3><p>Токен додається автоматично.</p></div></div>
-        <div class="step"><div class="step-num">4</div><div><h3>Отримуєш замовлення</h3><p>І гроші на рахунок.</p></div></div>
+        <div class="step"><div class="step-num">1</div><div><h3>Створюєш магазин</h3><p>Реєстрація за номером телефону без зайвих полів.</p></div></div>
+        <div class="step"><div class="step-num">2</div><div><h3>Наповнюєш вітрину</h3><p>Додаєш фото, ціни та короткі описи товарів.</p></div></div>
+        <div class="step"><div class="step-num">3</div><div><h3>Вмикаєш оплати і доставку</h3><p>Підключаєш зручні способи для клієнтів у кілька кліків.</p></div></div>
+        <div class="step"><div class="step-num">4</div><div><h3>Приймаєш перші замовлення</h3><p>Отримуєш заявки, обробляєш їх і розвиваєш продажі.</p></div></div>
       </div>
     </div>
   </section>
@@ -400,22 +521,22 @@
       </div>
       <div class="cards-3">
         <div class="card">
-          <div class="icon-box">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="5" stroke="#378ADD" stroke-width="2"/><circle cx="12" cy="12" r="4" stroke="#378ADD" stroke-width="2"/><circle cx="17.5" cy="6.5" r="1.2" fill="#378ADD"/></svg>
+          <div class="icon-box icon-instagram">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4.5" stroke="#fff" stroke-width="2"/><circle cx="12" cy="12" r="3.5" stroke="#fff" stroke-width="2"/><circle cx="16.9" cy="7.1" r="1.1" fill="#fff"/></svg>
           </div>
           <h3>Instagram-магазини</h3>
           <p>Бренди, що продають у соцмережах.</p>
         </div>
         <div class="card">
-          <div class="icon-box">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M4 5h16v11H4z" stroke="#378ADD" stroke-width="2" stroke-linejoin="round"/><path d="M2 20h20" stroke="#378ADD" stroke-width="2" stroke-linecap="round"/><path d="M9 9l2 2 4-4" stroke="#378ADD" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div class="icon-box icon-digital">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 3.5h6.8L19 7.7V19a1.5 1.5 0 01-1.5 1.5H8A1.5 1.5 0 016.5 19V5A1.5 1.5 0 018 3.5z" stroke="#fff" stroke-width="2" stroke-linejoin="round"/><path d="M14.8 3.5V8H19" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.5 11h5M9.5 14h5M9.5 17h3.5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
           </div>
           <h3>Цифрові товари</h3>
           <p>Курси, консультації, інфопродукти.</p>
         </div>
         <div class="card">
-          <div class="icon-box">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="#378ADD" stroke-width="2"/><path d="M4 20a8 8 0 0116 0" stroke="#378ADD" stroke-width="2" stroke-linecap="round"/></svg>
+          <div class="icon-box icon-services">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="8.2" r="3.2" stroke="#fff" stroke-width="2"/><path d="M6.2 18.8a5.8 5.8 0 0111.6 0" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M18.2 8.1h2.6M19.5 6.8v2.6" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
           </div>
           <h3>Онлайн-послуги</h3>
           <p>Фрілансери та майстри.</p>
@@ -429,16 +550,27 @@
     <div class="container">
       <div class="section-head">
         <h2 class="text-balance">Тарифи</h2>
-        <p>Почни безкоштовно й переходь на більше, коли зростатимеш</p>
+        <p>Обирай тариф під свій темп росту. Кожен план має 7-денний тестовий період.</p>
       </div>
       <div class="plans">
         <div class="plan">
           <h3>Старт</h3>
-          <div class="price">0 ₴ <small>/ міс</small></div>
+          <div class="price">89 ₴ <small>/ міс</small></div>
           <ul>
+            <li><strong>Входить:</strong></li>
             <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>До 15 товарів</li>
-            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Стандартний дизайн</li>
-            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Базова оплата</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>До 3 фото на товар (макс. 2 МБ кожне)</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>До 3 категорій товарів</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Онлайн-оплата</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>7-денний тестовий період з повним доступом до можливостей "Про"</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Підтримка через спільноту/чат-бота</li>
+            <li><strong>Не входить:</strong></li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M7 7l10 10M17 7L7 17" stroke="#d65b5b" stroke-width="2.5" stroke-linecap="round"/></svg>Промокоди</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M7 7l10 10M17 7L7 17" stroke="#d65b5b" stroke-width="2.5" stroke-linecap="round"/></svg>Статистика продажів і візитів</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M7 7l10 10M17 7L7 17" stroke="#d65b5b" stroke-width="2.5" stroke-linecap="round"/></svg>Telegram-сповіщення</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M7 7l10 10M17 7L7 17" stroke="#d65b5b" stroke-width="2.5" stroke-linecap="round"/></svg>Прибрати водяний знак "Створено на Вітрині" (лишається на сайті)</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M7 7l10 10M17 7L7 17" stroke="#d65b5b" stroke-width="2.5" stroke-linecap="round"/></svg>Власний домен</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M7 7l10 10M17 7L7 17" stroke="#d65b5b" stroke-width="2.5" stroke-linecap="round"/></svg>SEO-налаштування</li>
           </ul>
           <a href="registration.html?plan=starter" class="btn btn-outline btn-block">Обрати план</a>
         </div>
@@ -446,24 +578,44 @@
         <div class="plan featured">
           <span class="badge">Популярний</span>
           <h3>Бізнес</h3>
-          <div class="price">299 ₴ <small>/ міс</small></div>
+          <div class="price">179 ₴ <small>/ міс</small></div>
           <ul>
-            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Необмежена кількість товарів</li>
-            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Кастомізація дизайну</li>
-            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Промокоди та статистика</li>
-            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Telegram-сповіщення</li>
+            <li><strong>Входить:</strong></li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>До 150 товарів</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>До 6 фото на товар (макс. 2 МБ кожне)</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Необмежена кількість категорій</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Онлайн-оплата</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Промокоди</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Статистика продажів і візитів</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Telegram-сповіщення про замовлення</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Можливість прибрати водяний знак</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Базове SEO</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>7-денний тестовий період</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Підтримка email, відповідь до 24 год</li>
+            <li><strong>Не входить:</strong></li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M7 7l10 10M17 7L7 17" stroke="#d65b5b" stroke-width="2.5" stroke-linecap="round"/></svg>Власний домен</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M7 7l10 10M17 7L7 17" stroke="#d65b5b" stroke-width="2.5" stroke-linecap="round"/></svg>Розширене SEO</li>
           </ul>
           <a href="registration.html?plan=business" class="btn btn-primary btn-block">Обрати план</a>
         </div>
 
         <div class="plan">
           <h3>Про</h3>
-          <div class="price">599 ₴ <small>/ міс</small></div>
+          <div class="price">399 ₴ <small>/ міс</small></div>
           <ul>
-            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Все з тарифу «Бізнес»</li>
+            <li><strong>Входить:</strong></li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Необмежена кількість товарів</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>До 10 фото на товар (макс. 3 МБ кожне)</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Необмежена кількість категорій</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Онлайн-оплата</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Промокоди</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Статистика продажів і візитів</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Telegram-сповіщення про замовлення</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Водяний знак прибрано</li>
             <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Власний домен</li>
-            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Розширене SEO</li>
-            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Пріоритетна підтримка</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Розширене SEO-налаштування</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>7-денний тестовий період</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="#639922" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Пріоритетна підтримка, відповідь до 1 год</li>
           </ul>
           <a href="registration.html?plan=pro" class="btn btn-outline btn-block">Обрати план</a>
         </div>

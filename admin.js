@@ -10,6 +10,18 @@ document.addEventListener("DOMContentLoaded", () => {
   const copyHomeStoreDomain = document.getElementById("copyHomeStoreDomain");
   const homeDomainCopyMessage = document.getElementById("homeDomainCopyMessage");
   const storefrontHeadLink = document.querySelector(".store-link.store-link-head");
+  const domainSubdomainInput = document.getElementById("domainSubdomainInput");
+  const copyDomainSubdomain = document.getElementById("copyDomainSubdomain");
+  const domainSubdomainCopyMessage = document.getElementById("domainSubdomainCopyMessage");
+  const domainStatusBadge = document.getElementById("domainStatusBadge");
+  const domainStatusText = document.getElementById("domainStatusText");
+  const customDomainForm = document.getElementById("customDomainForm");
+  const customDomainInput = document.getElementById("customDomainInput");
+  const checkDomainBtn = document.getElementById("checkDomainBtn");
+  const disconnectDomainBtn = document.getElementById("disconnectDomainBtn");
+  const customDomainSavedMessage = document.getElementById("customDomainSavedMessage");
+  const dnsCopyMessage = document.getElementById("dnsCopyMessage");
+  const AUTH_KEY = "lavkaAuth";
   const SETTINGS_KEY = "lavkaStoreSettings";
   const REGISTRATION_KEY = "lavkaRegistration";
   const CHECKOUT_SETTINGS_KEY = "lavkaCheckoutSettings";
@@ -23,6 +35,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const TELEGRAM_ADMIN_SUBSCRIBER_KEY = "lavkaTelegramAdminSubscriberId";
   const ADMIN_ACTIVE_SECTION_KEY = "lavkaAdminActiveSection";
   const TELEGRAM_BOT_USERNAME = "lavkaorders_bot";
+  const FIREBASE_CONFIG = {
+    apiKey: "<SECRET>",
+    authDomain: "lavka-shop.firebaseapp.com",
+    projectId: "lavka-shop",
+    storageBucket: "lavka-shop.firebasestorage.app",
+    messagingSenderId: "446966778081",
+    appId: "1:446966778081:web:a9f60f4c27bb93fd45b8ee"
+  };
+  const SESSION_CHECK_INTERVAL_MS = 15000;
   const MAX_NAME_LENGTH = 60;
   const MAX_DESCRIPTION_LENGTH = 140;
   const MAX_AVATAR_FILE_SIZE = 3 * 1024 * 1024;
@@ -61,11 +82,14 @@ document.addEventListener("DOMContentLoaded", () => {
     notifications: "Сповіщення",
     payments: "Оплата",
     shipping: "Доставка",
+    domain: "Домен",
     logout: "Вихід"
   };
 
-  const settingsSections = ["settings", "notifications", "payments", "shipping"];
+  const settingsSections = ["settings", "notifications", "payments", "shipping", "domain"];
   let currentSection = "home";
+  let authSessionWatcher = null;
+  let isRedirectingToLogin = false;
 
   const isMobileViewport = () => window.matchMedia("(max-width: 640px)").matches;
 
@@ -123,6 +147,226 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     return `${baseOrigin}/landing.html`;
+  };
+
+  const getLoginUrl = (reason) => {
+    const baseOrigin = window.location.origin;
+    const pathname = window.location.pathname || "/";
+    let url = `${baseOrigin}/login.html`;
+
+    if (pathname.endsWith("/admin.html")) {
+      url = `${baseOrigin}${pathname.replace(/admin\.html$/, "login.html")}`;
+    } else if (pathname.endsWith("/admin")) {
+      url = `${baseOrigin}${pathname.slice(0, -"/admin".length) || "/"}login.html`;
+    }
+
+    if (!reason) {
+      return url;
+    }
+
+    try {
+      var parsed = new URL(url);
+      parsed.searchParams.set("reason", reason);
+      return parsed.toString();
+    } catch {
+      return url;
+    }
+  };
+
+  const clearAdminSession = () => {
+    [
+      AUTH_KEY,
+      REGISTRATION_KEY,
+      SETTINGS_KEY,
+      CHECKOUT_SETTINGS_KEY,
+      PRODUCTS_KEY,
+      CATEGORIES_KEY,
+      ORDERS_KEY,
+      PROMO_CODES_KEY,
+      VISITOR_EVENTS_KEY,
+      BILLING_KEY,
+      TELEGRAM_NOTIFIED_ORDERS_KEY,
+      TELEGRAM_ADMIN_SUBSCRIBER_KEY,
+      ADMIN_ACTIVE_SECTION_KEY
+    ].forEach((key) => {
+      localStorage.removeItem(key);
+    });
+  };
+
+  const redirectToLogin = (reason) => {
+    if (isRedirectingToLogin) {
+      return;
+    }
+    isRedirectingToLogin = true;
+    clearAdminSession();
+    window.location.href = getLoginUrl(reason || "auth-required");
+  };
+
+  const getAuthDb = () => {
+    if (!window.firebase) {
+      throw new Error("firebase-unavailable");
+    }
+
+    if (!firebase.apps.length) {
+      firebase.initializeApp(FIREBASE_CONFIG);
+    }
+
+    return firebase.firestore();
+  };
+
+  const isStoreDocActive = (docData) => {
+    const status = String(docData?.status || "").toLowerCase();
+    return !status || status === "active";
+  };
+
+  const normalizePhoneForAuth = (raw) => String(raw || "").trim().replace(/[^0-9+]/g, "");
+
+  const readAuthState = () => {
+    const auth = readJsonFromStorage(AUTH_KEY) || {};
+    return {
+      phone: normalizePhoneForAuth(auth.phone),
+      storeId: sanitizeStoreId(auth.storeId || auth.subdomain || ""),
+      domain: String(auth.domain || "").trim(),
+      storeName: String(auth.storeName || "").trim()
+    };
+  };
+
+  const persistAuthState = (authState) => {
+    const safe = authState || {};
+    localStorage.setItem(AUTH_KEY, JSON.stringify({
+      phone: normalizePhoneForAuth(safe.phone),
+      storeId: sanitizeStoreId(safe.storeId || safe.subdomain || ""),
+      subdomain: sanitizeStoreId(safe.storeId || safe.subdomain || ""),
+      domain: String(safe.domain || "").trim(),
+      storeName: String(safe.storeName || "").trim(),
+      authorizedAt: new Date().toISOString()
+    }));
+  };
+
+  const syncRegistrationFromAuth = (authState) => {
+    if (!authState || !authState.storeId) {
+      return;
+    }
+
+    const current = readJsonFromStorage(REGISTRATION_KEY) || {};
+    const next = {
+      ...current,
+      phone: normalizePhoneForAuth(authState.phone || current.phone),
+      storeName: String(authState.storeName || current.storeName || "").trim(),
+      subdomain: sanitizeStoreId(authState.storeId || current.subdomain),
+      domain: String(authState.domain || current.domain || "").trim()
+    };
+    localStorage.setItem(REGISTRATION_KEY, JSON.stringify(next));
+  };
+
+  const resolveActiveStoreForSession = async (authState) => {
+    const db = getAuthDb();
+
+    if (authState.storeId) {
+      const storeDoc = await db.collection("store_subdomains").doc(authState.storeId).get();
+      if (storeDoc.exists) {
+        const storeData = storeDoc.data() || {};
+        const storedPhone = normalizePhoneForAuth(storeData.phone);
+        if (isStoreDocActive(storeData) && (!authState.phone || !storedPhone || storedPhone === authState.phone)) {
+          return {
+            storeId: storeDoc.id,
+            phone: storedPhone || authState.phone,
+            domain: String(storeData.domain || authState.domain || "").trim(),
+            storeName: String(storeData.storeName || authState.storeName || "").trim()
+          };
+        }
+      }
+    }
+
+    if (!authState.phone) {
+      return null;
+    }
+
+    const byPhoneSnap = await db.collection("store_subdomains").where("phone", "==", authState.phone).limit(20).get();
+    if (byPhoneSnap.empty) {
+      return null;
+    }
+
+    let activeDoc = null;
+    byPhoneSnap.docs.some((doc) => {
+      const data = doc.data() || {};
+      if (isStoreDocActive(data)) {
+        activeDoc = doc;
+        return true;
+      }
+      return false;
+    });
+
+    if (!activeDoc) {
+      return null;
+    }
+
+    const activeData = activeDoc.data() || {};
+    return {
+      storeId: activeDoc.id,
+      phone: normalizePhoneForAuth(activeData.phone || authState.phone),
+      domain: String(activeData.domain || authState.domain || "").trim(),
+      storeName: String(activeData.storeName || authState.storeName || "").trim()
+    };
+  };
+
+  const verifySessionStoreStillActive = async (storeId) => {
+    if (!storeId) {
+      redirectToLogin("user-not-found");
+      return;
+    }
+
+    try {
+      const db = getAuthDb();
+      const doc = await db.collection("store_subdomains").doc(storeId).get();
+      if (!doc.exists || !isStoreDocActive(doc.data() || {})) {
+        redirectToLogin("user-not-found");
+      }
+    } catch (error) {
+      console.warn("[admin] session check failed:", error);
+    }
+  };
+
+  const startAuthSessionWatcher = (storeId) => {
+    if (!storeId) {
+      return;
+    }
+
+    if (authSessionWatcher) {
+      window.clearInterval(authSessionWatcher);
+    }
+
+    authSessionWatcher = window.setInterval(() => {
+      verifySessionStoreStillActive(storeId);
+    }, SESSION_CHECK_INTERVAL_MS);
+
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        verifySessionStoreStillActive(storeId);
+      }
+    });
+  };
+
+  const enforceSessionAccess = async () => {
+    const authState = readAuthState();
+    if (!authState.phone) {
+      redirectToLogin("auth-required");
+      return;
+    }
+
+    try {
+      const activeStore = await resolveActiveStoreForSession(authState);
+      if (!activeStore || !activeStore.storeId) {
+        redirectToLogin("user-not-found");
+        return;
+      }
+
+      persistAuthState(activeStore);
+      syncRegistrationFromAuth(activeStore);
+      startAuthSessionWatcher(activeStore.storeId);
+    } catch (error) {
+      console.warn("[admin] access validation failed:", error);
+    }
   };
 
   const getStorefrontUrl = () => {
@@ -215,6 +459,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (sectionId === "sales") {
       ensureSalesRangeDefaults();
       renderSalesFromForm();
+    }
+
+    if (sectionId === "domain") {
+      renderDomainSection();
     }
 
     if (sectionId === "notifications") {
@@ -324,8 +572,13 @@ document.addEventListener("DOMContentLoaded", () => {
   applyStorefrontContextUi();
   window.setTimeout(applyStorefrontContextUi, 900);
   window.setTimeout(applyStorefrontContextUi, 2500);
+  enforceSessionAccess();
   window.addEventListener("storage", function (event) {
     if (!event) return;
+    if (event.key === AUTH_KEY && !event.newValue) {
+      redirectToLogin("auth-required");
+      return;
+    }
     if (event.key === REGISTRATION_KEY || event.key === SETTINGS_KEY) {
       applyStorefrontContextUi();
     }
@@ -356,6 +609,157 @@ document.addEventListener("DOMContentLoaded", () => {
       }, 2200);
     });
   }
+
+  const sanitizeCustomDomain = (value) => String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\/.*$/, "");
+
+  const isValidCustomDomain = (value) => /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/.test(value);
+
+  const renderDomainSection = () => {
+    if (domainSubdomainInput) {
+      domainSubdomainInput.value = getStorefrontUrl();
+    }
+
+    const settings = readSettings() || {};
+    const customDomain = String(settings.customDomain || "").trim();
+    const status = String(settings.customDomainStatus || "none");
+
+    if (customDomainInput && document.activeElement !== customDomainInput) {
+      customDomainInput.value = customDomain;
+    }
+
+    if (domainStatusBadge && domainStatusText) {
+      domainStatusBadge.classList.remove("pending", "connected", "error");
+
+      if (!customDomain) {
+        domainStatusBadge.textContent = "Домен не підключено";
+        domainStatusText.textContent = "Ще жоден домен не додано до цього магазину.";
+      } else if (status === "connected") {
+        domainStatusBadge.classList.add("connected");
+        domainStatusBadge.textContent = "Підключено";
+        domainStatusText.textContent = `Домен ${customDomain} підключено та активний.`;
+      } else if (status === "error") {
+        domainStatusBadge.classList.add("error");
+        domainStatusBadge.textContent = "Помилка перевірки";
+        domainStatusText.textContent = `Не вдалося перевірити ${customDomain}. Перевірте DNS-записи нижче і спробуйте ще раз.`;
+      } else {
+        domainStatusBadge.classList.add("pending");
+        domainStatusBadge.textContent = "Очікує перевірки";
+        domainStatusText.textContent = `Домен ${customDomain} збережено. Додайте DNS-записи нижче, тоді натисніть "Перевірити підключення".`;
+      }
+    }
+
+    if (checkDomainBtn) checkDomainBtn.disabled = !customDomain || status === "connected";
+    if (disconnectDomainBtn) disconnectDomainBtn.disabled = !customDomain;
+  };
+
+  const showTemporaryMessage = (element, text, isError) => {
+    if (!element) return;
+    element.classList.toggle("error", Boolean(isError));
+    element.textContent = text;
+    setTimeout(() => {
+      element.textContent = "";
+      element.classList.remove("error");
+    }, 2600);
+  };
+
+  if (copyDomainSubdomain) {
+    copyDomainSubdomain.addEventListener("click", async () => {
+      const valueToCopy = domainSubdomainInput?.value?.trim();
+      try {
+        const copied = await copyTextToClipboard(valueToCopy);
+        showTemporaryMessage(domainSubdomainCopyMessage, copied ? "Адресу скопійовано." : "Не вдалося скопіювати адресу.", !copied);
+      } catch {
+        showTemporaryMessage(domainSubdomainCopyMessage, "Не вдалося скопіювати адресу.", true);
+      }
+    });
+  }
+
+  document.querySelectorAll(".dns-copy-btn").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const targetId = button.dataset.copyTarget;
+      const valueToCopy = targetId ? document.getElementById(targetId)?.textContent?.trim() : "";
+      try {
+        const copied = await copyTextToClipboard(valueToCopy);
+        showTemporaryMessage(dnsCopyMessage, copied ? "Значення скопійовано." : "Не вдалося скопіювати значення.", !copied);
+      } catch {
+        showTemporaryMessage(dnsCopyMessage, "Не вдалося скопіювати значення.", true);
+      }
+    });
+  });
+
+  if (customDomainForm) {
+    customDomainForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+
+      const rawValue = sanitizeCustomDomain(customDomainInput?.value);
+
+      if (!rawValue || !isValidCustomDomain(rawValue)) {
+        showTemporaryMessage(customDomainSavedMessage, "Введіть коректний домен, наприклад my-shop.com.", true);
+        return;
+      }
+
+      mergeAndSaveSettings({
+        customDomain: rawValue,
+        customDomainStatus: "pending"
+      });
+
+      if (customDomainInput) {
+        customDomainInput.value = rawValue;
+      }
+
+      showTemporaryMessage(customDomainSavedMessage, "Домен збережено. Додайте DNS-записи нижче і перевірте підключення.", false);
+      renderDomainSection();
+    });
+  }
+
+  if (checkDomainBtn) {
+    checkDomainBtn.addEventListener("click", async () => {
+      const settings = readSettings() || {};
+      const customDomain = String(settings.customDomain || "").trim();
+      if (!customDomain) return;
+
+      checkDomainBtn.disabled = true;
+      const originalLabel = checkDomainBtn.textContent;
+      checkDomainBtn.textContent = "Перевіряємо...";
+
+      try {
+        await fetch(`https://${customDomain}`, { mode: "no-cors", cache: "no-store" });
+        mergeAndSaveSettings({ customDomainStatus: "connected" });
+        showTemporaryMessage(customDomainSavedMessage, "Домен успішно перевірено та підключено.", false);
+      } catch {
+        mergeAndSaveSettings({ customDomainStatus: "error" });
+        showTemporaryMessage(customDomainSavedMessage, "DNS ще не оновились. Спробуйте пізніше (може тривати до 24 годин).", true);
+      } finally {
+        checkDomainBtn.textContent = originalLabel;
+        renderDomainSection();
+      }
+    });
+  }
+
+  if (disconnectDomainBtn) {
+    disconnectDomainBtn.addEventListener("click", () => {
+      const settings = readSettings() || {};
+      if (!settings.customDomain) return;
+
+      mergeAndSaveSettings({
+        customDomain: "",
+        customDomainStatus: "none"
+      });
+
+      if (customDomainInput) {
+        customDomainInput.value = "";
+      }
+
+      showTemporaryMessage(customDomainSavedMessage, "Домен відключено.", false);
+      renderDomainSection();
+    });
+  }
+
   const telegramNotificationsForm = document.getElementById("telegramNotificationsForm");
   const telegramOrderNotifyEnabled = document.getElementById("telegramOrderNotifyEnabled");
   const telegramAdminSubscriberId = document.getElementById("telegramAdminSubscriberId");
@@ -510,6 +914,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const salesRangeTo = document.getElementById("salesRangeTo");
   const salesRangeResult = document.getElementById("salesRangeResult");
   const salesTopProductsBody = document.getElementById("salesTopProductsBody");
+  const viewsRangePresets = document.getElementById("viewsRangePresets");
+  const salesRangePresets = document.getElementById("salesRangePresets");
   const billingCurrentPlanName = document.getElementById("billingCurrentPlanName");
   const billingValidUntil = document.getElementById("billingValidUntil");
   const billingPlansGrid = document.getElementById("billingPlansGrid");
@@ -1058,6 +1464,65 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${year}-${month}-${day}`;
   };
 
+  const getPresetDateRange = (preset) => {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    switch (preset) {
+      case "today":
+        return { from: todayStart, to: todayStart };
+      case "yesterday": {
+        const yesterday = new Date(todayStart);
+        yesterday.setDate(yesterday.getDate() - 1);
+        return { from: yesterday, to: yesterday };
+      }
+      case "7d": {
+        const start = new Date(todayStart);
+        start.setDate(start.getDate() - 6);
+        return { from: start, to: todayStart };
+      }
+      case "30d": {
+        const start = new Date(todayStart);
+        start.setDate(start.getDate() - 29);
+        return { from: start, to: todayStart };
+      }
+      case "month": {
+        const start = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
+        return { from: start, to: todayStart };
+      }
+      default:
+        return null;
+    }
+  };
+
+  const setupRangePresets = (container, fromInput, toInput, onApply) => {
+    if (!container || !fromInput || !toInput) return;
+
+    const clearActive = () => {
+      container.querySelectorAll(".range-preset-btn").forEach((btn) => btn.classList.remove("active"));
+    };
+
+    container.addEventListener("click", (event) => {
+      const button = event.target.closest(".range-preset-btn");
+      if (!button) return;
+
+      const range = getPresetDateRange(button.dataset.preset);
+      if (!range) return;
+
+      fromInput.value = formatDateInputValue(range.from);
+      toInput.value = formatDateInputValue(range.to);
+
+      container.querySelectorAll(".range-preset-btn").forEach((btn) => {
+        btn.classList.toggle("active", btn === button);
+      });
+
+      onApply();
+    });
+
+    fromInput.addEventListener("input", clearActive);
+    toInput.addEventListener("input", clearActive);
+  };
+
   const parseOrderTimestamp = (order) => {
     const source = order?.createdAt || order?.updatedAt || null;
     if (!source) return null;
@@ -1094,6 +1559,7 @@ document.addEventListener("DOMContentLoaded", () => {
     salesTopProductsBody.innerHTML = "";
     if (!topProducts.length) {
       const row = document.createElement("tr");
+      row.className = "empty-row";
       row.innerHTML = '<td colspan="2">За обраний період продажів не знайдено.</td>';
       salesTopProductsBody.append(row);
       return;
@@ -1181,24 +1647,72 @@ document.addEventListener("DOMContentLoaded", () => {
   const BILLING_PLANS = [
     {
       id: "starter",
-      name: "Starter",
-      price: 399,
+      name: "Старт",
+      price: 109,
       periodMonths: 1,
-      description: "Базовий план для невеликого магазину."
+      description: "Базовий план для запуску невеликого магазину.",
+      includes: [
+        "До 15 товарів",
+        "До 3 фото на товар (макс. 2 МБ кожне)",
+        "До 3 категорій товарів",
+        "Онлайн-оплата",
+        "7-денний тестовий період з повним доступом до можливостей \"Про\"",
+        "Підтримка через спільноту/чат-бота"
+      ],
+      excludes: [
+        "Промокоди",
+        "Статистика продажів і візитів",
+        "Telegram-сповіщення",
+        "Прибирання водяного знаку \"Створено на Вітрині\"",
+        "Власний домен",
+        "SEO-налаштування"
+      ]
     },
     {
       id: "business",
-      name: "Business",
-      price: 899,
+      name: "Бізнес",
+      price: 209,
       periodMonths: 1,
-      description: "Оптимальний план для активних продажів."
+      description: "Оптимальний план для активних продажів.",
+      includes: [
+        "До 150 товарів",
+        "До 6 фото на товар (макс. 2 МБ кожне)",
+        "Необмежена кількість категорій",
+        "Онлайн-оплата",
+        "Промокоди",
+        "Статистика продажів і візитів",
+        "Telegram-сповіщення про замовлення",
+        "Можливість прибрати водяний знак",
+        "Базове SEO",
+        "7-денний тестовий період",
+        "Підтримка email, відповідь до 24 год"
+      ],
+      excludes: [
+        "Власний домен",
+        "Розширене SEO"
+      ]
     },
     {
       id: "pro",
-      name: "Pro",
-      price: 2399,
-      periodMonths: 3,
-      description: "Розширений план для масштабування бізнесу."
+      name: "Про",
+      price: 449,
+      periodMonths: 1,
+      description: "Максимальний набір функцій для масштабування.",
+      includes: [
+        "Необмежена кількість товарів",
+        "До 10 фото на товар (макс. 3 МБ кожне)",
+        "Необмежена кількість категорій",
+        "Онлайн-оплата",
+        "Промокоди",
+        "Статистика продажів і візитів",
+        "Telegram-сповіщення про замовлення",
+        "Водяний знак прибрано",
+        "Власний домен",
+        "Розширене SEO-налаштування",
+        "7-денний тестовий період",
+        "Пріоритетна підтримка, відповідь до 1 год"
+      ],
+      excludes: []
     }
   ];
 
@@ -1275,6 +1789,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (billingPlansGrid) {
       billingPlansGrid.innerHTML = "";
       BILLING_PLANS.forEach((plan) => {
+        const includeItems = (plan.includes || []).map((item) => `<li>${item}</li>`).join("");
+        const excludeItems = (plan.excludes || []).length
+          ? plan.excludes.map((item) => `<li>${item}</li>`).join("")
+          : "<li>Обмежень немає.</li>";
+
         const card = document.createElement("article");
         card.className = `billing-plan-card ${currentPlan?.id === plan.id ? "current" : ""}`;
         card.innerHTML = `
@@ -1284,6 +1803,16 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
           <p class="billing-plan-price">${formatNumber(plan.price)} ${getCurrencyLabel(getCurrentCurrency())} / ${plan.periodMonths} міс.</p>
           <p class="billing-plan-desc">${plan.description}</p>
+          <div class="billing-plan-accordions">
+            <details class="billing-plan-accordion">
+              <summary>Що входить</summary>
+              <ul>${includeItems}</ul>
+            </details>
+            <details class="billing-plan-accordion billing-plan-accordion-muted">
+              <summary>Що не входить</summary>
+              <ul>${excludeItems}</ul>
+            </details>
+          </div>
           <button type="button" class="action-btn billing-pay-btn" data-plan-id="${plan.id}">Оплатити</button>
         `;
         billingPlansGrid.append(card);
@@ -1295,6 +1824,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (!billing.payments.length) {
         const row = document.createElement("tr");
+        row.className = "empty-row";
         row.innerHTML = '<td colspan="5">Оплат ще немає.</td>';
         billingHistoryBody.append(row);
       } else {
@@ -1636,6 +2166,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!filteredOrders.length) {
       const row = document.createElement("tr");
+      row.className = "empty-row";
       row.innerHTML = '<td colspan="8">За вашим запитом замовлень не знайдено.</td>';
       ordersTableBody.append(row);
       return;
@@ -1694,6 +2225,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!promoCodes.length) {
       const row = document.createElement("tr");
+      row.className = "empty-row";
       row.innerHTML = '<td colspan="8">Промо-коди ще не створені.</td>';
       promoCodesTableBody.append(row);
       return;
@@ -1736,6 +2268,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!products.length) {
       currentStockPage = 1;
       const row = document.createElement("tr");
+      row.className = "empty-row";
       row.innerHTML = '<td colspan="6">Товари ще не створені.</td>';
       stockTableBody.append(row);
       renderStockPagination(0);
@@ -2467,6 +3000,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const emptyMessage = currentProductsVisibilityFilter === "hidden"
         ? "Наразі немає прихованих товарів."
         : "Наразі немає видимих товарів.";
+      row.className = "empty-row";
       row.innerHTML = `<td colspan="10">${emptyMessage}</td>`;
       productsTableBody.append(row);
       updateBulkSelectionState();
@@ -4480,12 +5014,16 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  setupRangePresets(viewsRangePresets, viewsRangeFrom, viewsRangeTo, renderViewsCustomRange);
+
   if (salesRangeForm) {
     salesRangeForm.addEventListener("submit", (event) => {
       event.preventDefault();
       renderSalesFromForm();
     });
   }
+
+  setupRangePresets(salesRangePresets, salesRangeFrom, salesRangeTo, renderSalesFromForm);
 
   if (logoutActionButton) {
     logoutActionButton.addEventListener("click", () => {

@@ -17,10 +17,6 @@
           <span class="brand-dot"></span>
           Lavka Admin
         </a>
-        <a class="store-link store-link-head" href="index.html" aria-label="Перейти до вітрини">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 7h18v12H3V7Z" stroke="currentColor" stroke-width="2"/><path d="M8 11h8M8 15h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-          <span>До вітрини</span>
-        </a>
         <button class="menu-toggle" id="mobileMenuToggle" type="button" aria-label="Відкрити меню" aria-expanded="false" aria-controls="sidebarNav">
           <span></span>
           <span></span>
@@ -132,6 +128,12 @@
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 7h11v8H3V7Zm11 2h4l3 3v3h-7V9Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="7" cy="17" r="2" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="17" r="2" stroke="currentColor" stroke-width="2"/></svg>
           </span>
           <span class="settings-item-label">Доставка</span>
+        </button>
+        <button class="settings-item" data-section="domain">
+          <span class="settings-item-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M3 12h18M12 3c2.5 2.6 4 6 4 9s-1.5 6.4-4 9c-2.5-2.6-4-6-4-9s1.5-6.4 4-9Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="settings-item-label">Домен</span>
         </button>
       </nav>
 
@@ -639,6 +641,13 @@
       <section class="panel" id="views">
         <div class="panel-box">
           <h2>Відвідувачі за власний діапазон</h2>
+          <div class="range-presets" id="viewsRangePresets">
+            <button type="button" class="mini-btn range-preset-btn" data-preset="today">Сьогодні</button>
+            <button type="button" class="mini-btn range-preset-btn" data-preset="yesterday">Вчора</button>
+            <button type="button" class="mini-btn range-preset-btn" data-preset="7d">7 днів</button>
+            <button type="button" class="mini-btn range-preset-btn" data-preset="30d">30 днів</button>
+            <button type="button" class="mini-btn range-preset-btn" data-preset="month">Цей місяць</button>
+          </div>
           <form id="viewsRangeForm" class="views-range-form">
             <label>
               Від
@@ -680,6 +689,13 @@
       <section class="panel" id="sales">
         <div class="panel-box">
           <h2>Оберіть період</h2>
+          <div class="range-presets" id="salesRangePresets">
+            <button type="button" class="mini-btn range-preset-btn" data-preset="today">Сьогодні</button>
+            <button type="button" class="mini-btn range-preset-btn" data-preset="yesterday">Вчора</button>
+            <button type="button" class="mini-btn range-preset-btn" data-preset="7d">7 днів</button>
+            <button type="button" class="mini-btn range-preset-btn" data-preset="30d">30 днів</button>
+            <button type="button" class="mini-btn range-preset-btn" data-preset="month">Цей місяць</button>
+          </div>
           <form id="salesRangeForm" class="sales-range-form">
             <label>
               Від
@@ -1263,6 +1279,103 @@
             <button type="submit" class="action-btn">Зберегти доставку</button>
             <p id="shippingSavedMessage" class="saved-message" aria-live="polite"></p>
           </form>
+        </div>
+      </section>
+
+      <section class="panel" id="domain">
+        <div class="panel-box">
+          <h2>Безкоштовна адреса магазину</h2>
+          <p class="settings-note">Ваш магазин завжди доступний за цією адресою, навіть якщо власний домен ще не підключено.</p>
+          <div class="home-domain-box">
+            <label for="domainSubdomainInput">Адреса на Вітрині</label>
+            <div class="home-domain-row">
+              <input id="domainSubdomainInput" type="text" readonly>
+              <button id="copyDomainSubdomain" type="button" class="mini-btn" aria-label="Скопіювати адресу">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+            <p id="domainSubdomainCopyMessage" class="saved-message" aria-live="polite"></p>
+          </div>
+        </div>
+
+        <div class="panel-box">
+          <h2>Підключення власного домену</h2>
+          <p class="settings-note">Функція доступна на тарифі "Про". Введіть свій домен (наприклад, my-shop.com) і налаштуйте DNS-записи у панелі вашого реєстратора доменів.</p>
+
+          <div class="domain-status-card" id="domainStatusCard">
+            <span class="domain-status-badge" id="domainStatusBadge">Домен не підключено</span>
+            <p class="domain-status-text" id="domainStatusText">Ще жоден домен не додано до цього магазину.</p>
+          </div>
+
+          <form id="customDomainForm" class="settings-form">
+            <label>
+              Ваш домен
+              <input id="customDomainInput" type="text" placeholder="napryklad, my-shop.com" autocomplete="off">
+            </label>
+            <div class="domain-form-actions">
+              <button type="submit" class="action-btn">Підключити домен</button>
+              <button type="button" id="checkDomainBtn" class="action-btn ghost">Перевірити підключення</button>
+              <button type="button" id="disconnectDomainBtn" class="action-btn danger">Відключити домен</button>
+            </div>
+            <p id="customDomainSavedMessage" class="saved-message" aria-live="polite"></p>
+          </form>
+        </div>
+
+        <div class="panel-box">
+          <h2>DNS-записи для підключення</h2>
+          <p class="settings-note">Додайте ОБИДВА записи нижче в налаштуваннях DNS вашого домену. Зміни можуть діяти до 24 годин.</p>
+
+          <div class="dns-records-grid">
+            <div class="dns-record-card">
+              <p class="dns-record-title">Кореневий домен (наприклад, my-shop.com)</p>
+              <div class="dns-record-row">
+                <span class="dns-record-label">Тип</span>
+                <span class="dns-record-value">A</span>
+              </div>
+              <div class="dns-record-row">
+                <span class="dns-record-label">Ім'я/Хост</span>
+                <span class="dns-record-value">@</span>
+              </div>
+              <div class="dns-record-row">
+                <span class="dns-record-label">Значення</span>
+                <span class="dns-record-value-copy">
+                  <code id="dnsAValue">192.0.2.1</code>
+                  <button type="button" class="mini-btn dns-copy-btn" data-copy-target="dnsAValue" aria-label="Скопіювати значення A-запису">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                  </button>
+                </span>
+              </div>
+            </div>
+
+            <div class="dns-record-card">
+              <p class="dns-record-title">Піддомен www (наприклад, www.my-shop.com)</p>
+              <div class="dns-record-row">
+                <span class="dns-record-label">Тип</span>
+                <span class="dns-record-value">CNAME</span>
+              </div>
+              <div class="dns-record-row">
+                <span class="dns-record-label">Ім'я/Хост</span>
+                <span class="dns-record-value">www</span>
+              </div>
+              <div class="dns-record-row">
+                <span class="dns-record-label">Значення</span>
+                <span class="dns-record-value-copy">
+                  <code id="dnsCnameValue">shop.lavka.shop</code>
+                  <button type="button" class="mini-btn dns-copy-btn" data-copy-target="dnsCnameValue" aria-label="Скопіювати значення CNAME-запису">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                  </button>
+                </span>
+              </div>
+            </div>
+          </div>
+          <p id="dnsCopyMessage" class="saved-message" aria-live="polite"></p>
+
+          <ol class="domain-steps-list">
+            <li>Купіть домен у будь-якого реєстратора (наприклад, Ukrnames, ImenaUA, Namecheap).</li>
+            <li>Зайдіть у налаштування DNS вашого домену і додайте записи A та CNAME зі значеннями вище.</li>
+            <li>Введіть домен у полі "Ваш домен" вище і натисніть "Підключити домен".</li>
+            <li>Зачекайте оновлення DNS (зазвичай від кількох хвилин до 24 годин) і натисніть "Перевірити підключення".</li>
+          </ol>
         </div>
       </section>
 

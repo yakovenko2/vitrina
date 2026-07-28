@@ -70,7 +70,13 @@
     }
 
     const first = sanitizeStoreId(host.split(".")[0]);
-    if (first && first !== "www" && first !== "lavka-shop") {
+    if (
+      first
+      && first !== "www"
+      && first !== "lavka-shop"
+      && first !== "vitryna-shop"
+      && first !== "vitrina-shop"
+    ) {
       return first;
     }
 

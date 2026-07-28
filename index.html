@@ -4,6 +4,28 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lavka Keramiky — Вітрина товарів</title>
+<script>
+  (function () {
+    var host = String(window.location.hostname || "").toLowerCase();
+    var landingHosts = {
+      "www.vitryna-shop.com": true,
+      "vitryna-shop.com": true,
+      "www.vitrina-shop.com": true,
+      "vitrina-shop.com": true
+    };
+
+    if (!landingHosts[host]) return;
+
+    var path = String(window.location.pathname || "/");
+    var isStorefrontRoot = path === "/" || path.endsWith("/index.html");
+    if (!isStorefrontRoot) return;
+
+    var target = new URL("landing.html", window.location.href);
+    target.search = window.location.search;
+    target.hash = window.location.hash;
+    window.location.replace(target.toString());
+  })();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">

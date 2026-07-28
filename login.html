@@ -504,8 +504,19 @@
   <script>
     (function () {
       var AUTH_KEY = "lavkaAuth";
+      var REGISTRATION_KEY = "lavkaRegistration";
+      var FIREBASE_CONFIG = {
+        apiKey: "<SECRET>",
+        authDomain: "lavka-shop.firebaseapp.com",
+        projectId: "lavka-shop",
+        storageBucket: "lavka-shop.firebasestorage.app",
+        messagingSenderId: "446966778081",
+        appId: "1:446966778081:web:a9f60f4c27bb93fd45b8ee"
+      };
       var currentStep = 1;
       var generatedCode = "";
+      var pendingAccount = null;
+      var isCheckingAccount = false;
 
       var tips = [
         "Тримайте телефон під рукою: код діє лише 2 хвилини.",
@@ -530,6 +541,69 @@
 
       var step1Status = document.getElementById("step1Status");
       var step2Status = document.getElementById("step2Status");
+
+      function getFirestore() {
+        if (!window.firebase) {
+          throw new Error("firebase-unavailable");
+        }
+
+        if (!firebase.apps.length) {
+          firebase.initializeApp(FIREBASE_CONFIG);
+        }
+
+        return firebase.firestore();
+      }
+
+      function applyReasonNoticeFromUrl() {
+        var params = new URLSearchParams(window.location.search || "");
+        var reason = String(params.get("reason") || "").trim();
+
+        if (reason === "user-not-found") {
+          setStatus(step1Status, "Такого користувача не існує або акаунт видалено.", "error");
+        } else if (reason === "auth-required") {
+          setStatus(step1Status, "Щоб продовжити, увійдіть у свій акаунт.", "error");
+        }
+      }
+
+      function setCheckingState(loading) {
+        isCheckingAccount = loading;
+        sendCodeBtn.disabled = loading;
+        sendCodeBtn.textContent = loading ? "Перевіряємо..." : "Отримати код";
+      }
+
+      function pickActiveStoreDoc(docs) {
+        var list = Array.isArray(docs) ? docs : [];
+        for (var i = 0; i < list.length; i += 1) {
+          var data = list[i].data() || {};
+          var status = String(data.status || "").toLowerCase();
+          if (!status || status === "active") {
+            return list[i];
+          }
+        }
+        return null;
+      }
+
+      async function findAccountByPhone(phone) {
+        var db = getFirestore();
+        var snap = await db.collection("store_subdomains").where("phone", "==", phone).limit(20).get();
+        if (snap.empty) {
+          return null;
+        }
+
+        var activeDoc = pickActiveStoreDoc(snap.docs);
+        if (!activeDoc) {
+          return null;
+        }
+
+        var data = activeDoc.data() || {};
+        return {
+          storeId: activeDoc.id,
+          subdomain: String(data.subdomain || activeDoc.id || "").trim(),
+          domain: String(data.domain || "").trim(),
+          storeName: String(data.storeName || "").trim(),
+          phone: String(data.phone || phone || "").trim()
+        };
+      }
 
       function renderTipsSkeleton() {
         tipsDots.innerHTML = "";
@@ -628,13 +702,34 @@
         }
       }
 
-      sendCodeBtn.addEventListener("click", function () {
+      sendCodeBtn.addEventListener("click", async function () {
         setStatus(step1Status, "", "");
         var phone = normalizePhone(phoneInput.value);
         phoneInput.value = phone;
 
         if (!isValidPhone(phone)) {
           setStatus(step1Status, "Введи коректний номер телефону.", "error");
+          phoneInput.focus();
+          return;
+        }
+
+        if (isCheckingAccount) {
+          return;
+        }
+
+        try {
+          setCheckingState(true);
+          pendingAccount = await findAccountByPhone(phone);
+        } catch (error) {
+          console.error("[login] account check failed:", error);
+          setStatus(step1Status, "Не вдалося перевірити користувача в базі. Спробуйте ще раз.", "error");
+          setCheckingState(false);
+          return;
+        }
+
+        setCheckingState(false);
+        if (!pendingAccount) {
+          setStatus(step1Status, "Такого користувача не існує або акаунт видалено.", "error");
           phoneInput.focus();
           return;
         }
@@ -664,19 +759,42 @@
           return;
         }
 
+        if (!pendingAccount || !pendingAccount.storeId) {
+          setStatus(step2Status, "Сесія входу застаріла. Перевір номер ще раз.", "error");
+          goToStep(1);
+          return;
+        }
+
         localStorage.setItem(AUTH_KEY, JSON.stringify({
           phone: normalizePhone(phoneInput.value),
+          storeId: pendingAccount.storeId,
+          subdomain: pendingAccount.subdomain,
+          domain: pendingAccount.domain,
+          storeName: pendingAccount.storeName,
           authorizedAt: new Date().toISOString()
+        }));
+
+        localStorage.setItem(REGISTRATION_KEY, JSON.stringify({
+          phone: normalizePhone(phoneInput.value),
+          storeName: pendingAccount.storeName,
+          subdomain: pendingAccount.subdomain,
+          domain: pendingAccount.domain,
+          registeredAt: new Date().toISOString()
         }));
 
         setStatus(step2Status, "Успішно! Переходимо в адмін-панель...", "success");
         setTimeout(function () {
-          window.location.href = "admin.html";
+          var target = "admin.html";
+          if (pendingAccount.subdomain) {
+            target += "?store=" + encodeURIComponent(pendingAccount.subdomain);
+          }
+          window.location.href = target;
         }, 650);
       });
 
       startTipsRotation();
       updateProgress();
+      applyReasonNoticeFromUrl();
       phoneInput.focus();
     })();
   </script>

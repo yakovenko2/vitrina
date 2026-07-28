@@ -557,7 +557,7 @@
             <input id="subdomainInput" name="subdomain" type="text" maxlength="32" placeholder="miy-magazyn" required />
           </div>
 
-          <div class="subdomain-preview" id="subdomainPreview">https://miy-magazyn.lavka.shop</div>
+          <div class="subdomain-preview" id="subdomainPreview">https://miy-magazyn.vitryna-shop.com</div>
 
           <button type="submit" class="btn btn-coral">Завершити</button>
           <button type="button" class="btn btn-ghost" id="backToStep2Btn">Назад</button>
@@ -588,6 +588,7 @@
       var MAX_STORE_NAME_LENGTH = 60;
       var MIN_SUBDOMAIN_LENGTH = 1;
       var SUBDOMAIN_PATTERN = /^[a-z0-9-]{1,32}$/;
+      var STOREFRONT_BASE_DOMAIN = "vitryna-shop.com";
       var currentStep = 1;
       var generatedCode = "";
       var phoneVerified = false;
@@ -686,7 +687,7 @@
 
       function updateSubdomainPreview() {
         var safe = sanitizeSubdomain(subdomainInput.value) || "miy-magazyn";
-        subdomainPreview.textContent = "https://" + safe + ".lavka.shop";
+        subdomainPreview.textContent = "https://" + safe + "." + STOREFRONT_BASE_DOMAIN;
       }
 
       function normalizeStoreName(raw) {
@@ -716,53 +717,59 @@
         var registrationRef = db.collection("stores").doc(payload.subdomain).collection("data").doc(REGISTRATION_KEY);
         var settingsRef = db.collection("stores").doc(payload.subdomain).collection("data").doc(STORE_SETTINGS_KEY);
 
-        return subdomainRef
-          .create({
-            subdomain: payload.subdomain,
-            storeId: payload.subdomain,
-            domain: payload.domain,
-            storeName: payload.storeName,
-            phone: payload.phone,
-            status: "active",
-            createdAt: fieldValue.serverTimestamp(),
-            updatedAt: fieldValue.serverTimestamp()
-          })
-          .then(function () {
-            var batch = db.batch();
-            batch.set(registryRef, {
-              storeId: payload.subdomain,
-              storeName: payload.storeName,
-              domain: payload.domain,
-              phone: payload.phone,
-              updatedAt: new Date().toISOString()
-            }, { merge: true });
+        return db
+          .runTransaction(function (transaction) {
+            return transaction.get(subdomainRef).then(function (snap) {
+              if (snap.exists) {
+                var takenError = new Error("subdomain-taken");
+                takenError.code = "subdomain-taken";
+                throw takenError;
+              }
 
-            batch.set(registrationRef, {
-              key: REGISTRATION_KEY,
-              value: {
-                phone: payload.phone,
-                storeName: payload.storeName,
+              transaction.set(subdomainRef, {
                 subdomain: payload.subdomain,
+                storeId: payload.subdomain,
                 domain: payload.domain,
-                registeredAt: payload.registeredAt
-              },
-              updatedAt: new Date().toISOString()
-            }, { merge: true });
-
-            batch.set(settingsRef, {
-              key: STORE_SETTINGS_KEY,
-              value: {
                 storeName: payload.storeName,
-                domain: payload.domain
-              },
-              updatedAt: new Date().toISOString()
-            }, { merge: true });
+                phone: payload.phone,
+                status: "active",
+                createdAt: fieldValue.serverTimestamp(),
+                updatedAt: fieldValue.serverTimestamp()
+              });
 
-            return batch.commit();
+              transaction.set(registryRef, {
+                storeId: payload.subdomain,
+                storeName: payload.storeName,
+                domain: payload.domain,
+                phone: payload.phone,
+                updatedAt: new Date().toISOString()
+              }, { merge: true });
+
+              transaction.set(registrationRef, {
+                key: REGISTRATION_KEY,
+                value: {
+                  phone: payload.phone,
+                  storeName: payload.storeName,
+                  subdomain: payload.subdomain,
+                  domain: payload.domain,
+                  registeredAt: payload.registeredAt
+                },
+                updatedAt: new Date().toISOString()
+              }, { merge: true });
+
+              transaction.set(settingsRef, {
+                key: STORE_SETTINGS_KEY,
+                value: {
+                  storeName: payload.storeName,
+                  domain: payload.domain
+                },
+                updatedAt: new Date().toISOString()
+              }, { merge: true });
+            });
           })
           .catch(function (error) {
             var code = String((error && error.code) || "").toLowerCase();
-            if (code === "already-exists") {
+            if (code === "already-exists" || code === "subdomain-taken") {
               var takenError = new Error("subdomain-taken");
               takenError.code = "subdomain-taken";
               throw takenError;
@@ -948,7 +955,7 @@
           return;
         }
 
-        var domain = "https://" + subdomain + ".lavka.shop";
+        var domain = "https://" + subdomain + "." + STOREFRONT_BASE_DOMAIN;
         var registeredAt = new Date().toISOString();
         var payload = {
           phone: phone,
@@ -963,14 +970,17 @@
           setStatus(step3Status, "Перевіряємо і реєструємо піддомен...", "");
           await reserveSubdomainWithRetry(payload, 3);
         } catch (error) {
+          var errorCode = String((error && error.code) || "").toLowerCase();
+          console.error("[registration] subdomain reservation failed:", error);
           if (error && error.code === "subdomain-taken") {
             setStatus(step3Status, "Цей піддомен вже зайнятий. Спробуй інший.", "error");
-          } else if (error && /permission-denied/i.test(String(error.code || ""))) {
+          } else if (/permission-denied/i.test(errorCode)) {
             setStatus(step3Status, "Немає доступу до реєстрації піддомену. Перевір правила Firestore.", "error");
-          } else if (error && /unavailable|deadline-exceeded/i.test(String(error.code || ""))) {
+          } else if (/unavailable|deadline-exceeded/i.test(errorCode)) {
             setStatus(step3Status, "Тимчасова проблема з підключенням до бази. Спробуй ще раз через кілька секунд.", "error");
           } else {
-            setStatus(step3Status, "Не вдалося зареєструвати піддомен. Спробуй ще раз.", "error");
+            var codeSuffix = errorCode ? " (" + errorCode + ")" : "";
+            setStatus(step3Status, "Не вдалося зареєструвати піддомен. Спробуй ще раз" + codeSuffix + ".", "error");
           }
           setSubmittingState(false);
           return;

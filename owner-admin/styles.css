@@ -267,13 +267,17 @@ a {
 
 .users-table {
   min-width: 0;
+  width: 100%;
   table-layout: fixed;
   overflow: visible;
+  font-size: 12.5px;
 }
 
 .users-table th,
 .users-table td {
   overflow: visible;
+  padding: 9px 7px;
+  word-break: break-word;
 }
 
 .users-table th,
@@ -283,41 +287,48 @@ a {
 
 .users-table th:nth-child(1),
 .users-table td:nth-child(1) {
-  width: 44px;
+  width: 3%;
   text-align: center;
 }
 
 .users-table th:nth-child(2),
 .users-table td:nth-child(2) {
-  width: 150px;
-  white-space: nowrap;
+  width: 11%;
 }
 
 .users-table th:nth-child(3),
 .users-table td:nth-child(3) {
-  width: 210px;
+  width: 11%;
 }
 
 .users-table th:nth-child(4),
 .users-table td:nth-child(4) {
-  width: 300px;
-  word-break: break-word;
+  width: 13%;
 }
 
 .users-table th:nth-child(5),
 .users-table td:nth-child(5) {
-  width: 150px;
-  white-space: nowrap;
+  width: 14%;
 }
 
 .users-table th:nth-child(6),
 .users-table td:nth-child(6) {
-  width: 185px;
+  width: 17%;
 }
 
 .users-table th:nth-child(7),
 .users-table td:nth-child(7) {
-  width: 84px;
+  width: 11%;
+}
+
+.users-table th:nth-child(8),
+.users-table td:nth-child(8) {
+  width: 14%;
+}
+
+.users-table th:nth-child(9),
+.users-table td:nth-child(9) {
+  width: 6%;
   text-align: center;
 }
 

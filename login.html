@@ -517,6 +517,7 @@
       var generatedCode = "";
       var pendingAccount = null;
       var isCheckingAccount = false;
+      var lastCheckedPhone = "";
 
       var tips = [
         "Тримайте телефон під рукою: код діє лише 2 хвилини.",
@@ -755,17 +756,20 @@
           return;
         }
 
-        try {
-          setCheckingState(true);
-          pendingAccount = await findAccountByPhone(phone);
-        } catch (error) {
-          console.error("[login] account check failed:", error);
-          setStatus(step1Status, "Не вдалося перевірити користувача в базі. Спробуйте ще раз.", "error");
+        if (!pendingAccount || lastCheckedPhone !== phone) {
+          try {
+            setCheckingState(true);
+            pendingAccount = await findAccountByPhone(phone);
+            lastCheckedPhone = phone;
+          } catch (error) {
+            console.error("[login] account check failed:", error);
+            setStatus(step1Status, "Не вдалося перевірити користувача в базі. Спробуйте ще раз.", "error");
+            setCheckingState(false);
+            return;
+          }
           setCheckingState(false);
-          return;
         }
 
-        setCheckingState(false);
         if (!pendingAccount) {
           setStatus(step1Status, "Такого користувача не існує або акаунт видалено.", "error");
           phoneInput.focus();
@@ -776,6 +780,48 @@
         codeBox.style.display = "block";
         codeBox.textContent = "Демо-код: " + generatedCode;
         goToStep(2);
+      });
+
+      phoneInput.addEventListener("blur", async function () {
+        var phone = normalizePhone(phoneInput.value);
+        if (!phone) {
+          return;
+        }
+        phoneInput.value = phone;
+
+        if (!isValidPhone(phone)) {
+          setStatus(step1Status, "Введи коректний номер телефону.", "error");
+          return;
+        }
+
+        if (isCheckingAccount || lastCheckedPhone === phone) {
+          return;
+        }
+
+        try {
+          setCheckingState(true);
+          pendingAccount = await findAccountByPhone(phone);
+          lastCheckedPhone = phone;
+        } catch (error) {
+          console.error("[login] phone check failed:", error);
+          setCheckingState(false);
+          return;
+        }
+
+        setCheckingState(false);
+        if (!pendingAccount) {
+          setStatus(step1Status, "Такого користувача не існує або акаунт видалено.", "error");
+        } else {
+          setStatus(step1Status, "Номер знайдено в базі.", "success");
+        }
+      });
+
+      phoneInput.addEventListener("input", function () {
+        if (normalizePhone(phoneInput.value) !== lastCheckedPhone) {
+          pendingAccount = null;
+          lastCheckedPhone = "";
+          setStatus(step1Status, "", "");
+        }
       });
 
       backToStep1Btn.addEventListener("click", function () {

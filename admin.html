@@ -139,9 +139,6 @@
 
       <section class="panel active" id="home">
         <div class="panel-box home-guide-box">
-          <h2>Швидкий запуск магазину</h2>
-          <p class="home-guide-intro">Цей план допоможе запустити магазин без складних налаштувань. Зробіть базові кроки нижче і вже зможете приймати перші замовлення.</p>
-
           <div class="home-domain-box">
             <label for="homeStoreDomainInput">Адреса сайту (домен)</label>
             <div class="home-domain-row">
@@ -152,6 +149,14 @@
             </div>
             <p id="homeDomainCopyMessage" class="saved-message" aria-live="polite"></p>
           </div>
+
+          <a id="homeOpenStorefront" class="home-open-store-btn" href="#" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 9h16M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 13h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            Відкрити мій магазин
+          </a>
+
+          <h2>Швидкий запуск магазину</h2>
+          <p class="home-guide-intro">Цей план допоможе запустити магазин без складних налаштувань. Зробіть базові кроки нижче і вже зможете приймати перші замовлення.</p>
 
           <ol class="home-guide-list">
             <li>
@@ -1300,7 +1305,7 @@
 
         <div class="panel-box">
           <h2>Підключення власного домену</h2>
-          <p class="settings-note">Функція доступна на тарифі "Про". Введіть свій домен (наприклад, my-shop.com) і налаштуйте DNS-записи у панелі вашого реєстратора доменів.</p>
+          <p class="settings-note">Функція доступна на тарифі "Про". Введіть свій домен (наприклад, my-shop.com) і додайте один CNAME-запис — SSL-сертифікат випишеться автоматично.</p>
 
           <div class="domain-status-card" id="domainStatusCard">
             <span class="domain-status-badge" id="domainStatusBadge">Домен не підключено</span>
@@ -1321,61 +1326,18 @@
           </form>
         </div>
 
-        <div class="panel-box">
+        <div class="panel-box" id="dnsRecordsPanel" hidden>
           <h2>DNS-записи для підключення</h2>
-          <p class="settings-note">Додайте ці 2 записи у DNS-панелі вашого реєстратора. Зазвичай цього достатньо для підключення домену.</p>
+          <p class="settings-note">Додайте ці записи у DNS-панелі вашого реєстратора домену. Після оновлення DNS натисніть "Перевірити підключення".</p>
 
-          <div class="dns-records-grid">
-            <div class="dns-record-card">
-              <p class="dns-record-title">Кореневий домен (наприклад, my-shop.com)</p>
-              <div class="dns-record-row">
-                <span class="dns-record-label">Тип</span>
-                <span class="dns-record-value">A</span>
-              </div>
-              <div class="dns-record-row">
-                <span class="dns-record-label">Ім'я/Хост</span>
-                <span class="dns-record-value">@</span>
-              </div>
-              <div class="dns-record-row">
-                <span class="dns-record-label">Значення</span>
-                <span class="dns-record-value-copy">
-                  <code id="dnsAValue">199.36.158.100</code>
-                  <button type="button" class="mini-btn dns-copy-btn" data-copy-target="dnsAValue" aria-label="Скопіювати значення A-запису">
-                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-                  </button>
-                </span>
-              </div>
-            </div>
-
-            <div class="dns-record-card">
-              <p class="dns-record-title">Піддомен www (наприклад, www.my-shop.com)</p>
-              <div class="dns-record-row">
-                <span class="dns-record-label">Тип</span>
-                <span class="dns-record-value">CNAME</span>
-              </div>
-              <div class="dns-record-row">
-                <span class="dns-record-label">Ім'я/Хост</span>
-                <span class="dns-record-value">www</span>
-              </div>
-              <div class="dns-record-row">
-                <span class="dns-record-label">Значення</span>
-                <span class="dns-record-value-copy">
-                  <code id="dnsCnameValue">ghs.googlehosted.com</code>
-                  <button type="button" class="mini-btn dns-copy-btn" data-copy-target="dnsCnameValue" aria-label="Скопіювати значення CNAME-запису">
-                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-                  </button>
-                </span>
-              </div>
-            </div>
-          </div>
+          <div class="dns-records-grid" id="dnsRecordsDynamic"></div>
           <p id="dnsCopyMessage" class="saved-message" aria-live="polite"></p>
-          <p class="settings-note">Якщо ваш провайдер не дозволяє запис A для @, використайте ALIAS/ANAME для @ зі значенням ghs.googlehosted.com.</p>
 
           <ol class="domain-steps-list">
             <li>Купіть домен у будь-якого реєстратора (наприклад, Ukrnames, ImenaUA, Namecheap).</li>
-            <li>Додайте 2 DNS-записи: A @ → 199.36.158.100 і CNAME www → ghs.googlehosted.com.</li>
             <li>Введіть домен у полі "Ваш домен" вище і натисніть "Підключити домен".</li>
-            <li>Зачекайте оновлення DNS (зазвичай від кількох хвилин до 24 годин) і натисніть "Перевірити підключення".</li>
+            <li>Додайте показані вище DNS-записи (CNAME + запис підтвердження).</li>
+            <li>Зачекайте оновлення DNS (від кількох хвилин) і натисніть "Перевірити підключення" — сертифікат випишеться автоматично.</li>
           </ol>
         </div>
       </section>
@@ -1393,6 +1355,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-functions-compat.js"></script>
 <script src="firebase-sync.js"></script>
 <script src="admin.js"></script>
 <script>

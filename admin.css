@@ -2539,6 +2539,40 @@ th {
   height: 18px;
 }
 
+.home-open-store-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: -6px 0 6px;
+  padding: 12px 18px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--brand, #378add);
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(36, 77, 126, 0.18);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
+}
+
+.home-open-store-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(36, 77, 126, 0.24);
+}
+
+.home-open-store-btn:active {
+  transform: scale(0.98);
+}
+
+.home-open-store-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
 .home-guide-list li {
   color: var(--text);
 }

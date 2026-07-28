@@ -9,6 +9,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const homeStoreDomainInput = document.getElementById("homeStoreDomainInput");
   const copyHomeStoreDomain = document.getElementById("copyHomeStoreDomain");
   const homeDomainCopyMessage = document.getElementById("homeDomainCopyMessage");
+  const homeOpenStorefront = document.getElementById("homeOpenStorefront");
   const storefrontHeadLink = document.querySelector(".store-link.store-link-head");
   const domainSubdomainInput = document.getElementById("domainSubdomainInput");
   const copyDomainSubdomain = document.getElementById("copyDomainSubdomain");
@@ -21,6 +22,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const disconnectDomainBtn = document.getElementById("disconnectDomainBtn");
   const customDomainSavedMessage = document.getElementById("customDomainSavedMessage");
   const dnsCopyMessage = document.getElementById("dnsCopyMessage");
+  const dnsRecordsPanel = document.getElementById("dnsRecordsPanel");
+  const dnsRecordsDynamic = document.getElementById("dnsRecordsDynamic");
   const AUTH_KEY = "lavkaAuth";
   const SETTINGS_KEY = "lavkaStoreSettings";
   const REGISTRATION_KEY = "lavkaRegistration";
@@ -35,8 +38,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const TELEGRAM_ADMIN_SUBSCRIBER_KEY = "lavkaTelegramAdminSubscriberId";
   const ADMIN_ACTIVE_SECTION_KEY = "lavkaAdminActiveSection";
   const TELEGRAM_BOT_USERNAME = "lavkaorders_bot";
-  const FIREBASE_HOSTING_APEX_A = "199.36.158.100";
-  const FIREBASE_HOSTING_CNAME = "ghs.googlehosted.com";
+  const FUNCTIONS_REGION = "us-central1";
   const FIREBASE_CONFIG = {
     apiKey: "<SECRET>",
     authDomain: "lavka-shop.firebaseapp.com",
@@ -216,6 +218,18 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     return firebase.firestore();
+  };
+
+  const getFunctionsClient = () => {
+    if (!window.firebase || typeof firebase.functions !== "function") {
+      throw new Error("firebase-functions-unavailable");
+    }
+
+    if (!firebase.apps.length) {
+      firebase.initializeApp(FIREBASE_CONFIG);
+    }
+
+    return firebase.app().functions(FUNCTIONS_REGION);
   };
 
   const getStorageClient = () => {
@@ -635,6 +649,10 @@ document.addEventListener("DOMContentLoaded", () => {
       homeStoreDomainInput.value = storefrontUrl;
     }
 
+    if (homeOpenStorefront) {
+      homeOpenStorefront.href = storefrontUrl || "#";
+    }
+
     if (storefrontHeadLink) {
       storefrontHeadLink.href = storefrontUrl;
     }
@@ -690,66 +708,80 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const isValidCustomDomain = (value) => /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/.test(value);
 
-  const normalizeDnsValue = (value) => String(value || "").trim().toLowerCase().replace(/\.$/, "");
-
-  const fetchDnsRecords = async (name, type) => {
-    const domainName = sanitizeCustomDomain(name);
-    const recordType = String(type || "A").trim().toUpperCase();
-    if (!domainName) {
-      return [];
-    }
-
-    const endpoint = `https://dns.google/resolve?name=${encodeURIComponent(domainName)}&type=${encodeURIComponent(recordType)}`;
-    const response = await fetch(endpoint, { cache: "no-store" });
-    if (!response.ok) {
-      throw new Error("dns-resolve-failed");
-    }
-
-    const payload = await response.json();
-    const answers = Array.isArray(payload?.Answer) ? payload.Answer : [];
-    return answers.map((record) => normalizeDnsValue(record?.data)).filter(Boolean);
+  const callDomainFunction = async (name, payload) => {
+    const functionsClient = getFunctionsClient();
+    const callable = functionsClient.httpsCallable(name);
+    const response = await callable(payload || {});
+    return (response && response.data) || {};
   };
 
-  const checkCustomDomainDns = async (customDomain) => {
-    const domain = sanitizeCustomDomain(customDomain);
-    if (!domain) {
-      return {
-        connected: false,
-        reason: "domain-empty",
-        aRecords: [],
-        rootCnames: [],
-        wwwCnames: []
-      };
+  const applyDomainResult = (result) => {
+    if (!result || typeof result !== "object") {
+      return;
     }
 
-    const [aRecords, rootCnames, wwwCnames] = await Promise.all([
-      fetchDnsRecords(domain, "A"),
-      fetchDnsRecords(domain, "CNAME"),
-      fetchDnsRecords(`www.${domain}`, "CNAME")
-    ]);
+    mergeAndSaveSettings({
+      customDomain: String(result.domain || readSettings()?.customDomain || "").trim(),
+      customDomainStatus: result.connected ? "connected" : "pending",
+      customDomainHostnameId: String(result.hostnameId || readSettings()?.customDomainHostnameId || ""),
+      customDomainCfStatus: String(result.status || ""),
+      customDomainSslStatus: String(result.sslStatus || ""),
+      customDomainRecords: Array.isArray(result.records) ? result.records : [],
+      customDomainConnectedAt: result.connected ? new Date().toISOString() : (readSettings()?.customDomainConnectedAt || null),
+      customDomainLastCheckAt: new Date().toISOString()
+    });
+  };
 
-    const expectedA = normalizeDnsValue(FIREBASE_HOSTING_APEX_A);
-    const expectedCname = normalizeDnsValue(FIREBASE_HOSTING_CNAME);
+  const renderDnsRecords = (records) => {
+    if (!dnsRecordsDynamic) return;
 
-    const hasApexA = aRecords.includes(expectedA);
-    const hasRootAlias = rootCnames.some((value) => value === expectedCname || value.endsWith(`.${expectedCname}`));
-    const hasWwwCname = wwwCnames.some((value) => value === expectedCname || value.endsWith(`.${expectedCname}`));
+    const escapeDns = (value) => String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
 
-    const missing = [];
-    if (!hasApexA && !hasRootAlias) {
-      missing.push("A @ → 199.36.158.100");
+    const list = Array.isArray(records) ? records : [];
+    if (!list.length) {
+      dnsRecordsDynamic.innerHTML = "";
+      if (dnsRecordsPanel) dnsRecordsPanel.hidden = true;
+      return;
     }
-    if (!hasWwwCname) {
-      missing.push("CNAME www → ghs.googlehosted.com");
-    }
 
-    return {
-      connected: (hasApexA || hasRootAlias) && hasWwwCname,
-      reason: missing.length ? ("Додайте записи: " + missing.join(" і ")) : "ok",
-      aRecords,
-      rootCnames,
-      wwwCnames
-    };
+    if (dnsRecordsPanel) dnsRecordsPanel.hidden = false;
+
+    const copyIcon = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+
+    dnsRecordsDynamic.innerHTML = list.map((record, index) => {
+      const type = escapeDns(record.type);
+      const name = escapeDns(record.name);
+      const value = escapeDns(record.value);
+      const purpose = escapeDns(record.purpose);
+      const valueId = `dnsDynValue${index}`;
+      return `
+        <div class="dns-record-card">
+          <p class="dns-record-title">${purpose}</p>
+          <div class="dns-record-row">
+            <span class="dns-record-label">Тип</span>
+            <span class="dns-record-value">${type}</span>
+          </div>
+          <div class="dns-record-row">
+            <span class="dns-record-label">Ім'я/Хост</span>
+            <span class="dns-record-value-copy">
+              <code id="${valueId}Name">${name}</code>
+              <button type="button" class="mini-btn dns-copy-btn" data-copy-target="${valueId}Name" aria-label="Скопіювати ім'я запису">${copyIcon}</button>
+            </span>
+          </div>
+          <div class="dns-record-row">
+            <span class="dns-record-label">Значення</span>
+            <span class="dns-record-value-copy">
+              <code id="${valueId}">${value}</code>
+              <button type="button" class="mini-btn dns-copy-btn" data-copy-target="${valueId}" aria-label="Скопіювати значення запису">${copyIcon}</button>
+            </span>
+          </div>
+        </div>`;
+    }).join("");
   };
 
   const renderDomainSection = () => {
@@ -760,12 +792,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const settings = readSettings() || {};
     const customDomain = String(settings.customDomain || "").trim();
     const status = String(settings.customDomainStatus || "none");
-    const lastCheck = settings.customDomainLastCheck || null;
+    const sslStatus = String(settings.customDomainSslStatus || "");
     const lastCheckAt = settings.customDomainLastCheckAt || null;
 
     if (customDomainInput && document.activeElement !== customDomainInput) {
       customDomainInput.value = customDomain;
     }
+
+    renderDnsRecords(customDomain ? settings.customDomainRecords : []);
 
     if (domainStatusBadge && domainStatusText) {
       domainStatusBadge.classList.remove("pending", "connected", "error");
@@ -776,19 +810,20 @@ document.addEventListener("DOMContentLoaded", () => {
       } else if (status === "connected") {
         domainStatusBadge.classList.add("connected");
         domainStatusBadge.textContent = "Підключено";
-        domainStatusText.textContent = `Домен ${customDomain} підключено та активний.${lastCheckAt ? ` Остання перевірка: ${formatDateTime(lastCheckAt)}.` : ""}`;
+        domainStatusText.textContent = `Домен ${customDomain} підключено, сертифікат активний.${lastCheckAt ? ` Остання перевірка: ${formatDateTime(lastCheckAt)}.` : ""}`;
       } else if (status === "error") {
         domainStatusBadge.classList.add("error");
-        domainStatusBadge.textContent = "Помилка перевірки";
-        domainStatusText.textContent = `Не вдалося перевірити ${customDomain}.${lastCheck && lastCheck.reason && lastCheck.reason !== "ok" ? ` Причина: ${lastCheck.reason}.` : ""} Перевірте DNS-записи нижче і спробуйте ще раз.`;
+        domainStatusBadge.textContent = "Помилка";
+        domainStatusText.textContent = `Не вдалося підключити ${customDomain}. Перевірте DNS-записи нижче і спробуйте ще раз.`;
       } else {
         domainStatusBadge.classList.add("pending");
-        domainStatusBadge.textContent = "Очікує перевірки";
-        domainStatusText.textContent = `Домен ${customDomain} збережено. Додайте DNS-записи нижче, тоді натисніть "Перевірити підключення".`;
+        domainStatusBadge.textContent = "Очікує підтвердження";
+        const sslNote = sslStatus && sslStatus !== "active" ? ` Статус сертифіката: ${sslStatus}.` : "";
+        domainStatusText.textContent = `Домен ${customDomain} додано. Додайте DNS-записи нижче, тоді натисніть "Перевірити підключення".${sslNote}`;
       }
     }
 
-    if (checkDomainBtn) checkDomainBtn.disabled = !customDomain || status === "connected";
+    if (checkDomainBtn) checkDomainBtn.disabled = !customDomain;
     if (disconnectDomainBtn) disconnectDomainBtn.disabled = !customDomain;
   };
 
@@ -814,21 +849,22 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  document.querySelectorAll(".dns-copy-btn").forEach((button) => {
-    button.addEventListener("click", async () => {
-      const targetId = button.dataset.copyTarget;
-      const valueToCopy = targetId ? document.getElementById(targetId)?.textContent?.trim() : "";
-      try {
-        const copied = await copyTextToClipboard(valueToCopy);
-        showTemporaryMessage(dnsCopyMessage, copied ? "Значення скопійовано." : "Не вдалося скопіювати значення.", !copied);
-      } catch {
-        showTemporaryMessage(dnsCopyMessage, "Не вдалося скопіювати значення.", true);
-      }
-    });
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest && event.target.closest(".dns-copy-btn");
+    if (!button) return;
+
+    const targetId = button.dataset.copyTarget;
+    const valueToCopy = targetId ? document.getElementById(targetId)?.textContent?.trim() : "";
+    try {
+      const copied = await copyTextToClipboard(valueToCopy);
+      showTemporaryMessage(dnsCopyMessage, copied ? "Значення скопійовано." : "Не вдалося скопіювати значення.", !copied);
+    } catch {
+      showTemporaryMessage(dnsCopyMessage, "Не вдалося скопіювати значення.", true);
+    }
   });
 
   if (customDomainForm) {
-    customDomainForm.addEventListener("submit", (event) => {
+    customDomainForm.addEventListener("submit", async (event) => {
       event.preventDefault();
 
       const rawValue = sanitizeCustomDomain(customDomainInput?.value);
@@ -838,17 +874,27 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      mergeAndSaveSettings({
-        customDomain: rawValue,
-        customDomainStatus: "pending"
-      });
-
-      if (customDomainInput) {
-        customDomainInput.value = rawValue;
+      const submitBtn = customDomainForm.querySelector('button[type="submit"]');
+      const originalLabel = submitBtn ? submitBtn.textContent : "";
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Підключаємо...";
       }
 
-      showTemporaryMessage(customDomainSavedMessage, "Домен збережено. Додайте DNS-записи нижче і перевірте підключення.", false);
-      renderDomainSection();
+      try {
+        const result = await callDomainFunction("connectCustomDomain", { domain: rawValue });
+        applyDomainResult(result);
+        showTemporaryMessage(customDomainSavedMessage, "Домен додано. Додайте показані нижче DNS-записи і перевірте підключення.", false);
+      } catch (error) {
+        const message = (error && error.message) || "Не вдалося підключити домен. Спробуйте ще раз.";
+        showTemporaryMessage(customDomainSavedMessage, message, true);
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = originalLabel;
+        }
+        renderDomainSection();
+      }
     });
   }
 
@@ -863,29 +909,19 @@ document.addEventListener("DOMContentLoaded", () => {
       checkDomainBtn.textContent = "Перевіряємо...";
 
       try {
-        const dnsResult = await checkCustomDomainDns(customDomain);
-        if (dnsResult.connected) {
-          mergeAndSaveSettings({
-            customDomainStatus: "connected",
-            customDomainConnectedAt: new Date().toISOString(),
-            customDomainLastCheckAt: new Date().toISOString(),
-            customDomainLastCheck: dnsResult
-          });
-          showTemporaryMessage(customDomainSavedMessage, "DNS налаштовано правильно. Домен підключено.", false);
-        } else {
-          mergeAndSaveSettings({
-            customDomainStatus: "error",
-            customDomainLastCheckAt: new Date().toISOString(),
-            customDomainLastCheck: dnsResult
-          });
-          showTemporaryMessage(customDomainSavedMessage, `DNS ще не готовий: ${dnsResult.reason}.`, true);
-        }
-      } catch {
-        mergeAndSaveSettings({
-          customDomainStatus: "error",
-          customDomainLastCheckAt: new Date().toISOString()
+        const result = await callDomainFunction("refreshCustomDomain", {
+          hostnameId: settings.customDomainHostnameId || "",
+          domain: customDomain
         });
-        showTemporaryMessage(customDomainSavedMessage, "Не вдалося перевірити DNS зараз. Спробуйте ще раз за кілька хвилин.", true);
+        applyDomainResult(result);
+        if (result.connected) {
+          showTemporaryMessage(customDomainSavedMessage, "Домен підключено, сертифікат активний.", false);
+        } else {
+          showTemporaryMessage(customDomainSavedMessage, "Домен ще не готовий. Перевірте DNS-записи і спробуйте за кілька хвилин.", true);
+        }
+      } catch (error) {
+        const message = (error && error.message) || "Не вдалося перевірити підключення зараз.";
+        showTemporaryMessage(customDomainSavedMessage, message, true);
       } finally {
         checkDomainBtn.textContent = originalLabel;
         renderDomainSection();
@@ -894,19 +930,38 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   if (disconnectDomainBtn) {
-    disconnectDomainBtn.addEventListener("click", () => {
+    disconnectDomainBtn.addEventListener("click", async () => {
       const settings = readSettings() || {};
-      if (!settings.customDomain) return;
+      const customDomain = String(settings.customDomain || "").trim();
+      if (!customDomain) return;
+
+      disconnectDomainBtn.disabled = true;
+      const originalLabel = disconnectDomainBtn.textContent;
+      disconnectDomainBtn.textContent = "Відключаємо...";
+
+      try {
+        await callDomainFunction("disconnectCustomDomain", {
+          hostnameId: settings.customDomainHostnameId || "",
+          domain: customDomain
+        });
+      } catch (error) {
+        // Навіть якщо видалення на боці Cloudflare не вдалося — прибираємо домен локально.
+      }
 
       mergeAndSaveSettings({
         customDomain: "",
-        customDomainStatus: "none"
+        customDomainStatus: "none",
+        customDomainHostnameId: "",
+        customDomainCfStatus: "",
+        customDomainSslStatus: "",
+        customDomainRecords: []
       });
 
       if (customDomainInput) {
         customDomainInput.value = "";
       }
 
+      disconnectDomainBtn.textContent = originalLabel;
       showTemporaryMessage(customDomainSavedMessage, "Домен відключено.", false);
       renderDomainSection();
     });

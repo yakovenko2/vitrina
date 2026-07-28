@@ -268,16 +268,28 @@
     return 1;
   }
 
+  function planRank(planId) {
+    var id = cleanText(planId).toLowerCase();
+    if (id === "pro") {
+      return 3;
+    }
+    if (id === "business") {
+      return 2;
+    }
+    if (id === "starter") {
+      return 1;
+    }
+    return 0;
+  }
+
   function clientPriority(client) {
     var score = statusRank(client.status) * 1000;
+    score += planRank(client.planId) * 60;
     if (client.ipAddress && client.ipAddress !== DASH) {
-      score += 100;
-    }
-    if (client.planId) {
-      score += 50;
+      score += 20;
     }
     if (client.domain && client.domain !== DASH) {
-      score += 20;
+      score += 10;
     }
     var date = toDate(client.registeredAt);
     score += (date ? date.getTime() : 0) / 1e13;
@@ -342,18 +354,24 @@
     var archivedClients = results[1];
 
     var map = {};
+    var liveIds = {};
 
     archivedClients.forEach(function (client) {
       map[client.storeId] = client;
     });
 
     liveClients.forEach(function (client) {
+      liveIds[client.storeId] = true;
       map[client.storeId] = client;
       upsertSnapshot(db, client);
     });
 
     var list = Object.keys(map).map(function (key) {
-      return map[key];
+      var client = map[key];
+      if (!liveIds[client.storeId]) {
+        client.status = "deleted";
+      }
+      return client;
     });
 
     return dedupeClients(list);

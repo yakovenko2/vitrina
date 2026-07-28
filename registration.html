@@ -353,9 +353,132 @@
       transition: border-color .15s ease, box-shadow .15s ease;
     }
 
-    .field input:focus {
+    .field select {
+      width: 100%;
+      min-height: 48px;
+      border-radius: 11px;
+      border: 1px solid #ceddee;
+      background: #fff;
+      padding: 10px 14px;
+      font: inherit;
+      font-size: 16px;
+      color: var(--ink);
+      outline: none;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%233d4f66' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+      padding-right: 40px;
+      transition: border-color .15s ease, box-shadow .15s ease;
+      cursor: pointer;
+    }
+
+    .field input:focus,
+    .field select:focus {
       border-color: var(--blue);
       box-shadow: 0 0 0 3px rgba(55, 138, 221, 0.16);
+    }
+
+    .custom-select {
+      position: relative;
+      width: 100%;
+    }
+
+    .custom-select-trigger {
+      width: 100%;
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border-radius: 11px;
+      border: 1px solid #ceddee;
+      background: #fff;
+      padding: 10px 14px;
+      font: inherit;
+      font-size: 16px;
+      color: var(--ink);
+      text-align: left;
+      cursor: pointer;
+      outline: none;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+
+    .custom-select-trigger:focus-visible,
+    .custom-select.is-open .custom-select-trigger {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(55, 138, 221, 0.16);
+    }
+
+    .custom-select-value {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .custom-select-value.is-placeholder {
+      color: #90a1b6;
+    }
+
+    .custom-select-arrow {
+      flex: 0 0 auto;
+      color: #3d4f66;
+      transition: transform .18s ease;
+    }
+
+    .custom-select.is-open .custom-select-arrow {
+      transform: rotate(180deg);
+    }
+
+    .custom-select-options {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      right: 0;
+      z-index: 40;
+      margin: 0;
+      padding: 6px;
+      list-style: none;
+      max-height: 280px;
+      overflow-y: auto;
+      background: #fff;
+      border: 1px solid #ceddee;
+      border-radius: 12px;
+      box-shadow: 0 16px 34px rgba(18, 35, 56, 0.16);
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .custom-select-option {
+      padding: 11px 12px;
+      border-radius: 9px;
+      font-size: 15px;
+      color: var(--ink);
+      cursor: pointer;
+      transition: background .12s ease, color .12s ease;
+    }
+
+    .custom-select-option:hover,
+    .custom-select-option.is-active {
+      background: #eef4fb;
+    }
+
+    .custom-select-option.is-selected {
+      background: var(--blue);
+      color: #fff;
+      font-weight: 700;
+    }
+
+    @media (max-width: 480px) {
+      .custom-select-options {
+        max-height: 240px;
+      }
+
+      .custom-select-option {
+        padding: 12px;
+        font-size: 15px;
+      }
     }
 
     .btn {
@@ -435,6 +558,88 @@
       font-size: 13px;
       font-weight: 700;
       word-break: break-all;
+    }
+
+    .subdomain-input-wrap {
+      position: relative;
+      display: block;
+    }
+
+    .subdomain-input-wrap input {
+      padding-right: 46px;
+    }
+
+    .subdomain-check {
+      position: absolute;
+      top: 50%;
+      right: 14px;
+      transform: translateY(-50%);
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .15s ease;
+    }
+
+    .subdomain-check svg {
+      width: 22px;
+      height: 22px;
+      display: none;
+    }
+
+    .subdomain-input-wrap.is-checking .subdomain-check,
+    .subdomain-input-wrap.is-available .subdomain-check,
+    .subdomain-input-wrap.is-taken .subdomain-check {
+      opacity: 1;
+    }
+
+    .subdomain-input-wrap.is-available .icon-check {
+      display: block;
+      color: #2e9c48;
+    }
+
+    .subdomain-input-wrap.is-taken .icon-cross {
+      display: block;
+      color: #d1495b;
+    }
+
+    .subdomain-input-wrap.is-checking .icon-spinner {
+      display: block;
+      color: #7d93ad;
+      animation: subdomain-spin .7s linear infinite;
+    }
+
+    .subdomain-input-wrap.is-available input {
+      border-color: #56b877;
+      box-shadow: 0 0 0 3px rgba(46, 156, 72, 0.14);
+    }
+
+    .subdomain-input-wrap.is-taken input {
+      border-color: #e08b95;
+      box-shadow: 0 0 0 3px rgba(209, 73, 91, 0.12);
+    }
+
+    @keyframes subdomain-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .subdomain-availability {
+      margin: 8px 0 6px;
+      min-height: 16px;
+      font-size: 12.5px;
+      font-weight: 700;
+      color: #7d93ad;
+    }
+
+    .subdomain-availability.is-available {
+      color: #2e9c48;
+    }
+
+    .subdomain-availability.is-taken {
+      color: #d1495b;
     }
 
     .registration-time-note {
@@ -539,8 +744,44 @@
           <h2 class="step-title">Назва магазину</h2>
 
           <div class="field">
+            <label for="clientNameInput">Ваше ім'я</label>
+            <input id="clientNameInput" name="clientName" type="text" maxlength="60" placeholder="Наприклад, Оля" autocomplete="name" required />
+          </div>
+
+          <div class="field">
             <label for="storeNameInput">Назва</label>
             <input id="storeNameInput" name="storeName" type="text" maxlength="60" placeholder="Смаколики від Олі" required />
+          </div>
+
+          <div class="field">
+            <label id="categoryLabel" for="categoryTrigger">Категорія магазину</label>
+            <div class="custom-select" id="categorySelect">
+              <button type="button" class="custom-select-trigger" id="categoryTrigger" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="categoryLabel">
+                <span class="custom-select-value is-placeholder" id="categoryValueText">Оберіть категорію</span>
+                <svg class="custom-select-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+              <ul class="custom-select-options" id="categoryOptions" role="listbox" tabindex="-1" aria-label="Категорія магазину" hidden>
+                <li class="custom-select-option" role="option" data-value="Одяг, взуття та аксесуари">Одяг, взуття та аксесуари</li>
+                <li class="custom-select-option" role="option" data-value="Косметика, парфумерія та догляд">Косметика, парфумерія та догляд</li>
+                <li class="custom-select-option" role="option" data-value="Продукти харчування та напої">Продукти харчування та напої</li>
+                <li class="custom-select-option" role="option" data-value="Електроніка та побутова техніка">Електроніка та побутова техніка</li>
+                <li class="custom-select-option" role="option" data-value="Товари для дому, затишку та інтер'єру">Товари для дому, затишку та інтер'єру</li>
+                <li class="custom-select-option" role="option" data-value="Дитячі товари та іграшки">Дитячі товари та іграшки</li>
+                <li class="custom-select-option" role="option" data-value="Краса та здоров'я, фармація">Краса та здоров'я, фармація</li>
+                <li class="custom-select-option" role="option" data-value="Спорт, туризм та відпочинок">Спорт, туризм та відпочинок</li>
+                <li class="custom-select-option" role="option" data-value="Авто товари, мото та запчастини">Авто товари, мото та запчастини</li>
+                <li class="custom-select-option" role="option" data-value="Товари для тварин">Товари для тварин</li>
+                <li class="custom-select-option" role="option" data-value="Книги, канцелярія та творчість">Книги, канцелярія та творчість</li>
+                <li class="custom-select-option" role="option" data-value="Будівництво, ремонт та сад">Будівництво, ремонт та сад</li>
+                <li class="custom-select-option" role="option" data-value="Handmade та унікальні вироби">Handmade та унікальні вироби</li>
+                <li class="custom-select-option" role="option" data-value="__other__">Інше (Мій варіант)</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="field" id="customCategoryField" style="display:none;">
+            <label for="customCategoryInput">Ваша категорія</label>
+            <input id="customCategoryInput" name="customCategory" type="text" maxlength="60" placeholder="Введіть свою категорію" />
           </div>
 
           <button type="button" class="btn btn-primary" id="toStep3Btn">Далі</button>
@@ -554,7 +795,15 @@
 
           <div class="field">
             <label for="subdomainInput">Піддомен</label>
-            <input id="subdomainInput" name="subdomain" type="text" maxlength="32" placeholder="miy-magazyn" required />
+            <div class="subdomain-input-wrap" id="subdomainWrap">
+              <input id="subdomainInput" name="subdomain" type="text" maxlength="32" placeholder="miy-magazyn" autocomplete="off" required />
+              <span class="subdomain-check" id="subdomainCheck" aria-hidden="true">
+                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                <svg class="icon-cross" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                <svg class="icon-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>
+              </span>
+            </div>
+            <p class="subdomain-availability" id="subdomainAvailability" aria-live="polite"></p>
           </div>
 
           <div class="subdomain-preview" id="subdomainPreview">https://miy-magazyn.vitryna-shop.com</div>
@@ -594,6 +843,9 @@
       var generatedCode = "";
       var phoneVerified = false;
       var isSubmitting = false;
+      var subdomainAvailable = false;
+      var subdomainCheckToken = 0;
+      var subdomainCheckTimer = null;
 
       var progressItems = Array.from(document.querySelectorAll(".progress-step"));
       var stepPanels = Array.from(document.querySelectorAll(".step-panel"));
@@ -607,6 +859,16 @@
       var storeNameInput = document.getElementById("storeNameInput");
       var subdomainInput = document.getElementById("subdomainInput");
       var subdomainPreview = document.getElementById("subdomainPreview");
+      var subdomainWrap = document.getElementById("subdomainWrap");
+      var subdomainAvailability = document.getElementById("subdomainAvailability");
+      var clientNameInput = document.getElementById("clientNameInput");
+      var categorySelect = document.getElementById("categorySelect");
+      var categoryTrigger = document.getElementById("categoryTrigger");
+      var categoryOptions = document.getElementById("categoryOptions");
+      var categoryValueText = document.getElementById("categoryValueText");
+      var customCategoryField = document.getElementById("customCategoryField");
+      var customCategoryInput = document.getElementById("customCategoryInput");
+      var selectedCategory = "";
 
       var step1Status = document.getElementById("step1Status");
       var step2Status = document.getElementById("step2Status");
@@ -691,8 +953,75 @@
         subdomainPreview.textContent = "https://" + safe + "." + STOREFRONT_BASE_DOMAIN;
       }
 
+      function setSubdomainState(state, message) {
+        subdomainAvailable = state === "available";
+        subdomainWrap.classList.remove("is-checking", "is-available", "is-taken");
+        if (state) {
+          subdomainWrap.classList.add("is-" + state);
+        }
+        subdomainAvailability.textContent = message || "";
+        subdomainAvailability.classList.remove("is-available", "is-taken");
+        if (state === "available") {
+          subdomainAvailability.classList.add("is-available");
+        } else if (state === "taken") {
+          subdomainAvailability.classList.add("is-taken");
+        }
+      }
+
+      function checkSubdomainAvailability() {
+        var value = sanitizeSubdomain(subdomainInput.value);
+        if (!value || !isValidSubdomain(value)) {
+          setSubdomainState("", "");
+          return;
+        }
+
+        var token = subdomainCheckToken + 1;
+        subdomainCheckToken = token;
+        setSubdomainState("checking", "Перевіряємо доступність...");
+
+        var db = getFirestore();
+        if (!db) {
+          setSubdomainState("", "");
+          return;
+        }
+
+        db.collection("store_subdomains").doc(value).get().then(function (snap) {
+          if (token !== subdomainCheckToken) {
+            return;
+          }
+          if (snap.exists) {
+            setSubdomainState("taken", "Цей піддомен вже зайнятий.");
+          } else {
+            setSubdomainState("available", "Піддомен вільний.");
+          }
+        }).catch(function () {
+          if (token !== subdomainCheckToken) {
+            return;
+          }
+          setSubdomainState("", "");
+        });
+      }
+
       function normalizeStoreName(raw) {
         return String(raw || "").trim().slice(0, MAX_STORE_NAME_LENGTH);
+      }
+
+      function resolveCategory() {
+        var selected = String(selectedCategory || "").trim();
+        if (!selected) {
+          var chosen = categoryOptions.querySelector(".custom-select-option.is-selected");
+          if (chosen) {
+            selected = String(chosen.getAttribute("data-value") || "").trim();
+            selectedCategory = selected;
+          }
+        }
+        if (!selected) {
+          return "";
+        }
+        if (selected === "__other__") {
+          return normalizeStoreName(customCategoryInput.value);
+        }
+        return selected;
       }
 
       function isValidSubdomain(subdomain) {
@@ -741,6 +1070,8 @@
               transaction.set(registryRef, {
                 storeId: payload.subdomain,
                 storeName: payload.storeName,
+                clientName: payload.clientName,
+                category: payload.category,
                 domain: payload.domain,
                 phone: payload.phone,
                 updatedAt: new Date().toISOString()
@@ -751,6 +1082,8 @@
                 value: {
                   phone: payload.phone,
                   storeName: payload.storeName,
+                  clientName: payload.clientName,
+                  category: payload.category,
                   subdomain: payload.subdomain,
                   domain: payload.domain,
                   registeredAt: payload.registeredAt
@@ -762,6 +1095,7 @@
                 key: STORE_SETTINGS_KEY,
                 value: {
                   storeName: payload.storeName,
+                  category: payload.category,
                   domain: payload.domain
                 },
                 updatedAt: new Date().toISOString()
@@ -808,7 +1142,7 @@
           phoneInput.focus();
         }
         if (step === 2) {
-          storeNameInput.focus();
+          clientNameInput.focus();
         }
         if (step === 3) {
           subdomainInput.focus();
@@ -888,6 +1222,80 @@
         }
       });
 
+      function closeCategoryDropdown() {
+        categorySelect.classList.remove("is-open");
+        categoryTrigger.setAttribute("aria-expanded", "false");
+        categoryOptions.hidden = true;
+      }
+
+      function openCategoryDropdown() {
+        categorySelect.classList.add("is-open");
+        categoryTrigger.setAttribute("aria-expanded", "true");
+        categoryOptions.hidden = false;
+        var active = categoryOptions.querySelector(".custom-select-option.is-selected");
+        if (active && typeof active.scrollIntoView === "function") {
+          active.scrollIntoView({ block: "nearest" });
+        }
+      }
+
+      function selectCategory(value, label) {
+        selectedCategory = value;
+        categoryValueText.textContent = label;
+        categoryValueText.classList.remove("is-placeholder");
+
+        Array.prototype.forEach.call(
+          categoryOptions.querySelectorAll(".custom-select-option"),
+          function (option) {
+            option.classList.toggle("is-selected", option.getAttribute("data-value") === value);
+          }
+        );
+
+        var isOther = value === "__other__";
+        customCategoryField.style.display = isOther ? "" : "none";
+        if (isOther) {
+          customCategoryInput.focus();
+        }
+      }
+
+      categoryTrigger.addEventListener("click", function () {
+        if (categorySelect.classList.contains("is-open")) {
+          closeCategoryDropdown();
+        } else {
+          openCategoryDropdown();
+        }
+      });
+
+      categoryOptions.addEventListener("click", function (event) {
+        var option = event.target.closest(".custom-select-option");
+        if (!option) {
+          return;
+        }
+        selectCategory(option.getAttribute("data-value"), option.textContent.trim());
+        setStatus(step2Status, "", "");
+        closeCategoryDropdown();
+        categoryTrigger.focus();
+      });
+
+      document.addEventListener("click", function (event) {
+        if (!categorySelect.contains(event.target)) {
+          closeCategoryDropdown();
+        }
+      });
+
+      categoryTrigger.addEventListener("keydown", function (event) {
+        if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openCategoryDropdown();
+        }
+      });
+
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape" && categorySelect.classList.contains("is-open")) {
+          closeCategoryDropdown();
+          categoryTrigger.focus();
+        }
+      });
+
       toStep3Btn.addEventListener("click", function () {
         setStatus(step2Status, "", "");
 
@@ -897,11 +1305,31 @@
           return;
         }
 
+        var clientName = normalizeStoreName(clientNameInput.value);
+        clientNameInput.value = clientName;
+        if (clientName.length < 2) {
+          setStatus(step2Status, "Вкажи своє ім'я.", "error");
+          clientNameInput.focus();
+          return;
+        }
+
         var storeName = normalizeStoreName(storeNameInput.value);
         storeNameInput.value = storeName;
         if (storeName.length < 2) {
           setStatus(step2Status, "Вкажи назву магазину.", "error");
           storeNameInput.focus();
+          return;
+        }
+
+        var category = resolveCategory();
+        if (!category) {
+          if (selectedCategory === "__other__") {
+            setStatus(step2Status, "Введи свою категорію.", "error");
+            customCategoryInput.focus();
+          } else {
+            setStatus(step2Status, "Оберіть категорію магазину.", "error");
+            categoryTrigger.focus();
+          }
           return;
         }
 
@@ -918,6 +1346,11 @@
           subdomainInput.value = safeValue;
         }
         updateSubdomainPreview();
+        setSubdomainState("", "");
+        if (subdomainCheckTimer) {
+          clearTimeout(subdomainCheckTimer);
+        }
+        subdomainCheckTimer = setTimeout(checkSubdomainAvailability, 450);
       });
 
       registrationForm.addEventListener("submit", async function (event) {
@@ -937,9 +1370,24 @@
         storeNameInput.value = storeName;
         var subdomain = sanitizeSubdomain(subdomainInput.value);
         var phone = normalizePhone(phoneInput.value);
+        var clientName = normalizeStoreName(clientNameInput.value);
+        clientNameInput.value = clientName;
+        var category = resolveCategory();
+
+        if (clientName.length < 2) {
+          setStatus(step3Status, "Вкажи своє ім'я.", "error");
+          goToStep(2);
+          return;
+        }
 
         if (storeName.length < 2) {
           setStatus(step3Status, "Некоректна назва магазину.", "error");
+          goToStep(2);
+          return;
+        }
+
+        if (!category) {
+          setStatus(step3Status, "Оберіть категорію магазину.", "error");
           goToStep(2);
           return;
         }
@@ -956,11 +1404,19 @@
           return;
         }
 
+        if (subdomainWrap.classList.contains("is-taken")) {
+          setStatus(step3Status, "Цей піддомен вже зайнятий. Спробуй інший.", "error");
+          subdomainInput.focus();
+          return;
+        }
+
         var domain = "https://" + subdomain + "." + STOREFRONT_BASE_DOMAIN;
         var registeredAt = new Date().toISOString();
         var payload = {
           phone: phone,
           storeName: storeName,
+          clientName: clientName,
+          category: category,
           subdomain: subdomain,
           domain: domain,
           registeredAt: registeredAt
@@ -996,12 +1452,15 @@
 
         settings.storeName = storeName;
         settings.name = storeName;
+        settings.category = category;
         settings.domain = domain;
 
         localStorage.setItem(STORE_SETTINGS_KEY, JSON.stringify(settings));
         localStorage.setItem(REGISTRATION_KEY, JSON.stringify({
           phone: phone,
           storeName: storeName,
+          clientName: clientName,
+          category: category,
           subdomain: subdomain,
           domain: settings.domain,
           registeredAt: registeredAt
@@ -1013,6 +1472,7 @@
           subdomain: subdomain,
           domain: settings.domain,
           storeName: storeName,
+          clientName: clientName,
           authorizedAt: new Date().toISOString()
         }));
 

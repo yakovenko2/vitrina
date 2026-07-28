@@ -250,7 +250,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const categoryToken = tokenizedCategories.join(" ") || "all";
       const stockLabel = product.stock > 0 ? "В наявності" : "Немає в наявності";
       return `
-        <article class="product" data-cat="${categoryToken}" data-product-id="${product.id}" tabindex="0" role="button" aria-label="Відкрити товар ${product.name}">
+        <article class="product" data-cat="${categoryToken}" data-product-id="${product.id}" data-product-sku="${product.sku}" tabindex="0" role="button" aria-label="Відкрити товар ${product.name}">
           <div class="thumb">
             <img src="${product.photo}" alt="${product.name}" loading="lazy">
           </div>
@@ -519,6 +519,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const addProductToCart = (productNode, quantity = 1) => {
     const productId = String(productNode.dataset.productId || "").trim();
+    const productSku = String(productNode.dataset.productSku || "").trim();
     const productName = String(productNode.querySelector(".p-name")?.textContent || "Товар").trim();
     const rawPrice = String(productNode.querySelector(".p-price")?.textContent || "0");
     const productPrice = Number.parseInt(rawPrice.replace(/[^\d]/g, ""), 10) || 0;
@@ -530,6 +531,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
       cartState.push({
         id: productId || `${productName}-${Date.now()}`,
+        sku: productSku,
         name: productName,
         price: productPrice,
         image: productImage,

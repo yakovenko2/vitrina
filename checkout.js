@@ -1258,7 +1258,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const orderItems = cartState.map((item) => ({
         photo: String(item.image || "https://picsum.photos/seed/lavka-order-item/80/80"),
-        sku: String(item.id || "-"),
+        sku: String(item.sku || item.id || "-"),
         name: String(item.name || "Товар"),
         price: Math.max(0, Number(item.price) || 0),
         qty: Math.max(1, Number(item.qty) || 1)

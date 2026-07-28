@@ -760,7 +760,7 @@
       : sourceRows;
 
     if (!visibleRows.length) {
-      tableBodyEl.innerHTML = "<tr><td colspan=\"7\">Магазини поки не зареєстровані.</td></tr>";
+      tableBodyEl.innerHTML = "<tr><td colspan=\"9\">Магазини поки не зареєстровані.</td></tr>";
       return;
     }
 
@@ -768,7 +768,9 @@
       .map(function (row, index) {
         var number = index + 1;
         var phone = escapeHtml(row.phone || DASH);
+        var clientName = escapeHtml(row.clientName || DASH);
         var storeName = escapeHtml(row.storeName || DASH);
+        var category = escapeHtml(row.category || DASH);
         var address = escapeHtml(row.address || "не вказано");
         var ipAddress = escapeHtml(getAccessIp(row));
         var accessState = getStoreAccessState(row);
@@ -786,7 +788,9 @@
         return "<tr>"
           + "<td>" + number + "</td>"
           + "<td>" + phone + "</td>"
+          + "<td>" + clientName + "</td>"
           + "<td>" + storeName + "</td>"
+          + "<td>" + category + "</td>"
           + "<td>" + address + "</td>"
           + "<td>" + ipAddress + "</td>"
           + "<td>" + registeredAt + "</td>"
@@ -836,6 +840,8 @@
       var address = pickAddress(registrationValue, settingsValue, registryData);
       var domain = cleanText(registrationValue.domain) || cleanText(settingsValue.domain) || cleanText(registryData.domain);
       var registeredAt = registrationValue.registeredAt || registrationData.updatedAt || registryData.createdAt || registryData.updatedAt || null;
+      var clientName = cleanText(registrationValue.clientName) || cleanText(registrationValue.ownerName) || cleanText(registryData.clientName) || DASH;
+      var category = cleanText(registrationValue.category) || cleanText(settingsValue.category) || cleanText(registryData.category) || DASH;
 
       stores.push({
         storeId: storeId,
@@ -843,6 +849,8 @@
         phone: phone,
         phoneDigits: normalizePhoneDigits(phone),
         storeName: storeName,
+        clientName: clientName,
+        category: category,
         address: address,
         lastIpAddress: cleanText(authValue.lastIpAddress || authValue.ipAddress || registryData.lastIpAddress || subdomainData.lastIpAddress || ""),
         accountStatus: cleanText(subdomainData.status || registryData.status || "active") || "active",

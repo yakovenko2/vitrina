@@ -1,4 +1,12 @@
 document.addEventListener("DOMContentLoaded", () => {
+  const FIREBASE_CONFIG = {
+    apiKey: "<SECRET>",
+    authDomain: "lavka-shop.firebaseapp.com",
+    projectId: "lavka-shop",
+    storageBucket: "lavka-shop.firebasestorage.app",
+    messagingSenderId: "446966778081",
+    appId: "1:446966778081:web:a9f60f4c27bb93fd45b8ee"
+  };
   const SETTINGS_KEY = "lavkaStoreSettings";
   const PRODUCTS_KEY = "lavkaProducts";
   const CATEGORIES_KEY = "lavkaCategories";
@@ -44,6 +52,98 @@ document.addEventListener("DOMContentLoaded", () => {
   let galleryItems = [];
   let activePhotoIndex = -1;
 
+  const sanitizeStoreId = (value) => String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "")
+    .slice(0, 64);
+
+  const getStoreIdFromUrl = () => {
+    const searchParams = new URLSearchParams(window.location.search || "");
+    const currentHashParams = new URLSearchParams(String(window.location.hash || "").replace(/^#/, ""));
+    return sanitizeStoreId(searchParams.get("store") || searchParams.get("subdomain") || currentHashParams.get("store") || currentHashParams.get("subdomain"));
+  };
+
+  const getStoreIdFromHost = () => {
+    const host = String(window.location.hostname || "").toLowerCase();
+    if (!host || host === "localhost" || /^\d+\.\d+\.\d+\.\d+$/.test(host)) {
+      return "";
+    }
+    if (!host.endsWith(".vitryna-shop.com") && !host.endsWith(".vitrina-shop.com")) {
+      return "";
+    }
+    return sanitizeStoreId(host.split(".")[0] || "");
+  };
+
+  const getStoreIdForAccessCheck = () => {
+    const fromUrl = getStoreIdFromUrl();
+    if (fromUrl) return fromUrl;
+    const fromHost = getStoreIdFromHost();
+    if (fromHost) return fromHost;
+    const reg = readRegistration() || {};
+    return sanitizeStoreId(reg.subdomain || "");
+  };
+
+  const initDb = () => {
+    if (!window.firebase) {
+      return null;
+    }
+    if (!firebase.apps.length) {
+      firebase.initializeApp(FIREBASE_CONFIG);
+    }
+    return firebase.firestore();
+  };
+
+  const renderBlockedStorefront = () => {
+    document.title = "Магазин тимчасово недоступний";
+    if (productsGrid) {
+      productsGrid.innerHTML = `
+        <article class="store-empty" aria-live="polite">
+          <h3>Доступ до магазину тимчасово обмежено</h3>
+          <p>Власник або адміністратор обмежив доступ до цієї вітрини. Спробуйте пізніше.</p>
+        </article>
+      `;
+    }
+
+    if (categoriesNav) {
+      categoriesNav.hidden = true;
+      categoriesNav.innerHTML = "";
+    }
+
+    if (openCartBtn) {
+      openCartBtn.disabled = true;
+      openCartBtn.setAttribute("aria-disabled", "true");
+    }
+  };
+
+  const isBlockedStatus = (rawStatus) => String(rawStatus || "").trim().toLowerCase() === "blocked";
+
+  const checkStoreAccess = async () => {
+    const storeId = getStoreIdForAccessCheck();
+    if (!storeId) {
+      return false;
+    }
+
+    const db = initDb();
+    if (!db) {
+      return false;
+    }
+
+    try {
+      const [subdomainDoc, registryDoc] = await Promise.all([
+        db.collection("store_subdomains").doc(storeId).get(),
+        db.collection("stores_registry").doc(storeId).get()
+      ]);
+
+      const subdomainData = subdomainDoc.exists ? (subdomainDoc.data() || {}) : {};
+      const registryData = registryDoc.exists ? (registryDoc.data() || {}) : {};
+      return isBlockedStatus(subdomainData.status) || isBlockedStatus(registryData.status);
+    } catch (error) {
+      console.warn("[storefront] access check failed:", error);
+      return false;
+    }
+  };
+
   const readCart = () => {
     try {
       const raw = localStorage.getItem(CART_KEY);
@@ -82,7 +182,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const first = list[0];
     if (typeof first === "string" && first.trim()) return first.trim();
     if (first && typeof first === "object") {
-      const direct = String(first.src || first.url || first.dataUrl || first.path || "").trim();
+      const direct = String(first.src || first.url || first.dataUrl || first.path || first.preview || "").trim();
       if (direct) return direct;
     }
 
@@ -252,6 +352,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const readSettings = () => {
     try {
       const raw = localStorage.getItem(SETTINGS_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const readRegistration = () => {
+    try {
+      const raw = localStorage.getItem("lavkaRegistration");
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
@@ -480,7 +589,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   trackVisit();
 
-  const savedSettings = readSettings();
+  const savedSettings = readSettings() || {};
+  const savedRegistration = readRegistration() || {};
   const containsProfanity = (value) => {
     const text = (value || "").toLowerCase();
     return profanityPatterns.some((pattern) => pattern.test(text));
@@ -491,13 +601,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const profileAvatar = document.querySelector(".avatar");
   const socialsWrap = document.querySelector(".socials");
 
-  if (savedSettings) {
-    const normalizedName = String(savedSettings.name || "").trim();
-    const normalizedDescription = String(savedSettings.description || "").trim();
-    const normalizedAvatar = String(savedSettings.avatar || "").trim();
+  {
+    const normalizedName = String(savedSettings.name || savedSettings.storeName || savedRegistration.storeName || "").trim();
+    const normalizedDescription = String(savedSettings.description || savedSettings.storeDescription || "").trim();
+    const normalizedAvatar = String(savedSettings.avatar || savedSettings.storeAvatar || "").trim();
 
     if (profileName && normalizedName && !containsProfanity(normalizedName)) {
       profileName.textContent = normalizedName;
+      document.title = `${normalizedName} — Вітрина товарів`;
     }
 
     if (profileDescription && normalizedDescription && !containsProfanity(normalizedDescription)) {
@@ -571,18 +682,68 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const socialKeys = ["instagram", "facebook", "telegram", "tiktok"];
+    const legacySocialFieldMap = {
+      instagram: "socialInstagram",
+      facebook: "socialFacebook",
+      telegram: "socialTelegram",
+      tiktok: "socialTiktok"
+    };
+
+    const normalizeSocialUrl = (value, key) => {
+      const raw = String(value || "").trim();
+      if (!raw) return "";
+
+      if (/^https?:\/\//i.test(raw)) {
+        return raw;
+      }
+
+      if (key === "telegram") {
+        if (/^@/.test(raw)) {
+          return `https://t.me/${raw.slice(1)}`;
+        }
+        if (/^t\.me\//i.test(raw)) {
+          return `https://${raw}`;
+        }
+      }
+
+      if ((key === "instagram" || key === "tiktok") && /^@/.test(raw)) {
+        const nickname = raw.slice(1);
+        return key === "instagram"
+          ? `https://instagram.com/${nickname}`
+          : `https://tiktok.com/@${nickname}`;
+      }
+
+      return `https://${raw}`;
+    };
+
     let visibleSocialsCount = 0;
     socialKeys.forEach((key) => {
       const node = document.querySelector(`[data-social="${key}"]`);
       if (!node) return;
-      const href = String(savedSettings[key] || "").trim();
-      const enabled = Boolean(savedSettings[`${key}Enabled`]) && href.length > 0;
+
+      const legacyField = legacySocialFieldMap[key];
+      const directValue = String(savedSettings[key] || "").trim();
+      const legacyValue = String(savedSettings[legacyField] || "").trim();
+      const normalizedHref = normalizeSocialUrl(directValue || legacyValue, key);
+
+      const directEnabled = savedSettings[`${key}Enabled`];
+      const legacyEnabled = savedSettings[`${legacyField}Enabled`];
+      const enabled = typeof directEnabled === "boolean"
+        ? directEnabled
+        : (typeof legacyEnabled === "boolean" ? legacyEnabled : Boolean(normalizedHref));
+
       node.style.display = enabled ? "inline-flex" : "none";
       if (enabled) {
         visibleSocialsCount += 1;
-        node.href = href;
-        node.target = "_blank";
-        node.rel = "noopener noreferrer";
+        if (normalizedHref) {
+          node.href = normalizedHref;
+          node.target = "_blank";
+          node.rel = "noopener noreferrer";
+        } else {
+          node.href = "#";
+          node.removeAttribute("target");
+          node.removeAttribute("rel");
+        }
       } else {
         node.removeAttribute("href");
         node.removeAttribute("target");
@@ -592,10 +753,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (socialsWrap) {
       socialsWrap.style.display = visibleSocialsCount > 0 ? "flex" : "none";
-    }
-  } else {
-    if (socialsWrap) {
-      socialsWrap.style.display = "none";
     }
   }
 
@@ -623,18 +780,28 @@ document.addEventListener("DOMContentLoaded", () => {
     applyCategoryFilter(target.dataset.cat);
   };
 
-  renderStorefrontProducts();
-  buildCategoryButtons();
+  const initializeStorefront = async () => {
+    const isBlocked = await checkStoreAccess();
+    if (isBlocked) {
+      renderBlockedStorefront();
+      return;
+    }
 
-  if (categoriesNav) {
-    categoriesNav.addEventListener("click", (event) => {
-      const btn = event.target.closest(".cat-btn");
-      if (!btn) return;
-      activateCategoryButton(btn.dataset.cat);
-    });
-  }
+    renderStorefrontProducts();
+    buildCategoryButtons();
 
-  activateCategoryButton(hashParams.get("cat") || params.get("cat") || "all");
+    if (categoriesNav) {
+      categoriesNav.addEventListener("click", (event) => {
+        const btn = event.target.closest(".cat-btn");
+        if (!btn) return;
+        activateCategoryButton(btn.dataset.cat);
+      });
+    }
+
+    activateCategoryButton(hashParams.get("cat") || params.get("cat") || "all");
+  };
+
+  initializeStorefront();
 
   const scrollBtn = document.querySelector(".scroll-down");
   if (scrollBtn) {

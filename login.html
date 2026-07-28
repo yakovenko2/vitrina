@@ -571,6 +571,10 @@
         sendCodeBtn.textContent = loading ? "Перевіряємо..." : "Отримати код";
       }
 
+      function normalizePhoneDigits(raw) {
+        return String(raw || "").replace(/\D/g, "");
+      }
+
       function pickActiveStoreDoc(docs) {
         var list = Array.isArray(docs) ? docs : [];
         for (var i = 0; i < list.length; i += 1) {
@@ -583,14 +587,48 @@
         return null;
       }
 
+      async function loadStoreDocsByPhone(db, phone) {
+        var candidates = [];
+        var normalized = String(phone || "").trim();
+        var digits = normalizePhoneDigits(normalized);
+        if (normalized) {
+          candidates.push(normalized);
+        }
+        if (digits && digits !== normalized) {
+          candidates.push(digits);
+        }
+        if (digits && ("+" + digits) !== normalized) {
+          candidates.push("+" + digits);
+        }
+
+        var unique = [];
+        candidates.forEach(function (item) {
+          if (item && unique.indexOf(item) === -1) {
+            unique.push(item);
+          }
+        });
+
+        var docsById = {};
+        for (var i = 0; i < unique.length; i += 1) {
+          var snap = await db.collection("store_subdomains").where("phone", "==", unique[i]).limit(20).get();
+          snap.docs.forEach(function (doc) {
+            docsById[doc.id] = doc;
+          });
+        }
+
+        return Object.keys(docsById).map(function (id) {
+          return docsById[id];
+        });
+      }
+
       async function findAccountByPhone(phone) {
         var db = getFirestore();
-        var snap = await db.collection("store_subdomains").where("phone", "==", phone).limit(20).get();
-        if (snap.empty) {
+        var docs = await loadStoreDocsByPhone(db, phone);
+        if (!docs.length) {
           return null;
         }
 
-        var activeDoc = pickActiveStoreDoc(snap.docs);
+        var activeDoc = pickActiveStoreDoc(docs);
         if (!activeDoc) {
           return null;
         }

@@ -576,6 +576,7 @@
     (function () {
       var STORE_SETTINGS_KEY = "lavkaStoreSettings";
       var REGISTRATION_KEY = "lavkaRegistration";
+      var AUTH_KEY = "lavkaAuth";
       var PENDING_PHONE_KEY = "lavkaPendingRegistrationPhone";
       var FIREBASE_CONFIG = {
         apiKey: "AIzaSyDzJ3zOCHvuAnZQA-90va3xZxoBSVqnwLs",
@@ -994,6 +995,7 @@
         }
 
         settings.storeName = storeName;
+        settings.name = storeName;
         settings.domain = domain;
 
         localStorage.setItem(STORE_SETTINGS_KEY, JSON.stringify(settings));
@@ -1003,6 +1005,15 @@
           subdomain: subdomain,
           domain: settings.domain,
           registeredAt: registeredAt
+        }));
+
+        localStorage.setItem(AUTH_KEY, JSON.stringify({
+          phone: phone,
+          storeId: subdomain,
+          subdomain: subdomain,
+          domain: settings.domain,
+          storeName: storeName,
+          authorizedAt: new Date().toISOString()
         }));
 
         setStatus(step3Status, "Готово! Переходимо в адмін-панель...", "success");

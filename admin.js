@@ -35,6 +35,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const TELEGRAM_ADMIN_SUBSCRIBER_KEY = "lavkaTelegramAdminSubscriberId";
   const ADMIN_ACTIVE_SECTION_KEY = "lavkaAdminActiveSection";
   const TELEGRAM_BOT_USERNAME = "lavkaorders_bot";
+  const FIREBASE_HOSTING_APEX_A = "199.36.158.100";
+  const FIREBASE_HOSTING_CNAME = "ghs.googlehosted.com";
   const FIREBASE_CONFIG = {
     apiKey: "<SECRET>",
     authDomain: "lavka-shop.firebaseapp.com",
@@ -43,18 +45,20 @@ document.addEventListener("DOMContentLoaded", () => {
     messagingSenderId: "446966778081",
     appId: "1:446966778081:web:a9f60f4c27bb93fd45b8ee"
   };
+  const STORAGE_BUCKET_CANDIDATES = ["lavka-shop.firebasestorage.app", "lavka-shop.appspot.com"];
   const SESSION_CHECK_INTERVAL_MS = 15000;
   const MAX_NAME_LENGTH = 60;
   const MAX_DESCRIPTION_LENGTH = 140;
   const MAX_AVATAR_FILE_SIZE = 3 * 1024 * 1024;
   const MAX_PRODUCT_NAME_LENGTH = 60;
   const MAX_PRODUCT_DESCRIPTION_LENGTH = 240;
-  const MAX_PRODUCT_PHOTOS = 4;
+  const MAX_PRODUCT_PHOTOS = 10;
   const MAX_PRODUCT_PHOTO_SIZE = 3 * 1024 * 1024;
   const MAX_BACKGROUND_FILE_SIZE = 5 * 1024 * 1024;
   const MAX_CATEGORY_NAME_LENGTH = 40;
   const PRODUCTS_PER_PAGE = 5;
   const STOCKS_PER_PAGE = 4;
+  const EMPTY_AVATAR_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
 
   const profanityPatterns = [
     /бля/i,
@@ -214,20 +218,64 @@ document.addEventListener("DOMContentLoaded", () => {
     return firebase.firestore();
   };
 
+  const getStorageClient = () => {
+    if (!window.firebase || typeof firebase.storage !== "function") {
+      throw new Error("firebase-storage-unavailable");
+    }
+
+    if (!firebase.apps.length) {
+      firebase.initializeApp(FIREBASE_CONFIG);
+    }
+
+    const storage = firebase.storage();
+    if (typeof storage.setMaxUploadRetryTime === "function") {
+      storage.setMaxUploadRetryTime(12000);
+    }
+    if (typeof storage.setMaxOperationRetryTime === "function") {
+      storage.setMaxOperationRetryTime(12000);
+    }
+    return storage;
+  };
+
+  const getStorageClientForBucket = (bucketName) => {
+    const normalizedBucket = String(bucketName || "").trim();
+    const defaultBucket = String(FIREBASE_CONFIG.storageBucket || "").trim();
+    const storage = normalizedBucket && normalizedBucket !== defaultBucket
+      ? firebase.app().storage(`gs://${normalizedBucket}`)
+      : getStorageClient();
+
+    if (typeof storage.setMaxUploadRetryTime === "function") {
+      storage.setMaxUploadRetryTime(12000);
+    }
+    if (typeof storage.setMaxOperationRetryTime === "function") {
+      storage.setMaxOperationRetryTime(12000);
+    }
+
+    return storage;
+  };
+
   const isStoreDocActive = (docData) => {
     const status = String(docData?.status || "").toLowerCase();
     return !status || status === "active";
   };
 
   const normalizePhoneForAuth = (raw) => String(raw || "").trim().replace(/[^0-9+]/g, "");
+  const normalizePhoneDigits = (raw) => String(raw || "").replace(/\D/g, "");
+  const phonesMatch = (left, right) => {
+    const leftDigits = normalizePhoneDigits(left);
+    const rightDigits = normalizePhoneDigits(right);
+    return Boolean(leftDigits && rightDigits && leftDigits === rightDigits);
+  };
 
   const readAuthState = () => {
     const auth = readJsonFromStorage(AUTH_KEY) || {};
+    const registration = readJsonFromStorage(REGISTRATION_KEY) || {};
+    const fallbackStoreId = sanitizeStoreId(registration.subdomain || extractSubdomainFromDomain(registration.domain) || "");
     return {
-      phone: normalizePhoneForAuth(auth.phone),
-      storeId: sanitizeStoreId(auth.storeId || auth.subdomain || ""),
-      domain: String(auth.domain || "").trim(),
-      storeName: String(auth.storeName || "").trim()
+      phone: normalizePhoneForAuth(auth.phone || registration.phone),
+      storeId: sanitizeStoreId(auth.storeId || auth.subdomain || fallbackStoreId),
+      domain: String(auth.domain || registration.domain || "").trim(),
+      storeName: String(auth.storeName || registration.storeName || "").trim()
     };
   };
 
@@ -267,7 +315,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (storeDoc.exists) {
         const storeData = storeDoc.data() || {};
         const storedPhone = normalizePhoneForAuth(storeData.phone);
-        if (isStoreDocActive(storeData) && (!authState.phone || !storedPhone || storedPhone === authState.phone)) {
+        if (isStoreDocActive(storeData) && (!authState.phone || !storedPhone || phonesMatch(storedPhone, authState.phone))) {
           return {
             storeId: storeDoc.id,
             phone: storedPhone || authState.phone,
@@ -282,13 +330,36 @@ document.addEventListener("DOMContentLoaded", () => {
       return null;
     }
 
-    const byPhoneSnap = await db.collection("store_subdomains").where("phone", "==", authState.phone).limit(20).get();
-    if (byPhoneSnap.empty) {
+    const phoneCandidates = [];
+    const normalizedPhone = String(authState.phone || "").trim();
+    const digitsPhone = normalizePhoneDigits(normalizedPhone);
+    if (normalizedPhone) {
+      phoneCandidates.push(normalizedPhone);
+    }
+    if (digitsPhone && digitsPhone !== normalizedPhone) {
+      phoneCandidates.push(digitsPhone);
+    }
+    if (digitsPhone && ("+" + digitsPhone) !== normalizedPhone) {
+      phoneCandidates.push("+" + digitsPhone);
+    }
+
+    const uniqueCandidates = phoneCandidates.filter((item, index) => item && phoneCandidates.indexOf(item) === index);
+    const docsById = new Map();
+
+    for (let i = 0; i < uniqueCandidates.length; i += 1) {
+      const byPhoneSnap = await db.collection("store_subdomains").where("phone", "==", uniqueCandidates[i]).limit(20).get();
+      byPhoneSnap.docs.forEach((doc) => {
+        docsById.set(doc.id, doc);
+      });
+    }
+
+    const candidateDocs = Array.from(docsById.values());
+    if (!candidateDocs.length) {
       return null;
     }
 
     let activeDoc = null;
-    byPhoneSnap.docs.some((doc) => {
+    candidateDocs.some((doc) => {
       const data = doc.data() || {};
       if (isStoreDocActive(data)) {
         activeDoc = doc;
@@ -349,7 +420,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const enforceSessionAccess = async () => {
     const authState = readAuthState();
-    if (!authState.phone) {
+    if (!authState.phone && !authState.storeId) {
       redirectToLogin("auth-required");
       return;
     }
@@ -619,6 +690,68 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const isValidCustomDomain = (value) => /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/.test(value);
 
+  const normalizeDnsValue = (value) => String(value || "").trim().toLowerCase().replace(/\.$/, "");
+
+  const fetchDnsRecords = async (name, type) => {
+    const domainName = sanitizeCustomDomain(name);
+    const recordType = String(type || "A").trim().toUpperCase();
+    if (!domainName) {
+      return [];
+    }
+
+    const endpoint = `https://dns.google/resolve?name=${encodeURIComponent(domainName)}&type=${encodeURIComponent(recordType)}`;
+    const response = await fetch(endpoint, { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error("dns-resolve-failed");
+    }
+
+    const payload = await response.json();
+    const answers = Array.isArray(payload?.Answer) ? payload.Answer : [];
+    return answers.map((record) => normalizeDnsValue(record?.data)).filter(Boolean);
+  };
+
+  const checkCustomDomainDns = async (customDomain) => {
+    const domain = sanitizeCustomDomain(customDomain);
+    if (!domain) {
+      return {
+        connected: false,
+        reason: "domain-empty",
+        aRecords: [],
+        rootCnames: [],
+        wwwCnames: []
+      };
+    }
+
+    const [aRecords, rootCnames, wwwCnames] = await Promise.all([
+      fetchDnsRecords(domain, "A"),
+      fetchDnsRecords(domain, "CNAME"),
+      fetchDnsRecords(`www.${domain}`, "CNAME")
+    ]);
+
+    const expectedA = normalizeDnsValue(FIREBASE_HOSTING_APEX_A);
+    const expectedCname = normalizeDnsValue(FIREBASE_HOSTING_CNAME);
+
+    const hasApexA = aRecords.includes(expectedA);
+    const hasRootAlias = rootCnames.some((value) => value === expectedCname || value.endsWith(`.${expectedCname}`));
+    const hasWwwCname = wwwCnames.some((value) => value === expectedCname || value.endsWith(`.${expectedCname}`));
+
+    const missing = [];
+    if (!hasApexA && !hasRootAlias) {
+      missing.push("A @ → 199.36.158.100");
+    }
+    if (!hasWwwCname) {
+      missing.push("CNAME www → ghs.googlehosted.com");
+    }
+
+    return {
+      connected: (hasApexA || hasRootAlias) && hasWwwCname,
+      reason: missing.length ? ("Додайте записи: " + missing.join(" і ")) : "ok",
+      aRecords,
+      rootCnames,
+      wwwCnames
+    };
+  };
+
   const renderDomainSection = () => {
     if (domainSubdomainInput) {
       domainSubdomainInput.value = getStorefrontUrl();
@@ -627,6 +760,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const settings = readSettings() || {};
     const customDomain = String(settings.customDomain || "").trim();
     const status = String(settings.customDomainStatus || "none");
+    const lastCheck = settings.customDomainLastCheck || null;
+    const lastCheckAt = settings.customDomainLastCheckAt || null;
 
     if (customDomainInput && document.activeElement !== customDomainInput) {
       customDomainInput.value = customDomain;
@@ -641,11 +776,11 @@ document.addEventListener("DOMContentLoaded", () => {
       } else if (status === "connected") {
         domainStatusBadge.classList.add("connected");
         domainStatusBadge.textContent = "Підключено";
-        domainStatusText.textContent = `Домен ${customDomain} підключено та активний.`;
+        domainStatusText.textContent = `Домен ${customDomain} підключено та активний.${lastCheckAt ? ` Остання перевірка: ${formatDateTime(lastCheckAt)}.` : ""}`;
       } else if (status === "error") {
         domainStatusBadge.classList.add("error");
         domainStatusBadge.textContent = "Помилка перевірки";
-        domainStatusText.textContent = `Не вдалося перевірити ${customDomain}. Перевірте DNS-записи нижче і спробуйте ще раз.`;
+        domainStatusText.textContent = `Не вдалося перевірити ${customDomain}.${lastCheck && lastCheck.reason && lastCheck.reason !== "ok" ? ` Причина: ${lastCheck.reason}.` : ""} Перевірте DNS-записи нижче і спробуйте ще раз.`;
       } else {
         domainStatusBadge.classList.add("pending");
         domainStatusBadge.textContent = "Очікує перевірки";
@@ -728,12 +863,29 @@ document.addEventListener("DOMContentLoaded", () => {
       checkDomainBtn.textContent = "Перевіряємо...";
 
       try {
-        await fetch(`https://${customDomain}`, { mode: "no-cors", cache: "no-store" });
-        mergeAndSaveSettings({ customDomainStatus: "connected" });
-        showTemporaryMessage(customDomainSavedMessage, "Домен успішно перевірено та підключено.", false);
+        const dnsResult = await checkCustomDomainDns(customDomain);
+        if (dnsResult.connected) {
+          mergeAndSaveSettings({
+            customDomainStatus: "connected",
+            customDomainConnectedAt: new Date().toISOString(),
+            customDomainLastCheckAt: new Date().toISOString(),
+            customDomainLastCheck: dnsResult
+          });
+          showTemporaryMessage(customDomainSavedMessage, "DNS налаштовано правильно. Домен підключено.", false);
+        } else {
+          mergeAndSaveSettings({
+            customDomainStatus: "error",
+            customDomainLastCheckAt: new Date().toISOString(),
+            customDomainLastCheck: dnsResult
+          });
+          showTemporaryMessage(customDomainSavedMessage, `DNS ще не готовий: ${dnsResult.reason}.`, true);
+        }
       } catch {
-        mergeAndSaveSettings({ customDomainStatus: "error" });
-        showTemporaryMessage(customDomainSavedMessage, "DNS ще не оновились. Спробуйте пізніше (може тривати до 24 годин).", true);
+        mergeAndSaveSettings({
+          customDomainStatus: "error",
+          customDomainLastCheckAt: new Date().toISOString()
+        });
+        showTemporaryMessage(customDomainSavedMessage, "Не вдалося перевірити DNS зараз. Спробуйте ще раз за кілька хвилин.", true);
       } finally {
         checkDomainBtn.textContent = originalLabel;
         renderDomainSection();
@@ -1750,6 +1902,42 @@ document.addEventListener("DOMContentLoaded", () => {
     localStorage.setItem(BILLING_KEY, JSON.stringify(billing));
   };
 
+  const getPhotoPolicyByPlan = () => {
+    const billing = readBilling();
+    const planId = String(billing?.currentPlanId || "").trim().toLowerCase();
+
+    if (planId === "pro") {
+      return {
+        planId: "pro",
+        planName: "Про",
+        maxPhotos: 10,
+        maxUploadBytes: 3 * 1024 * 1024,
+        targetStoredBytes: 90 * 1024,
+        maxDimension: 1800
+      };
+    }
+
+    if (planId === "business") {
+      return {
+        planId: "business",
+        planName: "Бізнес",
+        maxPhotos: 6,
+        maxUploadBytes: 2 * 1024 * 1024,
+        targetStoredBytes: 110 * 1024,
+        maxDimension: 1600
+      };
+    }
+
+    return {
+      planId: "starter",
+      planName: "Старт",
+      maxPhotos: 3,
+      maxUploadBytes: 2 * 1024 * 1024,
+      targetStoredBytes: 120 * 1024,
+      maxDimension: 1400
+    };
+  };
+
   const formatDateLong = (value) => {
     if (!value) return "-";
     const date = new Date(value);
@@ -1867,7 +2055,9 @@ document.addEventListener("DOMContentLoaded", () => {
       planName: selectedPlan.name,
       amount: selectedPlan.price,
       periodMonths: selectedPlan.periodMonths,
-      paidAt: nowIso
+      paidAt: nowIso,
+      actorRole: "user",
+      source: "store-admin-self-service"
     };
 
     const nextBilling = {
@@ -3117,14 +3307,23 @@ document.addEventListener("DOMContentLoaded", () => {
     productDescriptionCounter.textContent = `${length}/${MAX_PRODUCT_DESCRIPTION_LENGTH}`;
   };
 
+  const getPhotoPolicyHint = () => {
+    const policy = getPhotoPolicyByPlan();
+    const maxMb = Math.round(policy.maxUploadBytes / (1024 * 1024));
+    return `Тариф ${policy.planName}: до ${policy.maxPhotos} фото, до ${maxMb} МБ кожне.`;
+  };
+
   const validatePhotos = (files) => {
-    if (files.length > MAX_PRODUCT_PHOTOS) {
-      return `Можна додати максимум ${MAX_PRODUCT_PHOTOS} фото.`;
+    const list = Array.isArray(files) ? files : [];
+    const policy = getPhotoPolicyByPlan();
+
+    if (list.length > policy.maxPhotos) {
+      return `${getPhotoPolicyHint()} Обрано: ${list.length}.`;
     }
 
-    const oversized = files.find((file) => file.size > MAX_PRODUCT_PHOTO_SIZE);
+    const oversized = list.find((file) => Number(file?.size) > policy.maxUploadBytes);
     if (oversized) {
-      return "Кожне фото має бути до 3 МБ.";
+      return `${getPhotoPolicyHint()} Файл ${oversized.name} перевищує ліміт.`;
     }
 
     return "";
@@ -3140,6 +3339,201 @@ document.addEventListener("DOMContentLoaded", () => {
       productUnitOptions.hidden = true;
     }
     updateModalScrollLock();
+  };
+
+  const resolveStoreIdForUploads = () => {
+    const authState = readAuthState();
+    if (authState?.storeId) {
+      return sanitizeStoreId(authState.storeId);
+    }
+
+    const context = getCurrentStoreContext();
+    return sanitizeStoreId(context.subdomain || "") || "default-store";
+  };
+
+  const sanitizeStorageFileName = (name) => {
+    const normalized = String(name || "photo")
+      .trim()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-zA-Z0-9._-]/g, "");
+    return normalized || "photo";
+  };
+
+  const withTimeout = (promise, timeoutMs, errorCode) => {
+    const timeout = Math.max(1000, Number(timeoutMs) || 12000);
+    return new Promise((resolve, reject) => {
+      const timerId = window.setTimeout(() => {
+        reject(new Error(errorCode || "operation-timeout"));
+      }, timeout);
+
+      promise
+        .then((value) => {
+          window.clearTimeout(timerId);
+          resolve(value);
+        })
+        .catch((error) => {
+          window.clearTimeout(timerId);
+          reject(error);
+        });
+    });
+  };
+
+  const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("file-read-failed"));
+    reader.readAsDataURL(file);
+  });
+
+  const loadImageFromDataUrl = (dataUrl) => new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("image-load-failed"));
+    image.src = dataUrl;
+  });
+
+  const clampDimension = (width, height, maxDimension) => {
+    const w = Math.max(1, Number(width) || 1);
+    const h = Math.max(1, Number(height) || 1);
+    const max = Math.max(1, Number(maxDimension) || 1);
+    if (w <= max && h <= max) {
+      return { width: w, height: h };
+    }
+
+    if (w >= h) {
+      return { width: max, height: Math.max(1, Math.round((h * max) / w)) };
+    }
+
+    return { width: Math.max(1, Math.round((w * max) / h)), height: max };
+  };
+
+  const canvasToDataUrl = (canvas, quality) => {
+    const q = Math.min(0.92, Math.max(0.45, Number(quality) || 0.85));
+    return canvas.toDataURL("image/jpeg", q);
+  };
+
+  const estimateDataUrlBytes = (dataUrl) => {
+    const value = String(dataUrl || "");
+    const base64 = value.split(",")[1] || "";
+    return Math.max(0, Math.floor((base64.length * 3) / 4));
+  };
+
+  const buildEmbeddedProductPhoto = async (file, policy, index, uploadErrorCode) => {
+    const sourceDataUrl = await readFileAsDataUrl(file);
+    const sourceImage = await loadImageFromDataUrl(sourceDataUrl);
+    const size = clampDimension(sourceImage.width, sourceImage.height, policy.maxDimension);
+    const canvas = document.createElement("canvas");
+    canvas.width = size.width;
+    canvas.height = size.height;
+    const context = canvas.getContext("2d", { alpha: false });
+    if (!context) {
+      throw new Error("canvas-context-unavailable");
+    }
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, size.width, size.height);
+    context.drawImage(sourceImage, 0, 0, size.width, size.height);
+
+    var quality = 0.9;
+    var dataUrl = canvasToDataUrl(canvas, quality);
+    var bytes = estimateDataUrlBytes(dataUrl);
+    var maxBytes = Math.max(24 * 1024, Number(policy.targetStoredBytes) || 120 * 1024);
+
+    while (bytes > maxBytes && quality > 0.5) {
+      quality -= 0.08;
+      dataUrl = canvasToDataUrl(canvas, quality);
+      bytes = estimateDataUrlBytes(dataUrl);
+    }
+
+    return {
+      id: `photo-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      name: String(file?.name || `photo-${index + 1}`).trim() || `photo-${index + 1}`,
+      type: "image/jpeg",
+      size: bytes,
+      dataUrl,
+      src: dataUrl,
+      storageSync: "embedded-fallback",
+      storageErrorCode: String(uploadErrorCode || "storage-upload-failed"),
+      width: size.width,
+      height: size.height,
+      updatedAt: new Date().toISOString()
+    };
+  };
+
+  const getExtensionFromFile = (file) => {
+    const rawName = String(file?.name || "").trim();
+    const dotIndex = rawName.lastIndexOf(".");
+    if (dotIndex > -1 && dotIndex < rawName.length - 1) {
+      return rawName.slice(dotIndex + 1).toLowerCase();
+    }
+
+    const type = String(file?.type || "").toLowerCase();
+    if (type === "image/png") return "png";
+    if (type === "image/webp") return "webp";
+    return "jpg";
+  };
+
+  const uploadProductPhotoToStorage = async (file, storeId, productId, index, policy) => {
+    const extension = getExtensionFromFile(file);
+    const nameRoot = sanitizeStorageFileName(String(file?.name || `photo-${index + 1}`)).replace(/\.[^.]+$/, "");
+    const objectPath = `stores/${storeId}/products/${productId}/${Date.now()}-${index + 1}-${nameRoot}.${extension}`;
+    const metadata = { contentType: String(file?.type || "image/jpeg") };
+    const bucketCandidates = [
+      FIREBASE_CONFIG.storageBucket,
+      ...STORAGE_BUCKET_CANDIDATES
+    ].map((value) => String(value || "").trim()).filter(Boolean).filter((value, i, arr) => arr.indexOf(value) === i);
+
+    let lastError = null;
+    for (let i = 0; i < bucketCandidates.length; i += 1) {
+      try {
+        const bucket = bucketCandidates[i];
+        const storage = getStorageClientForBucket(bucket);
+        const ref = storage.ref().child(objectPath);
+        const snapshot = await withTimeout(ref.put(file, metadata), 15000, "storage-upload-timeout");
+        const downloadUrl = await withTimeout(snapshot.ref.getDownloadURL(), 10000, "storage-url-timeout");
+
+        return {
+          id: `photo-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+          name: String(file?.name || `photo-${index + 1}`).trim() || `photo-${index + 1}`,
+          type: String(file?.type || "image/jpeg"),
+          size: Number(file?.size) || 0,
+          url: downloadUrl,
+          src: downloadUrl,
+          path: objectPath,
+          bucket,
+          storageSync: "firebase-storage",
+          updatedAt: new Date().toISOString()
+        };
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    console.warn("[admin] storage upload failed, using embedded fallback", {
+      storeId,
+      productId,
+      fileName: String(file?.name || ""),
+      error: lastError
+    });
+
+    return buildEmbeddedProductPhoto(file, policy, index, lastError?.code || lastError?.message || "storage-upload-failed");
+  };
+
+  const convertProductFilesToStoredPhotos = async (files, productId) => {
+    const list = Array.isArray(files) ? files : [];
+    if (!list.length) {
+      return [];
+    }
+
+    const policy = getPhotoPolicyByPlan();
+    const storeId = resolveStoreIdForUploads();
+    const safeProductId = sanitizeStorageFileName(String(productId || `product-${Date.now()}`));
+    const results = [];
+    for (let index = 0; index < list.length; index += 1) {
+      const entry = await uploadProductPhotoToStorage(list[index], storeId, safeProductId, index, policy);
+      results.push(entry);
+    }
+    return results;
   };
 
   const applyProductUnitValue = (value) => {
@@ -3310,10 +3704,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const applySettings = (settings) => {
     if (!settings) return;
-    storeName.value = settings.name || storeName.value;
-    storeDescription.value = settings.description || storeDescription.value;
-    storeAvatar.value = settings.avatar || storeAvatar.value;
-    avatarPreview.src = settings.avatar || avatarPreview.src;
+    const normalizedName = String(settings.name || settings.storeName || "").trim();
+    const normalizedDescription = String(settings.description || settings.storeDescription || "").trim();
+    const normalizedAvatar = String(settings.avatar || settings.storeAvatar || "").trim();
+
+    storeName.value = normalizedName;
+    storeDescription.value = normalizedDescription;
+    storeAvatar.value = normalizedAvatar;
+    avatarPreview.src = normalizedAvatar || EMPTY_AVATAR_SRC;
     socialInstagram.value = settings.instagram || "";
     socialFacebook.value = settings.facebook || "";
     socialTelegram.value = settings.telegram || "";
@@ -4183,11 +4581,15 @@ document.addEventListener("DOMContentLoaded", () => {
         productPhotos.value = "";
         return;
       }
-      productSavedMessage.textContent = "";
+      if (files.length) {
+        productSavedMessage.textContent = getPhotoPolicyHint();
+      } else {
+        productSavedMessage.textContent = "";
+      }
       productSavedMessage.classList.remove("error");
     });
 
-    productCreateForm.addEventListener("submit", (event) => {
+    productCreateForm.addEventListener("submit", async (event) => {
       event.preventDefault();
 
       const editingId = productEditingId.value.trim();
@@ -4273,13 +4675,20 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      const nextPhotos = files.length
-        ? files.map((file) => ({
-            name: file.name,
-            size: file.size,
-            type: file.type
-          }))
-        : existingProduct?.photos || [];
+      const nextProductId = editingId || `product-${Date.now()}`;
+
+      let nextPhotos = existingProduct?.photos || [];
+      if (files.length) {
+        try {
+          productSavedMessage.textContent = "Завантажуємо фото у базу...";
+          nextPhotos = await convertProductFilesToStoredPhotos(files, nextProductId);
+        } catch (photoProcessingError) {
+          console.error("[admin] photo upload failed", photoProcessingError);
+          productSavedMessage.textContent = "Не вдалося завантажити фото у базу. Спробуйте ще раз.";
+          productSavedMessage.classList.add("error");
+          return;
+        }
+      }
 
       const preservedSizeStocks = isClothing
         ? selectedSizes.reduce((acc, sizeKey) => {
@@ -4291,7 +4700,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const totalStockFromSizes = Object.values(preservedSizeStocks).reduce((sum, value) => sum + value, 0);
 
       const nextProduct = {
-        id: editingId || `product-${Date.now()}`,
+        id: nextProductId,
         sku: normalizedSku,
         name: normalizedName,
         category: normalizedCategories[0],
@@ -4648,7 +5057,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     avatarPreview.addEventListener("error", () => {
-      avatarPreview.src = "https://picsum.photos/seed/lavka-keramiky/160/160";
+      avatarPreview.src = EMPTY_AVATAR_SRC;
     });
 
     storeAvatarFile.addEventListener("change", () => {

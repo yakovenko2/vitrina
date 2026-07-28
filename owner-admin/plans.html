@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Тарифи та підписки - Адмінка власника | Лавка</title>
   <link rel="stylesheet" href="/owner-admin/styles.css" />
-  </head>
+</head>
 <body>
   <div class="layout">
     <aside class="sidebar">
@@ -13,14 +13,11 @@
       <nav class="menu" aria-label="Розділи адмінки власника">
         <a href="/owner-admin/index.html">Головна (дашборд)</a>
         <a href="/owner-admin/users.html">Користувачі</a>
+        <a href="/owner-admin/clients.html">База клієнтів</a>
         <a href="/owner-admin/stores.html">Магазини</a>
         <a href="/owner-admin/orders.html">Замовлення</a>
         <a class="active" href="/owner-admin/plans.html">Тарифи та підписки</a>
-        <a href="/owner-admin/finance.html">Платежі та фінанси</a>
-        <a href="/owner-admin/support.html">Підтримка / звернення</a>
         <a href="/owner-admin/analytics.html">Аналітика</a>
-        <a href="/owner-admin/notifications.html">Сповіщення / розсилки</a>
-        <a href="/owner-admin/system-settings.html">Налаштування системи</a>
       </nav>
     </aside>
 
@@ -30,37 +27,80 @@
           <h1>Тарифи та підписки</h1>
           <p>Керування планами, активними підписками та простроченими оплатами.</p>
         </div>
-        <span class="badge">3 тарифи активні</span>
+        <span class="badge" id="plansActiveBadge">Завантаження...</span>
       </header>
 
-      <section class="grid grid-3">
-        <article class="card kpi"><div class="label">Активні підписки</div><div class="value">1 642</div><div class="meta"><span class="status-ok">+73</span> за місяць</div></article>
-        <article class="card kpi"><div class="label">Trial</div><div class="value">274</div><div class="meta">Переходять у платні</div></article>
-        <article class="card kpi"><div class="label">Прострочені оплати</div><div class="value">86</div><div class="meta"><span class="status-bad">потребують дій</span></div></article>
-      </section>
-
-      <section class="grid grid-2">
+      <section class="grid">
         <article class="card">
-          <h2>Плани</h2>
-          <table class="table">
-            <thead><tr><th>Тариф</th><th>Ціна</th><th>Магазини</th><th>Статус</th></tr></thead>
-            <tbody>
-              <tr><td>Старт</td><td>₴299</td><td>741</td><td><span class="pill green">Активний</span></td></tr>
-              <tr><td>Бізнес</td><td>₴699</td><td>612</td><td><span class="pill green">Активний</span></td></tr>
-              <tr><td>Преміум</td><td>₴1299</td><td>289</td><td><span class="pill blue">Рекомендований</span></td></tr>
+          <h2>Пошук магазину</h2>
+          <p class="table-action-status" id="planSearchStatus">Введіть номер телефону або адресу магазину.</p>
+          <div class="plan-search-row">
+            <input id="planSearchInput" class="plan-search-input" type="text" placeholder="Наприклад: +380... або my-shop.vitryna-shop.com" />
+            <button id="planSearchClear" type="button" class="plan-search-clear">Очистити</button>
+          </div>
+          <table class="table" aria-label="Результати пошуку магазинів">
+            <thead><tr><th>Магазин</th><th>Телефон</th><th>Адреса</th><th>Поточний тариф</th><th>Дія</th></tr></thead>
+            <tbody id="planSearchResultsBody">
+              <tr><td colspan="5">Завантажуємо магазини...</td></tr>
             </tbody>
           </table>
-        </article>
-        <article class="card">
-          <h2>Що потребує уваги</h2>
-          <ul class="list">
-            <li>42 підписки завершуються протягом 3 днів.</li>
-            <li>19 карток мають повторну невдалу оплату.</li>
-            <li>Оновити опис тарифу "Преміум" для лендингу.</li>
-          </ul>
         </article>
       </section>
     </main>
   </div>
+
+  <div class="modal-backdrop" id="planDetailsModal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="planDetailsTitle">
+      <div class="modal-header">
+        <h2 id="planDetailsTitle">Деталі магазину</h2>
+        <button type="button" class="modal-close" id="planDetailsClose" aria-label="Закрити">×</button>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-info-grid">
+          <p><strong>Назва:</strong> <span id="detailStoreName">-</span></p>
+          <p><strong>Телефон:</strong> <span id="detailStorePhone">-</span></p>
+          <p><strong>Адреса:</strong> <span id="detailStoreAddress">-</span></p>
+          <p><strong>Дата реєстрації:</strong> <span id="detailStoreRegisteredAt">-</span></p>
+          <p><strong>Поточний тариф:</strong> <span id="detailCurrentPlan">-</span></p>
+          <p><strong>Дійсний до:</strong> <span id="detailPlanValidUntil">-</span></p>
+        </div>
+      </div>
+
+      <div class="modal-section">
+        <h3>Історія оплат тарифів</h3>
+        <table class="table modal-table" aria-label="Історія оплат тарифів">
+          <thead><tr><th>Дата</th><th>Тариф</th><th>Період</th><th>Сума</th><th>Статус</th><th>Хто виконав</th></tr></thead>
+          <tbody id="detailPaymentsBody">
+            <tr><td colspan="6">Оплат ще немає.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="modal-section">
+        <h3>Змінити тариф</h3>
+        <p class="table-action-status" id="planModalStatus"></p>
+        <div class="plan-change-row">
+          <select id="detailPlanSelect" class="plan-select">
+            <option value="starter">Старт — ₴109 / 1 міс.</option>
+            <option value="business">Бізнес — ₴209 / 1 міс.</option>
+            <option value="pro">Про — ₴449 / 1 міс.</option>
+          </select>
+          <button id="detailApplyPlan" type="button" class="plan-apply-btn">Застосувати тариф</button>
+          <button id="detailCancelPlan" type="button" class="plan-cancel-btn">Відмінити тариф</button>
+        </div>
+
+        <div class="plan-grant-row">
+          <input id="detailGrantDays" class="plan-grant-input" type="number" min="1" max="3650" step="1" placeholder="Кількість днів" />
+          <button id="detailGrantAccess" type="button" class="plan-apply-btn">Надати доступ на дні</button>
+        </div>
+        <p class="plan-grant-hint">Продовжує доступ магазину на вказану кількість днів без оплати.</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
+  <script src="/owner-admin/plans.js"></script>
 </body>
 </html>

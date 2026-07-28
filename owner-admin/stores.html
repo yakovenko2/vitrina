@@ -3,56 +3,112 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>РњР°РіР°Р·РёРЅРё - РђРґРјС–РЅРєР° РІР»Р°СЃРЅРёРєР° | Р›Р°РІРєР°</title>
+  <title>Магазини - Адмінка власника | Лавка</title>
   <link rel="stylesheet" href="/owner-admin/styles.css" />
 </head>
 <body>
   <div class="layout">
     <aside class="sidebar">
-      <a class="brand" href="/owner-admin/index.html" aria-label="РђРґРјС–РЅРєР° РІР»Р°СЃРЅРёРєР° - РіРѕР»РѕРІРЅР°"><span class="brand-mark">L</span><span><strong>Р›Р°РІРєР°</strong><small>Owner Admin</small></span></a>
-      <nav class="menu" aria-label="Р РѕР·РґС–Р»Рё Р°РґРјС–РЅРєРё РІР»Р°СЃРЅРёРєР°">
-        <a href="/owner-admin/index.html">Р“РѕР»РѕРІРЅР° (РґР°С€Р±РѕСЂРґ)</a>
-        <a href="/owner-admin/users.html">РљРѕСЂРёСЃС‚СѓРІР°С‡С–</a>
-        <a class="active" href="/owner-admin/stores.html">РњР°РіР°Р·РёРЅРё</a>
-        <a href="/owner-admin/orders.html">Р—Р°РјРѕРІР»РµРЅРЅСЏ</a>
-        <a href="/owner-admin/plans.html">РўР°СЂРёС„Рё С‚Р° РїС–РґРїРёСЃРєРё</a>
-        <a href="/owner-admin/finance.html">РџР»Р°С‚РµР¶С– С‚Р° С„С–РЅР°РЅСЃРё</a>
-        <a href="/owner-admin/support.html">РџС–РґС‚СЂРёРјРєР° / Р·РІРµСЂРЅРµРЅРЅСЏ</a>
-        <a href="/owner-admin/analytics.html">РђРЅР°Р»С–С‚РёРєР°</a>
-        <a href="/owner-admin/notifications.html">РЎРїРѕРІС–С‰РµРЅРЅСЏ / СЂРѕР·СЃРёР»РєРё</a>
-        <a href="/owner-admin/system-settings.html">РќР°Р»Р°С€С‚СѓРІР°РЅРЅСЏ СЃРёСЃС‚РµРјРё</a>
+      <a class="brand" href="/owner-admin/index.html" aria-label="Адмінка власника - головна"><span class="brand-mark">L</span><span><strong>Лавка</strong><small>Owner Admin</small></span></a>
+      <nav class="menu" aria-label="Розділи адмінки власника">
+        <a href="/owner-admin/index.html">Головна (дашборд)</a>
+        <a href="/owner-admin/users.html">Користувачі</a>
+        <a href="/owner-admin/clients.html">База клієнтів</a>
+        <a class="active" href="/owner-admin/stores.html">Магазини</a>
+        <a href="/owner-admin/orders.html">Замовлення</a>
+        <a href="/owner-admin/plans.html">Тарифи та підписки</a>
+        <a href="/owner-admin/analytics.html">Аналітика</a>
       </nav>
     </aside>
 
     <main class="content">
       <header class="topbar">
         <div>
-          <h1>РњР°РіР°Р·РёРЅРё</h1>
-          <p>РњРѕРґРµСЂР°С†С–СЏ, СЃС‚Р°С‚СѓСЃРё С‚Р° РґРµС‚Р°Р»С– СѓСЃС–С… РІС–С‚СЂРёРЅ РЅР° РїР»Р°С‚С„РѕСЂРјС–.</p>
+          <h1>Магазини</h1>
+          <p>Зведена таблиця магазинів з тарифом, статистикою та останньою активністю в адмінці.</p>
         </div>
-        <span class="badge">248 Р°РєС‚РёРІРЅРёС…</span>
+        <span class="badge" id="storesTotalBadge">Завантаження...</span>
       </header>
-
-      <section class="grid grid-3">
-        <article class="card kpi"><div class="label">РќР° РјРѕРґРµСЂР°С†С–С—</div><div class="value">18</div><div class="meta"><span class="status-warn">РїРѕС‚СЂС–Р±РЅР° РїРµСЂРµРІС–СЂРєР°</span></div></article>
-        <article class="card kpi"><div class="label">РџСЂРёР·СѓРїРёРЅРµРЅС–</div><div class="value">9</div><div class="meta">Р§РµСЂРµР· РѕРїР»Р°С‚Сѓ Р°Р±Рѕ РїРѕСЂСѓС€РµРЅРЅСЏ</div></article>
-        <article class="card kpi"><div class="label">РќРѕРІС– Р·Р° 7 РґРЅС–РІ</div><div class="value">31</div><div class="meta"><span class="status-ok">+14%</span> РґРѕ РјРёРЅСѓР»РѕРіРѕ С‚РёР¶РЅСЏ</div></article>
-      </section>
 
       <section class="grid">
         <article class="card">
-          <h2>РЎРїРёСЃРѕРє РјР°РіР°Р·РёРЅС–РІ</h2>
-          <table class="table" aria-label="РўР°Р±Р»РёС†СЏ РјР°РіР°Р·РёРЅС–РІ">
-            <thead><tr><th>ID</th><th>РќР°Р·РІР°</th><th>Р’Р»Р°СЃРЅРёРє</th><th>РљР°С‚РµРіРѕСЂС–СЏ</th><th>РЎС‚Р°С‚СѓСЃ</th><th>РћРЅРѕРІР»РµРЅРѕ</th></tr></thead>
-            <tbody>
-              <tr><td>S-0781</td><td>Lavka Keramiky</td><td>РћР»РµРЅР° Р†.</td><td>Р”РµРєРѕСЂ</td><td><span class="pill green">РђРєС‚РёРІРЅРёР№</span></td><td>2 С…РІ С‚РѕРјСѓ</td></tr>
-              <tr><td>S-0782</td><td>Taste Corner</td><td>РњР°СЂРєРѕ Рљ.</td><td>Р‡Р¶Р°</td><td><span class="pill orange">РњРѕРґРµСЂР°С†С–СЏ</span></td><td>16 С…РІ С‚РѕРјСѓ</td></tr>
-              <tr><td>S-0783</td><td>Bloom Craft</td><td>РђРЅРЅР° Р›.</td><td>РљРІС–С‚Рё</td><td><span class="pill red">РџСЂРёР·СѓРїРёРЅРµРЅРѕ</span></td><td>1 РґРµРЅСЊ С‚РѕРјСѓ</td></tr>
+          <h2>Список магазинів</h2>
+          <p class="table-action-status" id="storesStatus" aria-live="polite"></p>
+          <table class="table" aria-label="Таблиця магазинів">
+            <thead>
+              <tr>
+                <th>Назва магазину</th>
+                <th>Власник</th>
+                <th>Тарифний план</th>
+                <th>Товари / категорії</th>
+                <th>Замовлення (весь час)</th>
+                <th>Остання активність</th>
+              </tr>
+            </thead>
+            <tbody id="storesTableBody">
+              <tr><td colspan="6">Завантажуємо дані з бази...</td></tr>
             </tbody>
           </table>
         </article>
       </section>
     </main>
   </div>
+
+  <div class="modal-backdrop" id="storeDetailsModal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="storeDetailsTitle">
+      <div class="modal-header">
+        <h2 id="storeDetailsTitle">Картка магазину</h2>
+        <button type="button" class="modal-close" id="storeDetailsClose" aria-label="Закрити">×</button>
+      </div>
+
+      <p class="table-action-status" id="storeDetailsStatus" aria-live="polite"></p>
+
+      <div class="store-profile-grid">
+        <div class="store-profile-block">
+          <h3>Домени</h3>
+          <p><strong>Піддомен за замовчуванням:</strong> <a id="storeModalDefaultDomain" class="table-link" href="#" target="_blank" rel="noopener noreferrer">-</a></p>
+          <p><strong>Власний домен:</strong> <span id="storeModalCustomDomain">-</span></p>
+          <p><strong>Статус:</strong> <span id="storeModalCustomDomainStatus" class="pill blue">-</span></p>
+        </div>
+
+        <div class="store-profile-block">
+          <h3>Товари і категорії</h3>
+          <p><strong>Товари:</strong> <span id="storeModalProductsStats">-</span></p>
+          <p><strong>Категорії:</strong> <span id="storeModalCategoriesStats">-</span></p>
+          <p><strong>Сховище фото:</strong> <span id="storeModalStorageStats">-</span></p>
+        </div>
+
+        <div class="store-profile-block">
+          <h3>Тарифний план</h3>
+          <p><strong>План:</strong> <span id="storeModalPlanName" class="pill blue">-</span></p>
+          <p><strong>Статус оплати:</strong> <span id="storeModalPaymentStatus">-</span></p>
+          <p><strong>Остання оплата:</strong> <span id="storeModalLastPaymentAt">-</span></p>
+        </div>
+
+        <div class="store-profile-block">
+          <h3>Статистика продажів (місяць)</h3>
+          <p><strong>Сума:</strong> <span id="storeModalMonthRevenue">-</span></p>
+          <p><strong>Кількість замовлень:</strong> <span id="storeModalMonthOrders">-</span></p>
+          <p><strong>Середній чек:</strong> <span id="storeModalMonthAverage">-</span></p>
+        </div>
+      </div>
+
+      <div class="store-profile-block store-profile-activity">
+        <h3>Історія активності</h3>
+        <table class="table" aria-label="Історія активності магазину">
+          <thead>
+            <tr><th>Дата</th><th>Подія</th><th>Деталі</th></tr>
+          </thead>
+          <tbody id="storeModalActivityBody">
+            <tr><td colspan="3">Дані ще не завантажені.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
+  <script src="/owner-admin/stores.js"></script>
 </body>
 </html>

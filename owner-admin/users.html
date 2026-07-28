@@ -13,14 +13,11 @@
       <nav class="menu" aria-label="Розділи адмінки власника">
         <a href="/owner-admin/index.html">Головна (дашборд)</a>
         <a class="active" href="/owner-admin/users.html">Користувачі</a>
+        <a href="/owner-admin/clients.html">База клієнтів</a>
         <a href="/owner-admin/stores.html">Магазини</a>
         <a href="/owner-admin/orders.html">Замовлення</a>
         <a href="/owner-admin/plans.html">Тарифи та підписки</a>
-        <a href="/owner-admin/finance.html">Платежі та фінанси</a>
-        <a href="/owner-admin/support.html">Підтримка / звернення</a>
         <a href="/owner-admin/analytics.html">Аналітика</a>
-        <a href="/owner-admin/notifications.html">Сповіщення / розсилки</a>
-        <a href="/owner-admin/system-settings.html">Налаштування системи</a>
       </nav>
     </aside>
 
@@ -40,17 +37,59 @@
       </section>
 
       <section class="grid">
+        <article class="card" id="storeProfileCard" hidden>
+          <h2>Картка магазину</h2>
+          <p id="storeProfileStatus" class="table-action-status" aria-live="polite"></p>
+
+          <div class="store-profile-grid">
+            <div class="store-profile-block">
+              <h3>Домени</h3>
+              <p><strong>Піддомен за замовчуванням:</strong> <a id="storeDefaultDomain" class="table-link" href="#" target="_blank" rel="noopener noreferrer">-</a></p>
+              <p><strong>Власний домен:</strong> <span id="storeCustomDomain">-</span></p>
+              <p><strong>Статус:</strong> <span id="storeCustomDomainStatus" class="pill blue">-</span></p>
+            </div>
+
+            <div class="store-profile-block">
+              <h3>Товари і категорії</h3>
+              <p><strong>Товари:</strong> <span id="storeProductsStats">-</span></p>
+              <p><strong>Категорії:</strong> <span id="storeCategoriesStats">-</span></p>
+              <p><strong>Сховище фото:</strong> <span id="storeStorageStats">-</span></p>
+            </div>
+
+            <div class="store-profile-block">
+              <h3>Статистика продажів (місяць)</h3>
+              <p><strong>Сума:</strong> <span id="storeMonthRevenue">-</span></p>
+              <p><strong>Кількість замовлень:</strong> <span id="storeMonthOrders">-</span></p>
+              <p><strong>Середній чек:</strong> <span id="storeMonthAverage">-</span></p>
+            </div>
+          </div>
+
+          <div class="store-profile-block store-profile-activity">
+            <h3>Історія активності</h3>
+            <table class="table" aria-label="Історія активності магазину">
+              <thead>
+                <tr><th>Дата</th><th>Подія</th><th>Деталі</th></tr>
+              </thead>
+              <tbody id="storeActivityBody">
+                <tr><td colspan="3">Дані ще не завантажені.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
         <article class="card">
           <h2>Список зареєстрованих магазинів</h2>
           <p id="usersActionStatus" class="table-action-status" aria-live="polite"></p>
-          <table class="table" aria-label="Таблиця магазинів">
-            <thead>
-              <tr><th>#</th><th>Номер телефону</th><th>Назва магазину</th><th>Адреса магазину</th><th>Дата та час реєстрації</th><th>Дія</th></tr>
-            </thead>
-            <tbody id="usersTableBody">
-              <tr><td colspan="6">Завантажуємо дані з бази...</td></tr>
-            </tbody>
-          </table>
+          <div class="table-wrap">
+            <table class="table users-table" aria-label="Таблиця магазинів">
+              <thead>
+                <tr><th>#</th><th>Номер телефону</th><th>Назва магазину</th><th>Адреса магазину</th><th>IP адреса</th><th>Дата та час реєстрації</th><th>Дія</th></tr>
+              </thead>
+              <tbody id="usersTableBody">
+                <tr><td colspan="7">Завантажуємо дані з бази...</td></tr>
+              </tbody>
+            </table>
+          </div>
         </article>
       </section>
     </main>

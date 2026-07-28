@@ -885,16 +885,16 @@
           <form class="settings-form" id="storeSettingsForm">
             <label>
               Назва магазину
-              <input id="storeName" type="text" maxlength="60" value="Lavka Keramiky" placeholder="Введіть назву магазину">
+              <input id="storeName" type="text" maxlength="60" placeholder="Введіть назву магазину">
               <small id="nameCounter" class="name-counter">0/60</small>
             </label>
 
             <div class="avatar-row">
-              <img id="avatarPreview" src="https://picsum.photos/seed/lavka-keramiky/160/160" alt="Аватар магазину" class="avatar-preview">
+              <img id="avatarPreview" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" alt="Аватар магазину" class="avatar-preview">
               <div class="avatar-fields">
                 <label>
                   Аватарка (URL)
-                  <input id="storeAvatar" type="url" value="https://picsum.photos/seed/lavka-keramiky/200/200" placeholder="https://...">
+                  <input id="storeAvatar" type="url" placeholder="https://...">
                 </label>
                 <label>
                   або завантажити файл (до 3 МБ)
@@ -905,7 +905,7 @@
 
             <label>
               Опис магазину
-              <textarea id="storeDescription" rows="4" maxlength="140" placeholder="Коротко опишіть ваш магазин">Ручна кераміка та посуд для дому. Виготовляємо кожен виріб з любов'ю в невеликій майстерні.</textarea>
+              <textarea id="storeDescription" rows="4" maxlength="140" placeholder="Коротко опишіть ваш магазин"></textarea>
               <small id="descriptionCounter" class="desc-counter">0/140</small>
             </label>
 
@@ -1323,7 +1323,7 @@
 
         <div class="panel-box">
           <h2>DNS-записи для підключення</h2>
-          <p class="settings-note">Додайте ОБИДВА записи нижче в налаштуваннях DNS вашого домену. Зміни можуть діяти до 24 годин.</p>
+          <p class="settings-note">Додайте ці 2 записи у DNS-панелі вашого реєстратора. Зазвичай цього достатньо для підключення домену.</p>
 
           <div class="dns-records-grid">
             <div class="dns-record-card">
@@ -1339,7 +1339,7 @@
               <div class="dns-record-row">
                 <span class="dns-record-label">Значення</span>
                 <span class="dns-record-value-copy">
-                  <code id="dnsAValue">192.0.2.1</code>
+                  <code id="dnsAValue">199.36.158.100</code>
                   <button type="button" class="mini-btn dns-copy-btn" data-copy-target="dnsAValue" aria-label="Скопіювати значення A-запису">
                     <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                   </button>
@@ -1360,7 +1360,7 @@
               <div class="dns-record-row">
                 <span class="dns-record-label">Значення</span>
                 <span class="dns-record-value-copy">
-                  <code id="dnsCnameValue">shop.lavka.shop</code>
+                  <code id="dnsCnameValue">ghs.googlehosted.com</code>
                   <button type="button" class="mini-btn dns-copy-btn" data-copy-target="dnsCnameValue" aria-label="Скопіювати значення CNAME-запису">
                     <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                   </button>
@@ -1369,10 +1369,11 @@
             </div>
           </div>
           <p id="dnsCopyMessage" class="saved-message" aria-live="polite"></p>
+          <p class="settings-note">Якщо ваш провайдер не дозволяє запис A для @, використайте ALIAS/ANAME для @ зі значенням ghs.googlehosted.com.</p>
 
           <ol class="domain-steps-list">
             <li>Купіть домен у будь-якого реєстратора (наприклад, Ukrnames, ImenaUA, Namecheap).</li>
-            <li>Зайдіть у налаштування DNS вашого домену і додайте записи A та CNAME зі значеннями вище.</li>
+            <li>Додайте 2 DNS-записи: A @ → 199.36.158.100 і CNAME www → ghs.googlehosted.com.</li>
             <li>Введіть домен у полі "Ваш домен" вище і натисніть "Підключити домен".</li>
             <li>Зачекайте оновлення DNS (зазвичай від кількох хвилин до 24 годин) і натисніть "Перевірити підключення".</li>
           </ol>
@@ -1391,6 +1392,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-storage-compat.js"></script>
 <script src="firebase-sync.js"></script>
 <script src="admin.js"></script>
 <script>

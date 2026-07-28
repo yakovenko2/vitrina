@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>База клієнтів - Адмінка власника | Лавка</title>
+  <link rel="stylesheet" href="/owner-admin/styles.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <a class="brand" href="/owner-admin/index.html" aria-label="Адмінка власника - головна"><span class="brand-mark">L</span><span><strong>Лавка</strong><small>Owner Admin</small></span></a>
+      <nav class="menu" aria-label="Розділи адмінки власника">
+        <a href="/owner-admin/index.html">Головна (дашборд)</a>
+        <a href="/owner-admin/users.html">Користувачі</a>
+        <a class="active" href="/owner-admin/clients.html">База клієнтів</a>
+        <a href="/owner-admin/stores.html">Магазини</a>
+        <a href="/owner-admin/orders.html">Замовлення</a>
+        <a href="/owner-admin/plans.html">Тарифи та підписки</a>
+        <a href="/owner-admin/analytics.html">Аналітика</a>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <div>
+          <h1>База клієнтів</h1>
+          <p>Повний реєстр клієнтів. Дані видалених клієнтів залишаються в базі.</p>
+        </div>
+        <span class="badge" id="clientsTotalBadge">Завантаження...</span>
+      </header>
+
+      <section class="grid grid-3">
+        <article class="card kpi"><div class="label">Всього клієнтів</div><div class="value" id="kpiClientsTotal">0</div><div class="meta">Усі клієнти в базі</div></article>
+        <article class="card kpi"><div class="label">Активні</div><div class="value" id="kpiClientsActive">0</div><div class="meta">Діючі магазини</div></article>
+        <article class="card kpi"><div class="label">Видалені</div><div class="value" id="kpiClientsDeleted">0</div><div class="meta">Залишені в архіві</div></article>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <h2>Пошук клієнта</h2>
+          <div class="plan-search-row">
+            <input id="clientSearchInput" class="plan-search-input" type="search" placeholder="Ім'я, телефон, магазин, домен або IP" autocomplete="off" />
+            <button id="clientSearchClear" type="button" class="plan-search-clear">Очистити</button>
+          </div>
+          <p id="clientSearchStatus" class="table-action-status" aria-live="polite">Введіть запит для пошуку.</p>
+        </article>
+
+        <article class="card">
+          <h2>Клієнти</h2>
+          <div class="table-wrap">
+            <table class="table clients-table" aria-label="Таблиця клієнтів">
+              <thead>
+                <tr>
+                  <th>Ім'я клієнта</th>
+                  <th>Дата та час реєстрації</th>
+                  <th>Номер телефону</th>
+                  <th>Назва магазину</th>
+                  <th>Домен</th>
+                  <th>Тарифний план</th>
+                  <th>Статус</th>
+                  <th>IP адреса</th>
+                </tr>
+              </thead>
+              <tbody id="clientsTableBody">
+                <tr><td colspan="8">Завантажуємо дані з бази...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
+  <script src="/owner-admin/clients.js"></script>
+</body>
+</html>

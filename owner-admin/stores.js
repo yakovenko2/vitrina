@@ -43,6 +43,9 @@
   var modalMonthRevenueEl = document.getElementById("storeModalMonthRevenue");
   var modalMonthOrdersEl = document.getElementById("storeModalMonthOrders");
   var modalMonthAverageEl = document.getElementById("storeModalMonthAverage");
+  var modalPaymentMethodsEl = document.getElementById("storeModalPaymentMethods");
+  var modalShippingMethodsEl = document.getElementById("storeModalShippingMethods");
+  var modalOrderNotifyEl = document.getElementById("storeModalOrderNotify");
   var modalActivityBodyEl = document.getElementById("storeModalActivityBody");
   var storesState = [];
   var activeStoreId = "";
@@ -168,6 +171,42 @@
   function getPlanName(planId) {
     var key = cleanText(planId).toLowerCase();
     return key ? (PLAN_LABELS[key] || key) : "Trial";
+  }
+
+  function getEnabledPaymentMethods(checkout) {
+    var c = checkout || {};
+    var methods = [];
+    if (c.paymentMonoEnabled) {
+      methods.push("Plata by mono");
+    }
+    if (c.paymentLiqpayEnabled) {
+      methods.push("LiqPay");
+    }
+    if (c.paymentCodEnabled === undefined ? true : Boolean(c.paymentCodEnabled)) {
+      methods.push("Оплата при отриманні");
+    }
+    if (c.paymentPrepaymentEnabled && Math.max(0, Math.round(Number(c.paymentPrepaymentAmount) || 0)) > 0) {
+      methods.push("Передоплата");
+    }
+    if (c.paymentBankTransferEnabled || cleanText(c.paymentBankRequisites)) {
+      methods.push("Оплата на реквізити");
+    }
+    return methods;
+  }
+
+  function getEnabledShippingMethods(checkout) {
+    var c = checkout || {};
+    var methods = [];
+    if (c.shippingNovaPostEnabled === undefined ? true : Boolean(c.shippingNovaPostEnabled)) {
+      methods.push("Нова Пошта (відділення/поштомат)");
+    }
+    if (c.shippingUkrPostEnabled === undefined ? true : Boolean(c.shippingUkrPostEnabled)) {
+      methods.push("Укрпошта");
+    }
+    if (c.shippingNovaCourierEnabled) {
+      methods.push("Нова Пошта (кур'єр)");
+    }
+    return methods;
   }
 
   function formatMoney(value) {
@@ -572,6 +611,23 @@
     }
     if (modalMonthAverageEl) {
       modalMonthAverageEl.textContent = formatMoney(monthStats.average);
+    }
+
+    var paymentMethods = getEnabledPaymentMethods(details.checkout);
+    if (modalPaymentMethodsEl) {
+      modalPaymentMethodsEl.textContent = paymentMethods.length ? paymentMethods.join(", ") : "Не налаштовано";
+    }
+
+    var shippingMethods = getEnabledShippingMethods(details.checkout);
+    if (modalShippingMethodsEl) {
+      modalShippingMethodsEl.textContent = shippingMethods.length ? shippingMethods.join(", ") : "Не налаштовано";
+    }
+
+    if (modalOrderNotifyEl) {
+      var notifyEnabled = Boolean(settings.telegramOrderNotifyEnabled);
+      modalOrderNotifyEl.textContent = notifyEnabled ? "Підключено" : "Не підключено";
+      modalOrderNotifyEl.classList.remove("green", "blue", "orange", "red");
+      modalOrderNotifyEl.classList.add(notifyEnabled ? "green" : "orange");
     }
 
     var activityItems = buildActivityItems({

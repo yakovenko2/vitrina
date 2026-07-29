@@ -67,7 +67,14 @@
         <div class="store-profile-block">
           <h3>Домени</h3>
           <p><strong>Піддомен за замовчуванням:</strong> <a id="storeModalDefaultDomain" class="table-link" href="#" target="_blank" rel="noopener noreferrer">-</a></p>
-          <p><strong>Власний домен:</strong> <span id="storeModalCustomDomain">-</span></p>
+          <div class="store-domain-edit">
+            <label for="storeModalCustomDomainInput"><strong>Власний домен:</strong></label>
+            <div class="store-domain-edit-row">
+              <input type="text" id="storeModalCustomDomainInput" placeholder="my-shop.com" autocomplete="off" spellcheck="false">
+              <button type="button" class="plan-apply-btn" id="storeModalCustomDomainSave">Зберегти</button>
+            </div>
+            <span class="table-action-status" id="storeModalCustomDomainMessage" aria-live="polite"></span>
+          </div>
           <p><strong>Статус:</strong> <span id="storeModalCustomDomainStatus" class="pill blue">-</span></p>
         </div>
 

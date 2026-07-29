@@ -4,6 +4,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const CART_KEY = "lavkaCart";
   const ORDERS_KEY = "lavkaOrders";
   const PROMO_CODES_KEY = "lavkaPromoCodes";
+  const PRODUCTS_KEY = "lavkaProducts";
   const NOVA_POSHTA_API_URL = "https://api.novaposhta.ua/v2.0/json/";
   const NOVA_POSHTA_API_KEY = "8e24dc6bb36a0ee95f254d203bb3cc92";
 
@@ -182,6 +183,42 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {
       return [];
     }
+  };
+
+  const readProducts = () => {
+    try {
+      const raw = localStorage.getItem(PRODUCTS_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const findMatchingProduct = (products, item) => {
+    const rawId = String(item?.id || "").split("::")[0].trim();
+    const sku = String(item?.sku || "").trim().toUpperCase();
+    return products.find((product) => {
+      const productId = String(product?.id || "").trim();
+      const productSku = String(product?.sku || "").trim().toUpperCase();
+      return (rawId && productId === rawId) || (sku && sku !== "-" && productSku === sku);
+    }) || null;
+  };
+
+  const getUnavailableCartItems = () => {
+    const products = readProducts();
+    if (!products.length) return [];
+    return cartState.filter((item) => {
+      const product = findMatchingProduct(products, item);
+      if (!product) return false;
+      const size = String(item?.size || "").trim().toUpperCase();
+      if (size && product?.sizeStocks && typeof product.sizeStocks === "object") {
+        const sizeStock = Number.parseInt(product.sizeStocks[size], 10);
+        return !(Number.isFinite(sizeStock) && sizeStock > 0);
+      }
+      const stock = Number.parseInt(product?.stock, 10);
+      return !(Number.isFinite(stock) && stock > 0);
+    });
   };
 
   const saveOrders = (orders) => {
@@ -1226,6 +1263,16 @@ document.addEventListener("DOMContentLoaded", () => {
       event.preventDefault();
 
       if (!baseCheckoutEnabled()) {
+        return;
+      }
+
+      const unavailableItems = getUnavailableCartItems();
+      if (unavailableItems.length) {
+        if (checkoutMessage) {
+          checkoutMessage.classList.add("error");
+          const names = unavailableItems.map((item) => String(item?.name || "товар")).join(", ");
+          checkoutMessage.textContent = `Немає в наявності: ${names}. Видаліть ці товари з кошика, щоб оформити замовлення.`;
+        }
         return;
       }
 

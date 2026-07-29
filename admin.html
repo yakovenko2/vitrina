@@ -1303,42 +1303,31 @@
           </div>
         </div>
 
-        <div class="panel-box">
+        <div class="panel-box domain-support-box">
           <h2>Підключення власного домену</h2>
-          <p class="settings-note">Функція доступна на тарифі "Про". Введіть свій домен (наприклад, my-shop.com) і додайте один CNAME-запис — SSL-сертифікат випишеться автоматично.</p>
+          <p class="settings-note">Хочете, щоб магазин відкривався на вашому власному домені (наприклад, my-shop.com)? Ми підключимо його вручну та <strong>безкоштовно</strong> налаштуємо SSL-сертифікат.</p>
 
-          <div class="domain-status-card" id="domainStatusCard">
-            <span class="domain-status-badge" id="domainStatusBadge">Домен не підключено</span>
-            <p class="domain-status-text" id="domainStatusText">Ще жоден домен не додано до цього магазину.</p>
+          <div class="domain-support-hero">
+            <div class="domain-support-hero-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3c2.5 2.5 3.8 5.7 3.8 9S14.5 18.5 12 21c-2.5-2.5-3.8-5.7-3.8-9S9.5 5.5 12 3Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="domain-support-hero-text">
+              <span class="domain-support-badge">Підтримка на зв'язку</span>
+              <p>Надішліть нам ваш домен і адресу магазину на Вітрині (її видно у полі вище) — і ми все налаштуємо за вас.</p>
+            </div>
           </div>
 
-          <form id="customDomainForm" class="settings-form">
-            <label>
-              Ваш домен
-              <input id="customDomainInput" type="text" placeholder="napryklad, my-shop.com" autocomplete="off">
-            </label>
-            <div class="domain-form-actions">
-              <button type="submit" class="action-btn">Підключити домен</button>
-              <button type="button" id="checkDomainBtn" class="action-btn ghost">Перевірити підключення</button>
-              <button type="button" id="disconnectDomainBtn" class="action-btn danger">Відключити домен</button>
-            </div>
-            <p id="customDomainSavedMessage" class="saved-message" aria-live="polite"></p>
-          </form>
-        </div>
-
-        <div class="panel-box" id="dnsRecordsPanel" hidden>
-          <h2>DNS-записи для підключення</h2>
-          <p class="settings-note">Додайте ці записи у DNS-панелі вашого реєстратора домену. Після оновлення DNS натисніть "Перевірити підключення".</p>
-
-          <div class="dns-records-grid" id="dnsRecordsDynamic"></div>
-          <p id="dnsCopyMessage" class="saved-message" aria-live="polite"></p>
-
-          <ol class="domain-steps-list">
-            <li>Купіть домен у будь-якого реєстратора (наприклад, Ukrnames, ImenaUA, Namecheap).</li>
-            <li>Введіть домен у полі "Ваш домен" вище і натисніть "Підключити домен".</li>
-            <li>Додайте показані вище DNS-записи (CNAME + запис підтвердження).</li>
-            <li>Зачекайте оновлення DNS (від кількох хвилин) і натисніть "Перевірити підключення" — сертифікат випишеться автоматично.</li>
+          <ol class="domain-support-steps">
+            <li><span class="domain-support-step-num">1</span><span>Купіть домен у будь-якого реєстратора (Ukrnames, ImenaUA, Namecheap).</span></li>
+            <li><span class="domain-support-step-num">2</span><span>Натисніть кнопку нижче, щоб написати нам у підтримку.</span></li>
+            <li><span class="domain-support-step-num">3</span><span>Вкажіть у повідомленні ваш домен та адресу магазину на Вітрині.</span></li>
+            <li><span class="domain-support-step-num">4</span><span>Ми підключимо домен і повідомимо, коли все буде готово.</span></li>
           </ol>
+
+          <a class="domain-support-cta" href="https://t.me/sdasdadasd" target="_blank" rel="noopener">
+            <img src="image/telegram.png" alt="" aria-hidden="true">
+            Написати в підтримку
+          </a>
         </div>
       </section>
 

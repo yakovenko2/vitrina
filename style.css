@@ -344,6 +344,30 @@ body {
   padding-top: 8px;
 }
 
+.p-stock.out {
+  background: linear-gradient(180deg, #b23b3b 0%, #9c2f2f 100%);
+  box-shadow: 0 3px 8px rgba(90, 12, 12, 0.24);
+}
+
+.product.out-of-stock .thumb img {
+  filter: grayscale(0.7);
+  opacity: 0.72;
+}
+
+.cart-btn[disabled],
+.cart-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.cart-btn[disabled]:hover,
+.cart-btn:disabled:hover {
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--button-accent);
+  box-shadow: none;
+}
+
 .p-price {
   margin: 0;
   font-size: 16px;

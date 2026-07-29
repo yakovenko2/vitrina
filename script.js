@@ -248,18 +248,19 @@ document.addEventListener("DOMContentLoaded", () => {
     productsGrid.innerHTML = storedProducts.map((product) => {
       const tokenizedCategories = product.categories.map((value) => resolveCategoryToken(value)).filter(Boolean);
       const categoryToken = tokenizedCategories.join(" ") || "all";
-      const stockLabel = product.stock > 0 ? "В наявності" : "Немає в наявності";
+      const inStock = product.stock > 0;
+      const stockLabel = inStock ? "В наявності" : "Немає в наявності";
       return `
-        <article class="product" data-cat="${categoryToken}" data-product-id="${product.id}" data-product-sku="${product.sku}" tabindex="0" role="button" aria-label="Відкрити товар ${product.name}">
+        <article class="product${inStock ? "" : " out-of-stock"}" data-cat="${categoryToken}" data-product-id="${product.id}" data-product-sku="${product.sku}" data-product-stock="${product.stock}" tabindex="0" role="button" aria-label="Відкрити товар ${product.name}">
           <div class="thumb">
             <img src="${product.photo}" alt="${product.name}" loading="lazy">
           </div>
           <div class="p-info">
             <h3 class="p-name">${product.name}</h3>
-            <p class="p-stock">${stockLabel}</p>
+            <p class="p-stock${inStock ? "" : " out"}">${stockLabel}</p>
             <div class="p-footer">
               <p class="p-price">${Math.round(product.price)} грн</p>
-              <button class="cart-btn" aria-label="Додати в кошик">
+              <button class="cart-btn" aria-label="Додати в кошик"${inStock ? "" : " disabled aria-disabled=\"true\""}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M2 3h2l2.2 11.4a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L20 7H5.2"/></svg>
               </button>
             </div>
@@ -520,6 +521,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const addProductToCart = (productNode, quantity = 1) => {
     const productId = String(productNode.dataset.productId || "").trim();
     const productSku = String(productNode.dataset.productSku || "").trim();
+    const productStock = Number.parseInt(productNode.dataset.productStock, 10) || 0;
+    if (productStock <= 0) {
+      return;
+    }
     const productName = String(productNode.querySelector(".p-name")?.textContent || "Товар").trim();
     const rawPrice = String(productNode.querySelector(".p-price")?.textContent || "0");
     const productPrice = Number.parseInt(rawPrice.replace(/[^\d]/g, ""), 10) || 0;

@@ -512,6 +512,9 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const activateSection = (sectionId) => {
+    if (isSectionLocked(sectionId)) {
+      sectionId = "billing";
+    }
     currentSection = sectionId;
 
     localStorage.setItem(ADMIN_ACTIVE_SECTION_KEY, sectionId);
@@ -558,10 +561,25 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  const notifyPlanRestriction = (sectionId) => {
+    const requiredPlan = SECTION_PLAN_REQUIREMENT[sectionId] || "вищому";
+    const sectionName = titles[sectionId] || "Ця функція";
+    window.alert(`«${sectionName}» доступна на тарифі «${requiredPlan}». Оберіть відповідний тариф, щоб розблокувати цю функцію.`);
+  };
+
   primaryMenuItems.forEach((item) => {
     item.addEventListener("click", () => {
       if (item.dataset.section === "logout") {
         window.location.href = getLandingUrl();
+        return;
+      }
+
+      if (isSectionLocked(item.dataset.section)) {
+        notifyPlanRestriction(item.dataset.section);
+        activateSection("billing");
+        if (isMobileViewport()) {
+          setMenuOpen(false);
+        }
         return;
       }
 
@@ -583,6 +601,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
   settingsItems.forEach((item) => {
     item.addEventListener("click", () => {
+      if (isSectionLocked(item.dataset.section)) {
+        notifyPlanRestriction(item.dataset.section);
+        activateSection("billing");
+        if (isMobileViewport()) {
+          setMenuOpen(false);
+        }
+        return;
+      }
+
       activateSection(item.dataset.section);
       if (isMobileViewport()) {
         setMenuOpen(false);
@@ -1993,6 +2020,106 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   };
 
+  const PLAN_CAPABILITIES = {
+    starter: {
+      planId: "starter",
+      planName: "Старт",
+      maxProducts: 15,
+      maxCategories: 3,
+      maxPhotos: 3,
+      promoCodes: false,
+      statistics: false,
+      telegramNotifications: false,
+      removeWatermark: false,
+      customDomain: false,
+      seo: "none"
+    },
+    business: {
+      planId: "business",
+      planName: "Бізнес",
+      maxProducts: 150,
+      maxCategories: Infinity,
+      maxPhotos: 6,
+      promoCodes: true,
+      statistics: true,
+      telegramNotifications: true,
+      removeWatermark: true,
+      customDomain: false,
+      seo: "basic"
+    },
+    pro: {
+      planId: "pro",
+      planName: "Про",
+      maxProducts: Infinity,
+      maxCategories: Infinity,
+      maxPhotos: 10,
+      promoCodes: true,
+      statistics: true,
+      telegramNotifications: true,
+      removeWatermark: true,
+      customDomain: true,
+      seo: "advanced"
+    }
+  };
+
+  const getPlanCapabilities = () => {
+    const billing = readBilling();
+    const planId = String(billing?.currentPlanId || "").trim().toLowerCase();
+    return PLAN_CAPABILITIES[planId] || PLAN_CAPABILITIES.starter;
+  };
+
+  // Maps a locked section id to the minimum plan name required to unlock it.
+  const SECTION_PLAN_REQUIREMENT = {
+    promocodes: "Бізнес",
+    sales: "Бізнес",
+    views: "Бізнес",
+    notifications: "Бізнес",
+    domain: "Про"
+  };
+
+  const getLockedSections = () => {
+    const caps = getPlanCapabilities();
+    const locked = new Set();
+    if (!caps.promoCodes) locked.add("promocodes");
+    if (!caps.statistics) {
+      locked.add("sales");
+      locked.add("views");
+    }
+    if (!caps.telegramNotifications) locked.add("notifications");
+    if (!caps.customDomain) locked.add("domain");
+    return locked;
+  };
+
+  const isSectionLocked = (sectionId) => getLockedSections().has(sectionId);
+
+  const refreshPlanLocks = () => {
+    const locked = getLockedSections();
+    document.querySelectorAll("[data-section]").forEach((item) => {
+      const sectionId = item.dataset.section;
+      const isLocked = locked.has(sectionId);
+      item.classList.toggle("plan-locked", isLocked);
+      let badge = item.querySelector(".plan-lock-badge");
+      if (isLocked) {
+        if (!badge) {
+          badge = document.createElement("span");
+          badge.className = "plan-lock-badge";
+          badge.setAttribute("aria-hidden", "true");
+          badge.textContent = "🔒";
+          item.append(badge);
+        }
+        item.setAttribute("aria-disabled", "true");
+        const requiredPlan = SECTION_PLAN_REQUIREMENT[sectionId];
+        if (requiredPlan) {
+          item.title = `Доступно на тарифі «${requiredPlan}»`;
+        }
+      } else {
+        if (badge) badge.remove();
+        item.removeAttribute("aria-disabled");
+        item.removeAttribute("title");
+      }
+    });
+  };
+
   const formatDateLong = (value) => {
     if (!value) return "-";
     const date = new Date(value);
@@ -2123,6 +2250,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     saveBilling(nextBilling);
     renderBillingSection();
+    refreshPlanLocks();
   };
 
   const generatePromoCode = (charset = "letters", length = 8) => {
@@ -4273,6 +4401,13 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      const categoryCapabilities = getPlanCapabilities();
+      if (categories.length >= categoryCapabilities.maxCategories) {
+        categorySavedMessage.textContent = `Ліміт тарифу «${categoryCapabilities.planName}»: до ${categoryCapabilities.maxCategories} категорій. Оновіть тариф, щоб додати більше.`;
+        categorySavedMessage.classList.add("error");
+        return;
+      }
+
       const duplicate = categories.some((category) => category.name.toLowerCase() === normalized.toLowerCase());
       if (duplicate) {
         categorySavedMessage.textContent = "Категорія з такою назвою вже існує.";
@@ -4671,6 +4806,15 @@ document.addEventListener("DOMContentLoaded", () => {
         productSavedMessage.textContent = "Не вдалося знайти товар для редагування.";
         productSavedMessage.classList.add("error");
         return;
+      }
+
+      if (!editingId) {
+        const capabilities = getPlanCapabilities();
+        if (products.length >= capabilities.maxProducts) {
+          productSavedMessage.textContent = `Ліміт тарифу «${capabilities.planName}»: до ${capabilities.maxProducts} товарів. Оновіть тариф, щоб додати більше.`;
+          productSavedMessage.classList.add("error");
+          return;
+        }
       }
 
       if (!normalizedName || !normalizedSku || !normalizedDescription || !normalizedCategories.length || !parsedPrice) {
@@ -5504,5 +5648,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const savedSection = localStorage.getItem(ADMIN_ACTIVE_SECTION_KEY);
   const initialSection = savedSection && availableSections.has(savedSection) ? savedSection : "home";
 
+  refreshPlanLocks();
   activateSection(initialSection);
 });

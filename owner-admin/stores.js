@@ -30,7 +30,9 @@
   var modalCloseEl = document.getElementById("storeDetailsClose");
   var modalStatusEl = document.getElementById("storeDetailsStatus");
   var modalDefaultDomainEl = document.getElementById("storeModalDefaultDomain");
-  var modalCustomDomainEl = document.getElementById("storeModalCustomDomain");
+  var modalCustomDomainInputEl = document.getElementById("storeModalCustomDomainInput");
+  var modalCustomDomainSaveEl = document.getElementById("storeModalCustomDomainSave");
+  var modalCustomDomainMessageEl = document.getElementById("storeModalCustomDomainMessage");
   var modalCustomDomainStatusEl = document.getElementById("storeModalCustomDomainStatus");
   var modalProductsStatsEl = document.getElementById("storeModalProductsStats");
   var modalCategoriesStatsEl = document.getElementById("storeModalCategoriesStats");
@@ -43,6 +45,7 @@
   var modalMonthAverageEl = document.getElementById("storeModalMonthAverage");
   var modalActivityBodyEl = document.getElementById("storeModalActivityBody");
   var storesState = [];
+  var activeStoreId = "";
 
   function initDb() {
     if (!window.firebase) {
@@ -515,8 +518,12 @@
 
     var customDomain = cleanText(settings.customDomain);
     var customDomainStatus = normalizeCustomDomainStatus(settings.customDomainStatus);
-    if (modalCustomDomainEl) {
-      modalCustomDomainEl.textContent = customDomain || DASH;
+    if (modalCustomDomainInputEl && document.activeElement !== modalCustomDomainInputEl) {
+      modalCustomDomainInputEl.value = customDomain;
+    }
+    if (modalCustomDomainMessageEl) {
+      modalCustomDomainMessageEl.textContent = "";
+      modalCustomDomainMessageEl.classList.remove("error", "success");
     }
     if (modalCustomDomainStatusEl) {
       modalCustomDomainStatusEl.textContent = customDomainStatus.label;
@@ -599,6 +606,7 @@
       return;
     }
 
+    activeStoreId = id;
     openModal();
     setModalStatus("Завантажуємо картку магазину...", "");
     if (modalActivityBodyEl) {
@@ -764,6 +772,8 @@
       var domain = cleanText(registration.domain) || cleanText(settings.domain) || cleanText(registryData.domain);
       var storeUrl = normalizeStoreLink(domain, storeId);
       var domainHost = toHost(storeUrl);
+      var customDomain = cleanText(settings.customDomain) || cleanText(registryData.customDomain);
+      customDomain = customDomain.replace(/^https?:\/\//i, "").replace(/\/.*$/, "").replace(/\.$/, "");
       var storeAddress = pickAddress(registration, settings, registryData);
       var planName = getPlanName(billing.currentPlanId);
       var lastActivity = auth.authorizedAt || auth.updatedAt || authData.updatedAt || null;
@@ -777,6 +787,7 @@
         storeId: storeId,
         storeName: storeName,
         storeUrl: storeUrl,
+        customDomain: customDomain,
         storeAddress: storeAddress,
         ownerLabel: ownerLabel,
         ownerHref: ownerHref,
@@ -805,10 +816,15 @@
         ? '<a class="table-link" href="' + url + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(row.storeName) + '</a>'
         : '<span>' + escapeHtml(row.storeName) + '</span>';
 
+      var customDomainHtml = row.customDomain
+        ? '<div class="inline-meta">' + escapeHtml(row.customDomain) + '</div>'
+        : '';
+
       return "<tr>"
         + '<td>'
         + storeLinkHtml
         + '<div class="inline-meta">' + escapeHtml(row.storeAddress || DASH) + '</div>'
+        + customDomainHtml
         + '</td>'
         + '<td>'
         + '<div>' + escapeHtml(row.ownerLabel || DASH) + '</div>'
@@ -822,6 +838,86 @@
     }).join("");
 
     tableBodyEl.innerHTML = html;
+  }
+
+  function normalizeDomainInput(value) {
+    var raw = cleanText(value).toLowerCase();
+    if (!raw) {
+      return "";
+    }
+    raw = raw.replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/\.$/, "");
+    return raw;
+  }
+
+  function isValidDomainInput(value) {
+    return /^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/.test(value);
+  }
+
+  function setDomainMessage(message, kind) {
+    if (!modalCustomDomainMessageEl) {
+      return;
+    }
+    modalCustomDomainMessageEl.textContent = message || "";
+    modalCustomDomainMessageEl.classList.remove("error", "success");
+    if (kind) {
+      modalCustomDomainMessageEl.classList.add(kind);
+    }
+  }
+
+  async function saveCustomDomain() {
+    var id = sanitizeStoreId(activeStoreId);
+    if (!id) {
+      return;
+    }
+
+    var domain = normalizeDomainInput(modalCustomDomainInputEl ? modalCustomDomainInputEl.value : "");
+    if (domain && !isValidDomainInput(domain)) {
+      setDomainMessage("Введіть коректний домен, наприклад my-shop.com.", "error");
+      return;
+    }
+
+    if (modalCustomDomainSaveEl) {
+      modalCustomDomainSaveEl.disabled = true;
+    }
+    setDomainMessage("Зберігаємо...", "");
+
+    try {
+      var db = initDb();
+      var now = new Date().toISOString();
+      var settingsRef = db.collection("stores").doc(id).collection("data").doc(SETTINGS_KEY);
+
+      var snap = await settingsRef.get();
+      var currentDoc = snap.exists ? (snap.data() || {}) : {};
+      var value = Object.assign({}, currentDoc.value || {});
+      value.customDomain = domain;
+      value.customDomainStatus = domain ? "connected" : "";
+      value.updatedAt = now;
+
+      await settingsRef.set({ key: SETTINGS_KEY, value: value, updatedAt: now }, { merge: true });
+      await db.collection("stores_registry").doc(id).set({
+        storeId: id,
+        customDomain: domain,
+        updatedAt: now
+      }, { merge: true });
+
+      if (modalCustomDomainInputEl && document.activeElement !== modalCustomDomainInputEl) {
+        modalCustomDomainInputEl.value = domain;
+      }
+      if (modalCustomDomainStatusEl) {
+        var savedStatus = normalizeCustomDomainStatus(value.customDomainStatus);
+        modalCustomDomainStatusEl.textContent = savedStatus.label;
+        modalCustomDomainStatusEl.classList.remove("green", "blue", "orange", "red");
+        modalCustomDomainStatusEl.classList.add(savedStatus.className);
+      }
+      setDomainMessage(domain ? "Домен збережено." : "Домен очищено.", "success");
+    } catch (error) {
+      console.error("[owner-admin/stores] failed to save custom domain:", error);
+      setDomainMessage("Не вдалося зберегти домен.", "error");
+    } finally {
+      if (modalCustomDomainSaveEl) {
+        modalCustomDomainSaveEl.disabled = false;
+      }
+    }
   }
 
   function bindEvents() {
@@ -849,6 +945,19 @@
 
     if (modalCloseEl) {
       modalCloseEl.addEventListener("click", closeModal);
+    }
+
+    if (modalCustomDomainSaveEl) {
+      modalCustomDomainSaveEl.addEventListener("click", saveCustomDomain);
+    }
+
+    if (modalCustomDomainInputEl) {
+      modalCustomDomainInputEl.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          saveCustomDomain();
+        }
+      });
     }
 
     document.addEventListener("keydown", function (event) {

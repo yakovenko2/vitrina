@@ -146,7 +146,15 @@ document.addEventListener("DOMContentLoaded", () => {
       ? adminProduct.sizes.map((size) => String(size || "").trim().toUpperCase()).filter(Boolean)
       : [],
     isClothing: Boolean(adminProduct.isClothing),
+    stock: Number.isFinite(Number(adminProduct.stock)) ? Math.max(0, Math.trunc(Number(adminProduct.stock))) : 0,
+    sizeStocks: adminProduct?.sizeStocks && typeof adminProduct.sizeStocks === "object" ? adminProduct.sizeStocks : {},
     images: normalizeProductImages(adminProduct)
+  };
+
+  const getSizeStock = (size) => {
+    const raw = product.sizeStocks?.[String(size || "").trim().toUpperCase()];
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
   };
 
   const readSettings = () => {
@@ -285,6 +293,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const productSizesBlock = document.getElementById("productSizesBlock");
   const productSizesList = document.getElementById("productSizesList");
   const productSizesHint = document.getElementById("productSizesHint");
+  const productStockStatus = document.getElementById("productStockStatus");
   const backToCategory = document.getElementById("backToCategory");
   const openCartLinkBtn = document.getElementById("openCartLinkBtn");
   const copyProductLinkBtn = document.getElementById("copyProductLinkBtn");
@@ -480,7 +489,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     productSizesBlock.hidden = false;
     productSizesList.innerHTML = product.sizes
-      .map((size) => `<button type=\"button\" class=\"size-option-btn\" data-size=\"${size}\">${size}</button>`)
+      .map((size) => {
+        const outOfStock = getSizeStock(size) <= 0;
+        return `<button type=\"button\" class=\"size-option-btn${outOfStock ? " out-of-stock" : ""}\" data-size=\"${size}\"${outOfStock ? " disabled aria-disabled=\"true\"" : ""}>${size}</button>`;
+      })
       .join("");
   };
 
@@ -649,7 +661,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if (productSizesList) {
     productSizesList.addEventListener("click", (event) => {
       const button = event.target.closest(".size-option-btn");
-      if (!button) return;
+      if (!button || button.disabled) return;
       selectedSize = String(button.dataset.size || "").trim().toUpperCase();
       productSizesList.querySelectorAll(".size-option-btn").forEach((node) => {
         node.classList.toggle("active", node === button);
@@ -657,6 +669,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (productSizesHint) {
         productSizesHint.hidden = true;
       }
+      renderStockStatus();
     });
   }
 
@@ -664,6 +677,43 @@ document.addEventListener("DOMContentLoaded", () => {
   const minusQty = document.getElementById("minusQty");
   const plusQty = document.getElementById("plusQty");
   const addToCart = document.getElementById("addToCart");
+
+  const getAvailableStock = () => {
+    if (hasSizesEnabled) {
+      return selectedSize ? getSizeStock(selectedSize) : product.stock;
+    }
+    return product.stock;
+  };
+
+  const renderStockStatus = () => {
+    const overallOut = product.stock <= 0;
+    const selectedSizeOut = hasSizesEnabled && selectedSize && getSizeStock(selectedSize) <= 0;
+
+    if (productStockStatus) {
+      productStockStatus.classList.remove("in", "out");
+      if (overallOut) {
+        productStockStatus.textContent = "Немає в наявності";
+        productStockStatus.classList.add("out");
+      } else if (selectedSizeOut) {
+        productStockStatus.textContent = "Обраний розмір відсутній";
+        productStockStatus.classList.add("out");
+      } else {
+        productStockStatus.textContent = "В наявності";
+        productStockStatus.classList.add("in");
+      }
+    }
+
+    const disabled = overallOut || Boolean(selectedSizeOut);
+    if (addToCart) {
+      addToCart.disabled = disabled;
+      addToCart.setAttribute("aria-disabled", disabled ? "true" : "false");
+      if (disabled) {
+        addToCart.textContent = "Немає в наявності";
+      } else if (!addToCart.classList.contains("added")) {
+        addToCart.textContent = "Додати в кошик";
+      }
+    }
+  };
 
   const normalizeQty = () => {
     const parsed = Number.parseInt(qtyInput.value, 10);
@@ -687,11 +737,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
   qtyInput.addEventListener("change", normalizeQty);
 
+  renderStockStatus();
+
   addToCart.addEventListener("click", () => {
+    if (product.stock <= 0) {
+      return;
+    }
+
     if (hasSizesEnabled && !selectedSize) {
       if (productSizesHint) {
         productSizesHint.hidden = false;
       }
+      return;
+    }
+
+    if (getAvailableStock() <= 0) {
+      renderStockStatus();
       return;
     }
 

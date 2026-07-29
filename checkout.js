@@ -37,6 +37,8 @@ document.addEventListener("DOMContentLoaded", () => {
             customerName: String(order.customerName || ""),
             customerPhone: String(order.customerPhone || ""),
             deliveryMethod: String(order.deliveryMethod || ""),
+            paymentMethod: String(order.paymentMethod || ""),
+            comment: String(order.comment || ""),
             total: Number(order.total) || 0,
             items: Array.isArray(order.items)
               ? order.items.map((item) => ({

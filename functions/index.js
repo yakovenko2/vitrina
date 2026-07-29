@@ -371,18 +371,10 @@ const buildOrderMessage = (order) => {
   const customer = escapeTelegramHtml(String(safeOrder.customerName || "Клієнт").trim() || "Клієнт");
   const phone = escapeTelegramHtml(String(safeOrder.customerPhone || "—").trim() || "—");
   const delivery = escapeTelegramHtml(String(safeOrder.deliveryMethod || "").trim());
+  const payment = escapeTelegramHtml(String(safeOrder.paymentMethod || "").trim());
+  const comment = escapeTelegramHtml(String(safeOrder.comment || "").trim());
   const total = Number(safeOrder.total) || 0;
   const totalText = escapeTelegramHtml(total.toLocaleString("uk-UA"));
-
-  const items = Array.isArray(safeOrder.items) ? safeOrder.items : [];
-  const itemsLines = items
-    .slice(0, 30)
-    .map((item) => {
-      const name = escapeTelegramHtml(String((item && item.name) || "Товар").trim() || "Товар");
-      const qty = Math.max(1, Number(item && item.qty) || 1);
-      return `— ${name} x${qty}`;
-    })
-    .join("\n");
 
   const lines = [
     `🛍 <b>Нове замовлення №${orderId}</b>`,
@@ -393,9 +385,12 @@ const buildOrderMessage = (order) => {
   if (delivery) {
     lines.push(`<b>Доставка:</b> ${delivery}`);
   }
+  if (payment) {
+    lines.push(`Оплата: ${payment}`);
+  }
   lines.push(`<b>Сума:</b> ${totalText} грн`);
-  if (itemsLines) {
-    lines.push("", "<b>Товари:</b>", itemsLines);
+  if (comment) {
+    lines.push(`Коментар клієнта: ${comment}`);
   }
   return lines.join("\n");
 };

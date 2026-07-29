@@ -7,6 +7,50 @@ document.addEventListener("DOMContentLoaded", () => {
   const PRODUCTS_KEY = "lavkaProducts";
   const NOVA_POSHTA_API_URL = "https://api.novaposhta.ua/v2.0/json/";
   const NOVA_POSHTA_API_KEY = "8e24dc6bb36a0ee95f254d203bb3cc92";
+  const NOTIFY_ORDER_URL = "https://us-central1-lavka-shop.cloudfunctions.net/notifyOrder";
+
+  const resolveStoreIdForNotify = async () => {
+    if (window.__lavkaStoreId) return String(window.__lavkaStoreId);
+    if (typeof window.lavkaResolveStoreId === "function") {
+      try {
+        return String((await window.lavkaResolveStoreId()) || "");
+      } catch (error) {
+        return "";
+      }
+    }
+    return "";
+  };
+
+  const sendOrderTelegramNotification = async (order) => {
+    try {
+      const storeId = await resolveStoreIdForNotify();
+      if (!storeId || storeId === "default-store") return;
+
+      await fetch(NOTIFY_ORDER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        keepalive: true,
+        body: JSON.stringify({
+          storeId,
+          order: {
+            id: String(order.id || ""),
+            customerName: String(order.customerName || ""),
+            customerPhone: String(order.customerPhone || ""),
+            deliveryMethod: String(order.deliveryMethod || ""),
+            total: Number(order.total) || 0,
+            items: Array.isArray(order.items)
+              ? order.items.map((item) => ({
+                  name: String(item.name || "Товар"),
+                  qty: Math.max(1, Number(item.qty) || 1)
+                }))
+              : []
+          }
+        })
+      });
+    } catch (error) {
+      // Сповіщення не має блокувати оформлення замовлення.
+    }
+  };
 
   const checkoutForm = document.getElementById("checkoutForm");
   const customerName = document.getElementById("customerName");
@@ -1339,6 +1383,8 @@ document.addEventListener("DOMContentLoaded", () => {
       saveOrders([nextOrder, ...orders]);
       cartState = [];
       saveCart(cartState);
+
+      void sendOrderTelegramNotification(nextOrder);
 
       if (checkoutMessage) {
         checkoutMessage.classList.remove("error");

@@ -1126,17 +1126,26 @@
                   <span class="switch-slider"></span>
                 </span>
               </span>
-              <small class="notifications-hint">Бот: @lavkaorders_bot. Потрібна лише проста підписка, після чого сповіщення активується автоматично.</small>
+              <small class="notifications-hint">Бот: @lavkaorders_bot. Підключіть бота, щоб отримувати сповіщення про кожне нове замовлення прямо в Telegram.</small>
             </label>
 
-            <div class="telegram-subscribe-admin-box">
-              <p class="telegram-subscribe-admin-title">Підписка адміна на бота</p>
-              <p class="telegram-subscribe-admin-text">Натисніть Підписатися на бота і виконайте /start у Telegram. Система сама перевірить підписку.</p>
-              <p class="telegram-subscribe-admin-meta">ID підписки: <strong id="telegramAdminSubscriberId">-</strong></p>
-              <div class="telegram-subscribe-admin-actions">
-                <a id="telegramAdminSubscribeLink" class="action-btn" href="#" target="_blank" rel="noopener noreferrer">Підписатися на бота</a>
+            <div class="telegram-connect-box" id="telegramConnectBox">
+              <div class="telegram-connect-head">
+                <span class="telegram-connect-icon" aria-hidden="true">
+                  <img src="image/telegram.png" alt="">
+                </span>
+                <div class="telegram-connect-text">
+                  <p class="telegram-connect-title" id="telegramConnectTitle">Telegram не підключено</p>
+                  <p class="telegram-connect-desc" id="telegramConnectDesc">Натисніть кнопку нижче і виконайте /start у Telegram — магазин підключиться автоматично.</p>
+                </div>
+                <span class="telegram-connect-badge" id="telegramConnectBadge" hidden>Підключено</span>
               </div>
-              <p id="telegramSubscriptionStatus" class="saved-message" aria-live="polite"></p>
+              <div class="telegram-connect-actions">
+                <a id="telegramConnectBtn" class="telegram-connect-btn" href="#" target="_blank" rel="noopener noreferrer">
+                  <img src="image/telegram.png" alt="" aria-hidden="true">Підключити Telegram
+                </a>
+                <button type="button" id="telegramDisconnectBtn" class="telegram-disconnect-btn" hidden>Відключити</button>
+              </div>
             </div>
             <p id="telegramNotificationsSavedMessage" class="saved-message" aria-live="polite"></p>
           </form>

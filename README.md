@@ -1,40 +1,51 @@
 # vitrina
 
-## Telegram сповіщення про замовлення
+## Telegram-сповіщення про замовлення (Firebase Functions)
 
-Проєкт використовує одного Telegram-бота `@lavkaorders_bot` для сповіщень адміністратора магазину.
+Один Telegram-бот `@lavkaorders_bot` обслуговує всі магазини. Прив'язка магазину
+до чату відбувається через deep linking, а бекенд працює на Firebase Functions.
 
 ### Як це працює
 
-1. Адмін у розділі Сповіщення просто вмикає Telegram-сповіщення.
-2. Якщо підписки ще немає, система автоматично пропонує підписку через deep-link бота з payload `sub_<subscriberId>`.
-3. Telegram надсилає `/start` у webhook (з payload або без нього).
-4. Шлюз зберігає відповідність `subscriberId -> chatId`.
-5. Система автоматично підтверджує підписку і активує сповіщення.
-6. Коли в адмінці з'являється нове замовлення, шлюз надсилає його тільки в chat підписаного адміна.
+1. Адмін у розділі **Сповіщення** натискає «Підключити Telegram».
+2. Відкривається бот за посиланням `https://t.me/lavkaorders_bot?start=store_<STORE_ID>`.
+3. Користувач натискає `/start`. Функція `telegramWebhook` читає `chat_id` та `storeId`
+   з payload і зберігає їх у Firestore (`store_telegram/{storeId}`), після чого бот
+   надсилає вітальне повідомлення.
+4. Під час оформлення замовлення вітрина викликає функцію `notifyOrder`, яка надсилає
+   сповіщення в збережений `chat_id` магазину.
+5. Якщо користувач заблокував бота (403), сповіщення автоматично вимикаються.
 
-### Запуск шлюзу
+### Функції
 
-1. Встановіть змінну середовища `TELEGRAM_BOT_TOKEN`.
-2. Запустіть шлюз командою:
+- `telegramWebhook` (HTTPS) — обробляє `/start store_<id>`, зберігає `chat_id`.
+- `telegramStatus` (callable) — статус підключення для адмін-панелі.
+- `telegramSetEnabled` (callable) — увімкнути/вимкнути сповіщення.
+- `telegramDisconnect` (callable) — відв'язати Telegram.
+- `notifyOrder` (HTTPS) — надіслати сповіщення про нове замовлення (виклик з вітрини).
+
+### Налаштування (один раз)
+
+1. Задати секрет із токеном бота (у код НЕ потрапляє):
 
 ```bash
-node telegram-gateway.js
+firebase functions:secrets:set TELEGRAM_BOT_TOKEN
 ```
 
-За замовчуванням шлюз доступний на `http://localhost:8787`.
+2. Задеплоїти функції та хостинг:
 
-### Webhook для Telegram
+```bash
+firebase deploy --only functions,hosting
+```
 
-В BotFather або через API встановіть webhook на:
+3. Прив'язати webhook бота до функції `telegramWebhook`:
 
-`https://<ваш-домен>/api/telegram/webhook`
-
-Якщо локально, використайте тунель (наприклад, Cloudflare Tunnel або ngrok), щоб Telegram міг достукатись до вашого endpoint.
+```
+https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://us-central1-lavka-shop.cloudfunctions.net/telegramWebhook
+```
 
 ### Важливо
 
-- Токен бота не зберігається у фронтенді.
-- Поля `chat id` і `token` не вводяться в адмін-панелі.
-- Від адміністратора потрібна тільки проста підписка на бота та команда `/start`.
-- Після успішної прив'язки бот надсилає підтвердження про успішну підписку.
+- Токен бота зберігається лише як секрет Firebase, у фронтенді його немає.
+- Поля `chat id` і `token` не вводяться в адмін-панелі — усе відбувається автоматично.
+- Від адміністратора потрібно лише натиснути «Підключити Telegram» і виконати `/start`.

@@ -312,6 +312,8 @@
     return "default-store";
   };
 
+  window.lavkaResolveStoreId = getStoreId;
+
   const toTimestamp = () => new Date().toISOString();
 
   let firestore = null;
@@ -481,6 +483,12 @@
       }
 
       const storeId = await getStoreId();
+      window.__lavkaStoreId = storeId;
+      try {
+        window.dispatchEvent(new CustomEvent("lavka-store-id-ready", { detail: { storeId } }));
+      } catch (error) {
+        // ignore
+      }
       patchLocalStorageSync(storeId);
 
       if (firestore && clientIp) {

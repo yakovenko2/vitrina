@@ -22,12 +22,20 @@
  *   firebase functions:secrets:set CLOUDFLARE_ZONE_ID
  */
 
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { defineSecret } = require("firebase-functions/params");
 const { setGlobalOptions } = require("firebase-functions/v2");
+const admin = require("firebase-admin");
+
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
+const db = admin.firestore();
+const FieldValue = admin.firestore.FieldValue;
 
 const CLOUDFLARE_API_TOKEN = defineSecret("CLOUDFLARE_API_TOKEN");
 const CLOUDFLARE_ZONE_ID = defineSecret("CLOUDFLARE_ZONE_ID");
+const TELEGRAM_BOT_TOKEN = defineSecret("TELEGRAM_BOT_TOKEN");
 
 // Хост, на який клієнти вказують CNAME свого домену.
 const CNAME_TARGET = "cname.vitryna-shop.com";
@@ -268,6 +276,314 @@ exports.disconnectCustomDomain = onCall(
       return { ok: true };
     } catch (error) {
       throw mapCfError(error);
+    }
+  }
+);
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Telegram-сповіщення про нові замовлення (Deep Linking)
+ *
+ * Один бот @lavkaorders_bot обслуговує всі магазини. Прив'язка відбувається
+ * через deep link `https://t.me/lavkaorders_bot?start=store_<STORE_ID>`.
+ * chat_id зберігається у колекції `store_telegram/{storeId}`.
+ *
+ * ── Секрет (задається з терміналу, у код НЕ потрапляє) ────────────────────
+ *   firebase functions:secrets:set TELEGRAM_BOT_TOKEN
+ *
+ * ── Після деплою один раз прив'язати webhook ──────────────────────────────
+ *   https://api.telegram.org/bot<TOKEN>/setWebhook?url=<telegramWebhook URL>
+ * ──────────────────────────────────────────────────────────────────────── */
+
+const TELEGRAM_BOT_USERNAME = "lavkaorders_bot";
+const TELEGRAM_STORE_COLLECTION = "store_telegram";
+
+const sanitizeStoreId = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "")
+    .slice(0, 64);
+
+const parseStorePayload = (payload) => {
+  const raw = String(payload || "").trim();
+  if (!raw) return "";
+  const withoutPrefix = raw.startsWith("store_") ? raw.slice(6) : raw;
+  return sanitizeStoreId(withoutPrefix);
+};
+
+const escapeTelegramHtml = (value) =>
+  String(value == null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+const telegramApiCall = async (token, method, body) => {
+  const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {})
+  });
+  let data = null;
+  try {
+    data = await response.json();
+  } catch (error) {
+    data = null;
+  }
+  return {
+    ok: Boolean(response.ok && data && data.ok),
+    status: response.status,
+    errorCode: data && data.error_code,
+    data
+  };
+};
+
+const getStoreName = async (storeId) => {
+  try {
+    const reg = await db.collection("stores_registry").doc(storeId).get();
+    if (reg.exists) {
+      const name = String((reg.data() || {}).storeName || "").trim();
+      if (name) return name;
+    }
+  } catch (error) {
+    // ignore
+  }
+  try {
+    const settingsSnap = await db
+      .collection("stores")
+      .doc(storeId)
+      .collection("data")
+      .doc("lavkaStoreSettings")
+      .get();
+    if (settingsSnap.exists) {
+      const value = (settingsSnap.data() || {}).value || {};
+      const name = String(value.storeName || "").trim();
+      if (name) return name;
+    }
+  } catch (error) {
+    // ignore
+  }
+  return storeId;
+};
+
+const buildOrderMessage = (order) => {
+  const safeOrder = order && typeof order === "object" ? order : {};
+  const orderId = escapeTelegramHtml(String(safeOrder.id || "").replace(/^#/, "") || "—");
+  const customer = escapeTelegramHtml(String(safeOrder.customerName || "Клієнт").trim() || "Клієнт");
+  const phone = escapeTelegramHtml(String(safeOrder.customerPhone || "—").trim() || "—");
+  const delivery = escapeTelegramHtml(String(safeOrder.deliveryMethod || "").trim());
+  const total = Number(safeOrder.total) || 0;
+  const totalText = escapeTelegramHtml(total.toLocaleString("uk-UA"));
+
+  const items = Array.isArray(safeOrder.items) ? safeOrder.items : [];
+  const itemsLines = items
+    .slice(0, 30)
+    .map((item) => {
+      const name = escapeTelegramHtml(String((item && item.name) || "Товар").trim() || "Товар");
+      const qty = Math.max(1, Number(item && item.qty) || 1);
+      return `— ${name} x${qty}`;
+    })
+    .join("\n");
+
+  const lines = [
+    `🛍 <b>Нове замовлення №${orderId}</b>`,
+    "",
+    `<b>Клієнт:</b> ${customer}`,
+    `<b>Телефон:</b> ${phone}`
+  ];
+  if (delivery) {
+    lines.push(`<b>Доставка:</b> ${delivery}`);
+  }
+  lines.push(`<b>Сума:</b> ${totalText} грн`);
+  if (itemsLines) {
+    lines.push("", "<b>Товари:</b>", itemsLines);
+  }
+  return lines.join("\n");
+};
+
+/**
+ * Webhook Telegram: обробляє /start store_<STORE_ID>, зберігає chat_id
+ * і надсилає вітальне повідомлення.
+ */
+exports.telegramWebhook = onRequest(
+  { secrets: [TELEGRAM_BOT_TOKEN] },
+  async (req, res) => {
+    const token = TELEGRAM_BOT_TOKEN.value();
+    if (!token) {
+      res.status(200).send("ok");
+      return;
+    }
+
+    try {
+      const update = req.body || {};
+      const message = update.message || update.edited_message;
+      if (!message || !message.chat || message.chat.id == null) {
+        res.status(200).send("ok");
+        return;
+      }
+
+      const chatId = String(message.chat.id);
+      const text = String(message.text || "").trim();
+
+      if (/^\/start\b/.test(text)) {
+        const payload = text.replace(/^\/start\b/, "").trim();
+        const storeId = parseStorePayload(payload);
+
+        if (!storeId) {
+          await telegramApiCall(token, "sendMessage", {
+            chat_id: chatId,
+            text: "Будь ласка, перейдіть за посиланням із вашого особистого кабінету магазину, щоб підключити сповіщення."
+          });
+          res.status(200).send("ok");
+          return;
+        }
+
+        const storeName = await getStoreName(storeId);
+        await db.collection(TELEGRAM_STORE_COLLECTION).doc(storeId).set(
+          {
+            storeId,
+            chatId,
+            enabled: true,
+            storeName,
+            updatedAt: FieldValue.serverTimestamp()
+          },
+          { merge: true }
+        );
+
+        await telegramApiCall(token, "sendMessage", {
+          chat_id: chatId,
+          parse_mode: "HTML",
+          text: `✅ Вітаємо! Ваш магазин <b>${escapeTelegramHtml(storeName)}</b> успішно підключено до сповіщень про нові замовлення.`
+        });
+      }
+
+      res.status(200).send("ok");
+    } catch (error) {
+      console.error("telegramWebhook error:", error);
+      // Telegram очікує 200, інакше повторюватиме доставку.
+      res.status(200).send("ok");
+    }
+  }
+);
+
+/**
+ * Статус підключення магазину до Telegram (для адмін-панелі).
+ */
+exports.telegramStatus = onCall(async (request) => {
+  const storeId = sanitizeStoreId(request.data && request.data.storeId);
+  if (!storeId) {
+    throw new HttpsError("invalid-argument", "Не передано storeId.");
+  }
+
+  const snap = await db.collection(TELEGRAM_STORE_COLLECTION).doc(storeId).get();
+  if (!snap.exists) {
+    return { linked: false, enabled: false, chatId: "", storeName: "" };
+  }
+
+  const data = snap.data() || {};
+  const chatId = String(data.chatId || "");
+  return {
+    linked: Boolean(chatId),
+    enabled: chatId ? data.enabled !== false : false,
+    chatId,
+    storeName: String(data.storeName || "")
+  };
+});
+
+/**
+ * Увімкнути/вимкнути сповіщення без відв'язки chat_id.
+ */
+exports.telegramSetEnabled = onCall(async (request) => {
+  const storeId = sanitizeStoreId(request.data && request.data.storeId);
+  if (!storeId) {
+    throw new HttpsError("invalid-argument", "Не передано storeId.");
+  }
+  const enabled = Boolean(request.data && request.data.enabled);
+
+  await db.collection(TELEGRAM_STORE_COLLECTION).doc(storeId).set(
+    { storeId, enabled, updatedAt: FieldValue.serverTimestamp() },
+    { merge: true }
+  );
+  return { ok: true, enabled };
+});
+
+/**
+ * Відв'язати Telegram від магазину.
+ */
+exports.telegramDisconnect = onCall(async (request) => {
+  const storeId = sanitizeStoreId(request.data && request.data.storeId);
+  if (!storeId) {
+    throw new HttpsError("invalid-argument", "Не передано storeId.");
+  }
+
+  await db.collection(TELEGRAM_STORE_COLLECTION).doc(storeId).set(
+    { chatId: "", enabled: false, updatedAt: FieldValue.serverTimestamp() },
+    { merge: true }
+  );
+  return { ok: true };
+});
+
+/**
+ * Надіслати сповіщення про нове замовлення. Викликається з вітрини
+ * (checkout) під час оформлення замовлення.
+ */
+exports.notifyOrder = onRequest(
+  { secrets: [TELEGRAM_BOT_TOKEN], cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).json({ ok: false, error: "method-not-allowed" });
+      return;
+    }
+
+    const storeId = sanitizeStoreId(req.body && req.body.storeId);
+    const order = req.body && req.body.order;
+    if (!storeId || !order || typeof order !== "object") {
+      res.status(400).json({ ok: false, error: "invalid-request" });
+      return;
+    }
+
+    try {
+      const snap = await db.collection(TELEGRAM_STORE_COLLECTION).doc(storeId).get();
+      if (!snap.exists) {
+        res.status(200).json({ ok: true, skipped: "not-linked" });
+        return;
+      }
+
+      const data = snap.data() || {};
+      const chatId = String(data.chatId || "");
+      if (!chatId || data.enabled === false) {
+        res.status(200).json({ ok: true, skipped: "disabled" });
+        return;
+      }
+
+      const token = TELEGRAM_BOT_TOKEN.value();
+      const result = await telegramApiCall(token, "sendMessage", {
+        chat_id: chatId,
+        parse_mode: "HTML",
+        text: buildOrderMessage(order)
+      });
+
+      if (!result.ok) {
+        if (result.status === 403 || result.errorCode === 403) {
+          // Користувач заблокував бота — вимикаємо сповіщення.
+          await db.collection(TELEGRAM_STORE_COLLECTION).doc(storeId).set(
+            { enabled: false, updatedAt: FieldValue.serverTimestamp() },
+            { merge: true }
+          );
+          res.status(200).json({ ok: false, error: "forbidden", disabled: true });
+          return;
+        }
+        res.status(200).json({ ok: false, error: "send-failed" });
+        return;
+      }
+
+      res.status(200).json({ ok: true });
+    } catch (error) {
+      console.error("notifyOrder error:", error);
+      res.status(500).json({ ok: false, error: "internal" });
     }
   }
 );

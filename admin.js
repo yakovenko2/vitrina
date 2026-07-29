@@ -554,10 +554,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (sectionId === "notifications") {
-      renderAdminTelegramSubscriptionControls();
-      startTelegramSubscriptionPolling();
+      void openTelegramNotificationsSection();
     } else {
-      stopTelegramSubscriptionPolling();
+      stopTelegramStatusPolling();
     }
   };
 
@@ -996,9 +995,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const telegramNotificationsForm = document.getElementById("telegramNotificationsForm");
   const telegramOrderNotifyEnabled = document.getElementById("telegramOrderNotifyEnabled");
-  const telegramAdminSubscriberId = document.getElementById("telegramAdminSubscriberId");
-  const telegramAdminSubscribeLink = document.getElementById("telegramAdminSubscribeLink");
-  const telegramSubscriptionStatus = document.getElementById("telegramSubscriptionStatus");
+  const telegramConnectBox = document.getElementById("telegramConnectBox");
+  const telegramConnectTitle = document.getElementById("telegramConnectTitle");
+  const telegramConnectDesc = document.getElementById("telegramConnectDesc");
+  const telegramConnectBadge = document.getElementById("telegramConnectBadge");
+  const telegramConnectBtn = document.getElementById("telegramConnectBtn");
+  const telegramDisconnectBtn = document.getElementById("telegramDisconnectBtn");
   const telegramNotificationsSavedMessage = document.getElementById("telegramNotificationsSavedMessage");
   const paymentMethodsForm = document.getElementById("paymentMethodsForm");
   const paymentMonoEnabled = document.getElementById("paymentMonoEnabled");
@@ -1473,173 +1475,139 @@ document.addEventListener("DOMContentLoaded", () => {
     const settings = readSettings() || {};
     return {
       enabled: Boolean(settings.telegramOrderNotifyEnabled),
-      botUsername: TELEGRAM_BOT_USERNAME,
-      apiBaseUrl: String(settings.telegramApiBaseUrl || "http://localhost:8787").trim()
+      botUsername: TELEGRAM_BOT_USERNAME
     };
   };
 
-  const createRandomId = () => {
-    if (window.crypto?.randomUUID) {
-      return window.crypto.randomUUID();
-    }
-    return `admin-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  };
+  let telegramConnectionState = { linked: false, enabled: false, chatId: "" };
+  let telegramStatusPollTimer = null;
 
-  const getOrCreateAdminTelegramSubscriberId = () => {
-    const existing = String(localStorage.getItem(TELEGRAM_ADMIN_SUBSCRIBER_KEY) || "").trim();
-    if (existing) return existing;
-    const next = createRandomId();
-    localStorage.setItem(TELEGRAM_ADMIN_SUBSCRIBER_KEY, next);
-    return next;
-  };
-
-  const buildAdminTelegramSubscribeLink = (botUsername, subscriberId) => {
-    const normalizedBot = String(botUsername || "").replace(/^@+/, "").trim();
-    if (!normalizedBot || !subscriberId) return "#";
-    return `https://t.me/${encodeURIComponent(normalizedBot)}?start=${encodeURIComponent(`sub_${subscriberId}`)}`;
-  };
-
-  const checkAdminTelegramSubscription = async (apiBaseUrl, subscriberId) => {
-    const normalizedApiBaseUrl = String(apiBaseUrl || "").trim().replace(/\/$/, "");
-    if (!normalizedApiBaseUrl || !subscriberId) {
-      return { ok: false, linked: false };
-    }
-
-    try {
-      const response = await fetch(
-        `${normalizedApiBaseUrl}/api/telegram/subscription-status?subscriberId=${encodeURIComponent(subscriberId)}`
-      );
-      if (!response.ok) {
-        return { ok: false, linked: false };
+  const getAdminStoreId = async () => {
+    if (window.__lavkaStoreId) return String(window.__lavkaStoreId);
+    if (typeof window.lavkaResolveStoreId === "function") {
+      try {
+        return String((await window.lavkaResolveStoreId()) || "");
+      } catch {
+        return "";
       }
-      const payload = await response.json();
-      return {
-        ok: true,
-        linked: Boolean(payload?.linked)
-      };
-    } catch {
-      return { ok: false, linked: false };
+    }
+    return "";
+  };
+
+  const buildStoreTelegramLink = (storeId) => {
+    const safe = String(storeId || "").trim();
+    if (!safe || safe === "default-store") return "";
+    return `https://t.me/${TELEGRAM_BOT_USERNAME}?start=${encodeURIComponent(`store_${safe}`)}`;
+  };
+
+  const setTelegramMessage = (text, isError) => {
+    if (!telegramNotificationsSavedMessage) return;
+    telegramNotificationsSavedMessage.classList.toggle("error", Boolean(isError));
+    telegramNotificationsSavedMessage.textContent = text || "";
+  };
+
+  const renderTelegramConnectionState = () => {
+    const linked = Boolean(telegramConnectionState.linked);
+    const enabled = Boolean(telegramConnectionState.enabled);
+
+    if (telegramConnectBox) {
+      telegramConnectBox.classList.toggle("is-connected", linked);
+    }
+    if (telegramConnectBadge) {
+      telegramConnectBadge.hidden = !linked;
+    }
+    if (telegramConnectTitle) {
+      telegramConnectTitle.textContent = linked ? "Telegram підключено" : "Telegram не підключено";
+    }
+    if (telegramConnectDesc) {
+      telegramConnectDesc.textContent = linked
+        ? (telegramConnectionState.chatId ? `Chat ID: ${telegramConnectionState.chatId}` : "Магазин підключено до бота.")
+        : "Натисніть кнопку нижче і виконайте /start у Telegram — магазин підключиться автоматично.";
+    }
+    if (telegramConnectBtn) {
+      telegramConnectBtn.hidden = linked;
+    }
+    if (telegramDisconnectBtn) {
+      telegramDisconnectBtn.hidden = !linked;
+    }
+    if (telegramOrderNotifyEnabled) {
+      telegramOrderNotifyEnabled.checked = linked && enabled;
+      telegramOrderNotifyEnabled.disabled = !linked;
     }
   };
 
-  const registerAdminSubscribeIntent = async (apiBaseUrl, subscriberId) => {
-    const normalizedApiBaseUrl = String(apiBaseUrl || "").trim().replace(/\/$/, "");
-    if (!normalizedApiBaseUrl || !subscriberId) return false;
+  const refreshTelegramConnectLink = async () => {
+    const storeId = await getAdminStoreId();
+    const link = buildStoreTelegramLink(storeId);
+    if (telegramConnectBtn) {
+      if (link) {
+        telegramConnectBtn.href = link;
+        telegramConnectBtn.classList.remove("disabled");
+        telegramConnectBtn.setAttribute("aria-disabled", "false");
+      } else {
+        telegramConnectBtn.href = "#";
+        telegramConnectBtn.classList.add("disabled");
+        telegramConnectBtn.setAttribute("aria-disabled", "true");
+      }
+    }
+    return storeId;
+  };
 
+  const fetchTelegramStatus = async () => {
+    const storeId = await getAdminStoreId();
+    if (!storeId || storeId === "default-store") return null;
     try {
-      const response = await fetch(`${normalizedApiBaseUrl}/api/telegram/subscribe-intent`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          subscriberId
-        })
-      });
-      return response.ok;
+      const data = await callDomainFunction("telegramStatus", { storeId });
+      telegramConnectionState = {
+        linked: Boolean(data.linked),
+        enabled: Boolean(data.enabled),
+        chatId: String(data.chatId || "")
+      };
+      const nextEnabled = telegramConnectionState.linked && telegramConnectionState.enabled;
+      if (Boolean((readSettings() || {}).telegramOrderNotifyEnabled) !== nextEnabled) {
+        mergeAndSaveSettings({ telegramOrderNotifyEnabled: nextEnabled });
+      }
+      return telegramConnectionState;
     } catch {
-      return false;
+      return null;
     }
   };
 
   const renderAdminTelegramSubscriptionControls = () => {
-    const settings = readTelegramOrderNotificationsSettings();
-    const subscriberId = getOrCreateAdminTelegramSubscriberId();
-    const botUsername = TELEGRAM_BOT_USERNAME;
-
-    if (telegramAdminSubscriberId) {
-      telegramAdminSubscriberId.textContent = subscriberId;
-    }
-
-    if (telegramAdminSubscribeLink) {
-      telegramAdminSubscribeLink.href = buildAdminTelegramSubscribeLink(botUsername, subscriberId);
-      telegramAdminSubscribeLink.setAttribute("aria-disabled", "false");
-      telegramAdminSubscribeLink.classList.remove("disabled");
-    }
+    void refreshTelegramConnectLink();
+    renderTelegramConnectionState();
   };
 
-  let telegramSubscriptionPollTimer = null;
-  const stopTelegramSubscriptionPolling = () => {
-    if (!telegramSubscriptionPollTimer) return;
-    window.clearInterval(telegramSubscriptionPollTimer);
-    telegramSubscriptionPollTimer = null;
+  const stopTelegramStatusPolling = () => {
+    if (!telegramStatusPollTimer) return;
+    window.clearInterval(telegramStatusPollTimer);
+    telegramStatusPollTimer = null;
   };
 
-  const startTelegramSubscriptionPolling = () => {
-    stopTelegramSubscriptionPolling();
-    telegramSubscriptionPollTimer = window.setInterval(async () => {
-      if (currentSection !== "notifications") return;
-      const settings = readTelegramOrderNotificationsSettings();
-      const subscriberId = getOrCreateAdminTelegramSubscriberId();
-      const status = await checkAdminTelegramSubscription(settings.apiBaseUrl, subscriberId);
-      if (!status.ok || !status.linked) return;
-
-      applyTelegramNotificationsEnabledState(true);
-      if (telegramOrderNotifyEnabled) {
-        telegramOrderNotifyEnabled.checked = true;
+  const startTelegramStatusPolling = () => {
+    stopTelegramStatusPolling();
+    telegramStatusPollTimer = window.setInterval(async () => {
+      if (currentSection !== "notifications") {
+        stopTelegramStatusPolling();
+        return;
       }
-      if (telegramSubscriptionStatus) {
-        telegramSubscriptionStatus.classList.remove("error");
-        telegramSubscriptionStatus.textContent = "Підписка підтверджена. Сповіщення активовано.";
+      const wasLinked = telegramConnectionState.linked;
+      await fetchTelegramStatus();
+      renderTelegramConnectionState();
+      if (!wasLinked && telegramConnectionState.linked) {
+        setTelegramMessage("Telegram підключено. Сповіщення активовано.", false);
       }
-    }, 3000);
+    }, 4000);
   };
 
-  const buildTelegramOrderMessage = (order) => {
-    const customerName = String(order?.customerName || "Клієнт").trim();
-    const customerPhone = String(order?.customerPhone || "-").trim() || "-";
-    const orderId = String(order?.id || "#-").trim();
-    const deliveryMethod = String(order?.deliveryMethod || "-").trim() || "-";
-    const total = formatNumber(Number(order?.total) || 0);
-    const itemsSummary = Array.isArray(order?.items)
-      ? order.items
-        .slice(0, 3)
-        .map((item) => `${String(item?.name || "Товар").trim()} x${Number(item?.qty) || 1}`)
-        .join(", ")
-      : "";
-
-    const lines = [
-      "Нове замовлення у магазині",
-      `Номер: ${orderId}`,
-      `Клієнт: ${customerName}`,
-      `Телефон: ${customerPhone}`,
-      `Доставка: ${deliveryMethod}`,
-      `Сума: ${total} ${getCurrencyLabel(getCurrentCurrency())}`
-    ];
-
-    if (itemsSummary) {
-      lines.push(`Товари: ${itemsSummary}`);
-    }
-
-    return lines.join("\n");
+  const openTelegramNotificationsSection = async () => {
+    await refreshTelegramConnectLink();
+    renderTelegramConnectionState();
+    await fetchTelegramStatus();
+    renderTelegramConnectionState();
+    startTelegramStatusPolling();
   };
 
-  const sendTelegramOrderNotification = async (order) => {
-    const settings = readTelegramOrderNotificationsSettings();
-    const subscriberId = getOrCreateAdminTelegramSubscriberId();
-    if (!settings.enabled || !settings.apiBaseUrl || !subscriberId) return false;
-
-    try {
-      const response = await fetch(`${settings.apiBaseUrl.replace(/\/$/, "")}/api/telegram/order-notify`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          subscriberId,
-          message: buildTelegramOrderMessage(order),
-          orderId: String(order?.id || "").trim(),
-          botUsername: settings.botUsername
-        })
-      });
-
-      if (!response.ok) return false;
-      const result = await response.json();
-      return Boolean(result?.ok);
-    } catch {
-      return false;
-    }
-  };
 
   const renderViewsStats = () => {
     if (!viewsTodayCount) return;
@@ -3997,7 +3965,6 @@ document.addEventListener("DOMContentLoaded", () => {
   mergeAndSaveSettings({
     currency: normalizeCurrencyCode(readSettings()?.currency || "uah"),
     telegramBotUsername: TELEGRAM_BOT_USERNAME,
-    telegramApiBaseUrl: String((readSettings() || {}).telegramApiBaseUrl || "http://localhost:8787").trim(),
     shippingNovaPostEnabled: readSettings()?.shippingNovaPostEnabled ?? true,
     shippingUkrPostEnabled: readSettings()?.shippingUkrPostEnabled ?? true,
     shippingNovaCourierEnabled: readSettings()?.shippingNovaCourierEnabled ?? false,
@@ -4058,15 +4025,14 @@ document.addEventListener("DOMContentLoaded", () => {
         renderSalesFromForm();
       }
 
-      for (const order of newOrders) {
+      // Сповіщення надсилає бекенд (Cloud Function) під час оформлення
+      // замовлення на вітрині. Тут лише позначаємо як опрацьовані.
+      newOrders.forEach((order) => {
         const orderId = String(order.id || "").trim();
-        if (!orderId || notifiedOrderIds.has(orderId)) continue;
-
-        const isSent = await sendTelegramOrderNotification(order);
-        if (isSent) {
+        if (orderId) {
           notifiedOrderIds.add(orderId);
         }
-      }
+      });
 
       saveNotifiedOrderIds(notifiedOrderIds);
       knownOrderIds = latestOrderIds;
@@ -5412,95 +5378,75 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  const applyTelegramNotificationsEnabledState = (enabled) => {
-    mergeAndSaveSettings({
-      telegramOrderNotifyEnabled: enabled,
-      telegramBotUsername: TELEGRAM_BOT_USERNAME,
-      telegramApiBaseUrl: String((readSettings() || {}).telegramApiBaseUrl || "http://localhost:8787").trim(),
-      telegramChatId: "",
-      telegramBotToken: ""
-    });
-
-    if (enabled) {
-      const baselineNotifiedOrderIds = new Set(
-        orders.map((order) => String(order.id || "").trim()).filter(Boolean)
-      );
-      saveNotifiedOrderIds(baselineNotifiedOrderIds);
-      notifiedOrderIds = baselineNotifiedOrderIds;
-      knownOrderIds = new Set(baselineNotifiedOrderIds);
-    }
-  };
-
-  const verifyAdminSubscriptionAndApplyToggle = async () => {
+  const handleTelegramEnabledToggle = async () => {
     const desiredEnabled = Boolean(telegramOrderNotifyEnabled?.checked);
-    const subscriberId = getOrCreateAdminTelegramSubscriberId();
-    const apiBaseUrlValue = String((readSettings() || {}).telegramApiBaseUrl || "http://localhost:8787").trim();
 
-    if (!desiredEnabled) {
-      applyTelegramNotificationsEnabledState(false);
-      if (telegramSubscriptionStatus) {
-        telegramSubscriptionStatus.classList.remove("error");
-        telegramSubscriptionStatus.textContent = "Сповіщення вимкнено.";
-      }
-      if (telegramNotificationsSavedMessage) {
-        telegramNotificationsSavedMessage.textContent = "";
-      }
-      return;
-    }
-
-    const subscription = await checkAdminTelegramSubscription(apiBaseUrlValue, subscriberId);
-    if (!subscription.ok || !subscription.linked) {
+    if (!telegramConnectionState.linked) {
       if (telegramOrderNotifyEnabled) {
         telegramOrderNotifyEnabled.checked = false;
       }
-      applyTelegramNotificationsEnabledState(false);
-      void registerAdminSubscribeIntent(apiBaseUrlValue, subscriberId);
-      if (telegramAdminSubscribeLink && telegramAdminSubscribeLink.href && telegramAdminSubscribeLink.href !== "#") {
-        window.open(telegramAdminSubscribeLink.href, "_blank", "noopener");
-      }
-      if (telegramSubscriptionStatus) {
-        telegramSubscriptionStatus.classList.add("error");
-        telegramSubscriptionStatus.textContent = "Підписка ще не підтверджена. Натисніть Підписатися на бота і виконайте /start.";
-      }
-      if (telegramNotificationsSavedMessage) {
-        telegramNotificationsSavedMessage.classList.add("error");
-        telegramNotificationsSavedMessage.textContent = "Сповіщення не активовано: немає підписки на бота.";
-      }
+      setTelegramMessage("Спочатку підключіть Telegram.", true);
       return;
     }
 
-    applyTelegramNotificationsEnabledState(true);
-    if (telegramSubscriptionStatus) {
-      telegramSubscriptionStatus.classList.remove("error");
-      telegramSubscriptionStatus.textContent = "Підписка підтверджена. Сповіщення активовано.";
+    const storeId = await getAdminStoreId();
+    if (!storeId || storeId === "default-store") return;
+
+    try {
+      await callDomainFunction("telegramSetEnabled", { storeId, enabled: desiredEnabled });
+      telegramConnectionState.enabled = desiredEnabled;
+      mergeAndSaveSettings({ telegramOrderNotifyEnabled: desiredEnabled });
+      renderTelegramConnectionState();
+      setTelegramMessage(desiredEnabled ? "Сповіщення увімкнено." : "Сповіщення вимкнено.", false);
+    } catch {
+      if (telegramOrderNotifyEnabled) {
+        telegramOrderNotifyEnabled.checked = !desiredEnabled;
+      }
+      setTelegramMessage("Не вдалося оновити стан. Спробуйте ще раз.", true);
     }
-    if (telegramNotificationsSavedMessage) {
-      telegramNotificationsSavedMessage.classList.remove("error");
-      telegramNotificationsSavedMessage.textContent = "Сповіщення успішно увімкнено.";
-      setTimeout(() => {
-        if (telegramNotificationsSavedMessage) {
-          telegramNotificationsSavedMessage.textContent = "";
-        }
-      }, 2200);
+  };
+
+  const handleTelegramDisconnect = async () => {
+    const storeId = await getAdminStoreId();
+    if (!storeId || storeId === "default-store") return;
+
+    if (telegramDisconnectBtn) {
+      telegramDisconnectBtn.disabled = true;
+    }
+    try {
+      await callDomainFunction("telegramDisconnect", { storeId });
+      telegramConnectionState = { linked: false, enabled: false, chatId: "" };
+      mergeAndSaveSettings({ telegramOrderNotifyEnabled: false });
+      renderTelegramConnectionState();
+      setTelegramMessage("Telegram відключено.", false);
+    } catch {
+      setTelegramMessage("Не вдалося відключити. Спробуйте ще раз.", true);
+    } finally {
+      if (telegramDisconnectBtn) {
+        telegramDisconnectBtn.disabled = false;
+      }
     }
   };
 
   if (telegramOrderNotifyEnabled) {
     telegramOrderNotifyEnabled.addEventListener("change", () => {
-      void verifyAdminSubscriptionAndApplyToggle();
+      void handleTelegramEnabledToggle();
     });
   }
 
-  if (telegramAdminSubscribeLink) {
-    telegramAdminSubscribeLink.addEventListener("click", () => {
-      const settings = readTelegramOrderNotificationsSettings();
-      const subscriberId = getOrCreateAdminTelegramSubscriberId();
-      void registerAdminSubscribeIntent(settings.apiBaseUrl, subscriberId);
-      if (telegramSubscriptionStatus) {
-        telegramSubscriptionStatus.classList.remove("error");
-        telegramSubscriptionStatus.textContent = "Після /start у боті сповіщення увімкнеться автоматично.";
+  if (telegramConnectBtn) {
+    telegramConnectBtn.addEventListener("click", () => {
+      if (telegramConnectBtn.getAttribute("aria-disabled") === "true") {
+        return;
       }
-      startTelegramSubscriptionPolling();
+      setTelegramMessage("Після /start у боті магазин підключиться автоматично.", false);
+      startTelegramStatusPolling();
+    });
+  }
+
+  if (telegramDisconnectBtn) {
+    telegramDisconnectBtn.addEventListener("click", () => {
+      void handleTelegramDisconnect();
     });
   }
 

@@ -23,6 +23,7 @@
     "lavkaTelegramAdminSubscriberId"
   ];
   const BLOCKED_IPS_COLLECTION = "blocked_ips";
+  const DELETED_CLIENTS_COLLECTION = "clients_registry";
   const IP_CACHE_KEY = "lavkaClientIpCache";
   const IP_CACHE_TTL_MS = 10 * 60 * 1000;
 
@@ -178,6 +179,52 @@
       firestore.collection("stores_registry").doc(safeStoreId).set(payload, { merge: true }),
       firestore.collection("store_subdomains").doc(safeStoreId).set(payload, { merge: true })
     ]);
+  };
+
+  const isStoreMarkedDeleted = async (storeId) => {
+    if (!firestore) return false;
+    const safeStoreId = sanitizeStoreId(storeId);
+    if (!safeStoreId || safeStoreId === "default-store") {
+      return false;
+    }
+
+    try {
+      const snap = await firestore.collection(DELETED_CLIENTS_COLLECTION).doc(safeStoreId).get();
+      if (!snap.exists) return false;
+      const data = snap.data() || {};
+      const status = String(data.status || "").trim().toLowerCase();
+      return status === "deleted" || Boolean(data.deletedAt);
+    } catch {
+      return false;
+    }
+  };
+
+  const hasStoreEnvelopeDocs = async (storeId) => {
+    if (!firestore) return false;
+    const safeStoreId = sanitizeStoreId(storeId);
+    if (!safeStoreId || safeStoreId === "default-store") {
+      return false;
+    }
+
+    try {
+      const snaps = await Promise.all([
+        firestore.collection("stores_registry").doc(safeStoreId).get(),
+        firestore.collection("store_subdomains").doc(safeStoreId).get()
+      ]);
+      return Boolean((snaps[0] && snaps[0].exists) || (snaps[1] && snaps[1].exists));
+    } catch {
+      return true;
+    }
+  };
+
+  const clearDeletedStoreLocalState = () => {
+    try {
+      SYNCED_KEYS.forEach((key) => {
+        localStorage.removeItem(key);
+      });
+    } catch {
+      // ignore cleanup failures
+    }
   };
 
   const sanitizeStoreId = (value) => {
@@ -496,6 +543,20 @@
       } catch (error) {
         // ignore
       }
+
+      if (firestore) {
+        const storeDeleted = await isStoreMarkedDeleted(storeId);
+        if (storeDeleted) {
+          clearDeletedStoreLocalState();
+          return;
+        }
+
+        const hasEnvelopeDocs = await hasStoreEnvelopeDocs(storeId);
+        if (!hasEnvelopeDocs) {
+          return;
+        }
+      }
+
       patchLocalStorageSync(storeId);
 
       if (firestore && clientIp) {

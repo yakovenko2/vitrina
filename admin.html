@@ -3,12 +3,53 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lavka Keramiky Admin</title>
+<title>Admin</title>
+<style>
+  /* First-paint guard: never show all sections at once before external CSS loads. */
+  .panel { display: none !important; }
+  .panel.active { display: block !important; }
+</style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="admin.css?v=20260731f">
+<link rel="stylesheet" href="admin.css?v=20260731h">
 <script>
+  // Early title boot: read local store name synchronously to avoid title flicker.
+  (function () {
+    try {
+      var read = function (key) {
+        try {
+          var raw = localStorage.getItem(key);
+          return raw ? JSON.parse(raw) : null;
+        } catch (e) {
+          return null;
+        }
+      };
+
+      var settings = read("lavkaStoreSettings") || {};
+      var registration = read("lavkaRegistration") || {};
+      var auth = read("lavkaAuth") || {};
+
+      var candidates = [
+        settings.name,
+        settings.storeName,
+        registration.storeName,
+        auth.storeName
+      ];
+
+      var storeName = "";
+      for (var i = 0; i < candidates.length; i += 1) {
+        var value = String(candidates[i] || "").trim();
+        if (value) {
+          storeName = value;
+          break;
+        }
+      }
+
+      document.title = storeName ? (storeName + " Admin") : "Admin";
+    } catch (e) {}
+  })();
+
   // Early boot: show the correct section instantly (no flash) based on the URL
   // hash or the last active section, before the main script runs.
   (function () {
@@ -139,6 +180,12 @@
             </span>
             <span class="menu-item-label">Тарифний план</span>
           </button>
+          <button class="menu-item" data-section="support" type="button">
+            <span class="menu-item-icon" aria-hidden="true">
+              <img src="image/telegram.png" alt="">
+            </span>
+            <span class="menu-item-label">Підтримка</span>
+          </button>
           <button class="menu-item" data-section="settings">
             <span class="menu-item-icon" aria-hidden="true">
               <svg viewBox="-1 -1 26 26" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/><path d="M19.4 15a1.7 1.7 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 20.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V22a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 8 20.4a1.7 1.7 0 0 0-1-.6 1.7 1.7 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 3.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H1.8a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 3.6 9a1.7 1.7 0 0 0 .6-1 1.7 1.7 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 8 3.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V1.8a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 .4 1.1 1.7 1.7 0 0 0 1 .6 1.7 1.7 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 20.4 8a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.1.4 1.7 1.7 0 0 0-.6 1Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -258,17 +305,17 @@
 
       <section class="panel" id="orders">
         <div class="cards-row">
-          <article class="kpi">
+          <article class="kpi orders-kpi-card" data-orders-kpi-filter="new-today" role="button" tabindex="0" aria-pressed="false" title="Показати нові замовлення за сьогодні">
             <p>Нові сьогодні</p>
-            <strong>0</strong>
+            <strong id="ordersKpiNewToday">0</strong>
           </article>
-          <article class="kpi">
+          <article class="kpi orders-kpi-card" data-orders-kpi-filter="processing" role="button" tabindex="0" aria-pressed="false" title="Показати замовлення в обробці">
             <p>В обробці</p>
-            <strong>0</strong>
+            <strong id="ordersKpiProcessing">0</strong>
           </article>
-          <article class="kpi">
+          <article class="kpi orders-kpi-card" data-orders-kpi-filter="shipped" role="button" tabindex="0" aria-pressed="false" title="Показати відправлені замовлення">
             <p>Відправлено</p>
-            <strong>0</strong>
+            <strong id="ordersKpiShipped">0</strong>
           </article>
         </div>
 
@@ -1461,8 +1508,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-functions-compat.js"></script>
-<script src="firebase-sync.js?v=20260730c"></script>
-<script src="admin.js?v=20260731f"></script>
+<script src="firebase-sync.js?v=20260731a"></script>
+<script src="admin.js?v=20260731m"></script>
 <script>
   // Instant section activation: runs synchronously after the DOM is parsed but
   // BEFORE admin.js init (which firebase-sync defers by 1-2s). This makes the

@@ -540,12 +540,45 @@
       color: #46607f;
     }
 
+    .register-card .status:empty {
+      margin-top: 0;
+      min-height: 0;
+      display: none;
+    }
+
     .status.error {
       color: #b33b47;
     }
 
     .status.success {
       color: #487518;
+    }
+
+    .auth-switch-note {
+      margin: 12px 0 0;
+      padding: 10px 12px;
+      border-radius: 11px;
+      border: 1px solid #dbe6f4;
+      background: linear-gradient(180deg, #f8fbff 0%, #f2f7ff 100%);
+      text-align: center;
+      font-size: 12.5px;
+      line-height: 1.4;
+      color: #5b6d84;
+      font-weight: 700;
+    }
+
+    .auth-switch-note a {
+      color: #2f74bd;
+      font-weight: 800;
+      text-decoration: none;
+      border-bottom: 1px solid rgba(47, 116, 189, 0.35);
+      transition: color 0.16s ease, border-color 0.16s ease;
+    }
+
+    .auth-switch-note a:hover,
+    .auth-switch-note a:focus-visible {
+      color: var(--blue-dark);
+      border-bottom-color: rgba(43, 109, 177, 0.6);
     }
 
     .subdomain-preview {
@@ -643,7 +676,7 @@
     }
 
     .registration-time-note {
-      margin: 14px 0 0;
+      margin: 8px 0 0;
       text-align: center;
       color: rgba(72, 89, 112, 0.58);
       font-size: 12px;
@@ -815,6 +848,7 @@
         </div>
       </form>
       <p class="registration-time-note">Реєстрація триває не більше 45 сек</p>
+      <p class="auth-switch-note">Вже є акаунт? <a href="login.html">Авторизуйтеся</a></p>
     </section>
   </div>
 
@@ -827,6 +861,7 @@
       var REGISTRATION_KEY = "lavkaRegistration";
       var AUTH_KEY = "lavkaAuth";
       var PENDING_PHONE_KEY = "lavkaPendingRegistrationPhone";
+      var REGISTRATION_FLOW_KEY = "lavkaRegistrationFlow";
       var FIREBASE_CONFIG = {
         apiKey: "AIzaSyDzJ3zOCHvuAnZQA-90va3xZxoBSVqnwLs",
         authDomain: "lavka-shop.firebaseapp.com",
@@ -879,6 +914,41 @@
       var backToStep2Btn = document.getElementById("backToStep2Btn");
       var registrationForm = document.getElementById("registrationForm");
       var submitBtn = registrationForm.querySelector("button[type='submit']");
+
+      function readRegistrationFlow() {
+        try {
+          var raw = sessionStorage.getItem(REGISTRATION_FLOW_KEY);
+          return raw ? JSON.parse(raw) : null;
+        } catch (error) {
+          return null;
+        }
+      }
+
+      function saveRegistrationFlow() {
+        try {
+          var flow = {
+            step: currentStep,
+            phoneVerified: Boolean(phoneVerified),
+            phone: normalizePhone(phoneInput.value),
+            clientName: normalizeStoreName(clientNameInput.value),
+            storeName: normalizeStoreName(storeNameInput.value),
+            subdomain: sanitizeSubdomain(subdomainInput.value),
+            selectedCategory: String(selectedCategory || ""),
+            customCategory: normalizeStoreName(customCategoryInput.value)
+          };
+          sessionStorage.setItem(REGISTRATION_FLOW_KEY, JSON.stringify(flow));
+        } catch (error) {
+          // Ignore sessionStorage failures (private mode / quota).
+        }
+      }
+
+      function clearRegistrationFlow() {
+        try {
+          sessionStorage.removeItem(REGISTRATION_FLOW_KEY);
+        } catch (error) {
+          // Ignore sessionStorage cleanup failures.
+        }
+      }
 
       function getFirestore() {
         if (!window.firebase) {
@@ -1138,6 +1208,7 @@
       function goToStep(step) {
         currentStep = step;
         updateProgress();
+        saveRegistrationFlow();
         if (step === 1) {
           phoneInput.focus();
         }
@@ -1147,6 +1218,62 @@
         if (step === 3) {
           subdomainInput.focus();
         }
+      }
+
+      function restoreRegistrationFlow() {
+        var flow = readRegistrationFlow();
+        if (!flow || typeof flow !== "object") {
+          return false;
+        }
+
+        var phone = normalizePhone(flow.phone || "");
+        if (phone) {
+          phoneInput.value = phone;
+        }
+
+        var clientName = normalizeStoreName(flow.clientName || "");
+        if (clientName) {
+          clientNameInput.value = clientName;
+        }
+
+        var storeName = normalizeStoreName(flow.storeName || "");
+        if (storeName) {
+          storeNameInput.value = storeName;
+        }
+
+        var subdomain = sanitizeSubdomain(flow.subdomain || "");
+        if (subdomain) {
+          subdomainInput.value = subdomain;
+          updateSubdomainPreview();
+          checkSubdomainAvailability();
+        }
+
+        var restoredCategory = String(flow.selectedCategory || "").trim();
+        if (restoredCategory) {
+          var selectedOption = categoryOptions.querySelector('.custom-select-option[data-value="' + restoredCategory.replace(/"/g, '\\"') + '"]');
+          if (selectedOption) {
+            selectCategory(restoredCategory, selectedOption.textContent.trim());
+          }
+        }
+
+        var customCategory = normalizeStoreName(flow.customCategory || "");
+        if (customCategory) {
+          customCategoryInput.value = customCategory;
+        }
+
+        phoneVerified = Boolean(flow.phoneVerified);
+        var nextStep = Number(flow.step || 1);
+        if (!Number.isFinite(nextStep) || nextStep < 1 || nextStep > 3) {
+          nextStep = 1;
+        }
+
+        if (!phoneVerified && nextStep > 1) {
+          nextStep = 1;
+        }
+
+        currentStep = nextStep;
+        updateProgress();
+        return true;
       }
 
       function bootstrapPhoneFromLanding() {
@@ -1192,6 +1319,7 @@
         sendCodeBtn.style.display = "none";
         verifyCodeBtn.style.display = "block";
         setStatus(step1Status, "", "");
+        saveRegistrationFlow();
       });
 
       verifyCodeBtn.addEventListener("click", function () {
@@ -1220,6 +1348,14 @@
         if (storeNameInput.value.length > MAX_STORE_NAME_LENGTH) {
           storeNameInput.value = storeNameInput.value.slice(0, MAX_STORE_NAME_LENGTH);
         }
+        saveRegistrationFlow();
+      });
+
+      clientNameInput.addEventListener("input", function () {
+        if (clientNameInput.value.length > MAX_STORE_NAME_LENGTH) {
+          clientNameInput.value = clientNameInput.value.slice(0, MAX_STORE_NAME_LENGTH);
+        }
+        saveRegistrationFlow();
       });
 
       function closeCategoryDropdown() {
@@ -1255,7 +1391,15 @@
         if (isOther) {
           customCategoryInput.focus();
         }
+        saveRegistrationFlow();
       }
+
+      customCategoryInput.addEventListener("input", function () {
+        if (customCategoryInput.value.length > MAX_STORE_NAME_LENGTH) {
+          customCategoryInput.value = customCategoryInput.value.slice(0, MAX_STORE_NAME_LENGTH);
+        }
+        saveRegistrationFlow();
+      });
 
       categoryTrigger.addEventListener("click", function () {
         if (categorySelect.classList.contains("is-open")) {
@@ -1346,6 +1490,7 @@
           subdomainInput.value = safeValue;
         }
         updateSubdomainPreview();
+        saveRegistrationFlow();
         setSubdomainState("", "");
         if (subdomainCheckTimer) {
           clearTimeout(subdomainCheckTimer);
@@ -1477,6 +1622,7 @@
         }));
 
         setStatus(step3Status, "Готово! Переходимо в адмін-панель...", "success");
+        clearRegistrationFlow();
 
         setTimeout(function () {
           window.location.href = "admin.html?store=" + encodeURIComponent(subdomain);
@@ -1484,8 +1630,13 @@
       });
 
       updateSubdomainPreview();
-      updateProgress();
-      bootstrapPhoneFromLanding();
+      var restoredFlow = restoreRegistrationFlow();
+      if (!restoredFlow) {
+        updateProgress();
+      }
+      if (!restoredFlow) {
+        bootstrapPhoneFromLanding();
+      }
       if (codeField.style.display === "none") {
         phoneInput.focus();
       }

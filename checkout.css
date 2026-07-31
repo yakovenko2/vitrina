@@ -89,6 +89,34 @@ body {
   max-width: 58ch;
 }
 
+.checkout-order-status {
+  margin: 2px 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid #ffd9b0;
+  background: #fff2e2;
+  color: #955213;
+  font-size: 12.5px;
+  font-weight: 800;
+}
+
+.checkout-order-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #e18a2f;
+  box-shadow: 0 0 0 3px rgba(225, 138, 47, 0.2);
+  flex: 0 0 8px;
+}
+
+.checkout-order-status[hidden] {
+  display: none !important;
+}
+
 .back-link {
   display: inline-flex;
   align-items: center;

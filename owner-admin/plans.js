@@ -10,6 +10,7 @@
 
   var REGISTRATION_KEY = "lavkaRegistration";
   var BILLING_KEY = "lavkaBilling";
+  var BILLING_INVOICES_COLLECTION = "billing_invoices";
   var DASH = "-";
 
   var PLAN_CONFIG = {
@@ -136,11 +137,19 @@
   }
 
   function getPlanName(planId) {
-    var key = cleanText(planId).toLowerCase();
+    var key = normalizePlanId(cleanText(planId).toLowerCase());
     if (!key) {
       return "Trial";
     }
     return PLAN_CONFIG[key] ? PLAN_CONFIG[key].name : key;
+  }
+
+  function normalizePlanId(planId) {
+    var key = cleanText(planId).toLowerCase();
+    if (key === "start") {
+      return "starter";
+    }
+    return key;
   }
 
   function pickAddress(registrationValue, registryData) {
@@ -344,7 +353,7 @@
     var proCount = 0;
 
     for (var i = 0; i < stores.length; i += 1) {
-      var planId = cleanText(stores[i].billing.currentPlanId).toLowerCase();
+      var planId = normalizePlanId(cleanText(stores[i].billing.currentPlanId).toLowerCase());
       if (planId === "starter") starterCount += 1;
       if (planId === "business") businessCount += 1;
       if (planId === "pro") proCount += 1;
@@ -365,7 +374,7 @@
 
     for (var i = 0; i < stores.length; i += 1) {
       var billing = stores[i].billing || {};
-      var planId = cleanText(billing.currentPlanId).toLowerCase();
+      var planId = normalizePlanId(cleanText(billing.currentPlanId).toLowerCase());
       var validUntilDate = parseDate(billing.validUntil);
 
       if (planId) {
@@ -419,7 +428,7 @@
     detailValidUntilEl.textContent = formatDate(store.billing.validUntil);
 
     if (detailPlanSelectEl) {
-      var selected = cleanText(store.billing.currentPlanId).toLowerCase();
+      var selected = normalizePlanId(cleanText(store.billing.currentPlanId).toLowerCase());
       detailPlanSelectEl.value = PLAN_CONFIG[selected] ? selected : "starter";
     }
 
@@ -427,10 +436,168 @@
       detailCancelPlanEl.disabled = !cleanText(store.billing.currentPlanId);
     }
 
-    renderPaymentHistory(store.billing.payments || []);
+    renderPaymentHistory(dedupePayments(store.billing.payments || []));
+    void hydratePaymentHistoryFromInvoices(store);
 
     modalEl.hidden = false;
     document.body.style.overflow = "hidden";
+  }
+
+  function normalizeInvoiceToPayment(invoice) {
+    var raw = invoice && typeof invoice === "object" ? invoice : {};
+    var amountKop = Number(raw.amountKop);
+    var paidAt = raw.activatedDoneAt || raw.updatedAt || raw.createdAt || raw.modifiedDate || null;
+    var status = cleanText(raw.status).toLowerCase() || cleanText(raw.monoStatus).toLowerCase();
+    var normalizedPlanId = normalizePlanId(raw.tariffId);
+    var invoiceId = cleanText(raw.invoiceId);
+    var normalizedId = invoiceId
+      ? (invoiceId.indexOf("mono-") === 0 ? invoiceId : ("mono-" + invoiceId))
+      : "";
+
+    return {
+      id: normalizedId,
+      reference: invoiceId,
+      planId: normalizedPlanId,
+      planName: cleanText(raw.tariffName) || getPlanName(normalizedPlanId),
+      amount: Number.isFinite(amountKop) ? Math.round(amountKop / 100) : 0,
+      periodMonths: Number(raw.periodMonths) || 1,
+      paidAt: paidAt,
+      status: status === "success" ? "paid" : status,
+      actorRole: "user",
+      source: "monobank-acquiring"
+    };
+  }
+
+  function normalizePaymentReference(payment) {
+    var ref = cleanText(payment && (payment.reference || payment.invoiceId || payment.id)).toLowerCase();
+    return ref.indexOf("mono-") === 0 ? ref.slice(5) : ref;
+  }
+
+  function getPaymentStatusRank(statusKey) {
+    var status = cleanText(statusKey).toLowerCase();
+    if (status === "paid" || status === "success" || status === "granted") {
+      return 3;
+    }
+    if (status === "pending" || status === "processing") {
+      return 2;
+    }
+    if (status === "unpaid" || status === "cancelled" || status === "canceled" || status === "failed") {
+      return 1;
+    }
+    return 0;
+  }
+
+  function scorePaymentRecord(payment) {
+    var item = payment || {};
+    var score = 0;
+    var paidAt = parseDate(item.paidAt);
+
+    score += getPaymentStatusRank(item.status) * 1000;
+    if (normalizePaymentReference(item)) {
+      score += 100;
+    }
+    if (cleanText(item.id)) {
+      score += 50;
+    }
+    if (Number.isFinite(Number(item.amount)) && Number(item.amount) > 0) {
+      score += 25;
+    }
+    if (paidAt) {
+      score += Math.floor(paidAt.getTime() / 1000000);
+    }
+
+    return score;
+  }
+
+  function dedupePayments(payments) {
+    var list = Array.isArray(payments) ? payments : [];
+    var indexByKey = {};
+    var result = [];
+
+    for (var i = 0; i < list.length; i += 1) {
+      var item = list[i] || {};
+      var refPart = normalizePaymentReference(item);
+      var stamp = cleanText(item.paidAt);
+      var plan = cleanText(item.planId || item.planName).toLowerCase();
+      var amount = String(Number(item.amount) || 0);
+      var actor = cleanText(item.actorRole || item.source).toLowerCase();
+      var key = refPart || [stamp, plan, amount, actor].join("|");
+
+      if (!key) {
+        continue;
+      }
+
+      var existingIndex = indexByKey[key];
+      if (typeof existingIndex !== "number") {
+        indexByKey[key] = result.length;
+        result.push(item);
+        continue;
+      }
+
+      var existing = result[existingIndex] || {};
+      var existingScore = scorePaymentRecord(existing);
+      var incomingScore = scorePaymentRecord(item);
+
+      if (incomingScore > existingScore) {
+        result[existingIndex] = item;
+      }
+    }
+
+    return result;
+  }
+
+  async function fetchInvoicePaymentsForStore(storeId) {
+    var id = cleanText(storeId);
+    if (!id) {
+      return [];
+    }
+
+    try {
+      var db = initDb();
+      var snap = await db
+        .collection(BILLING_INVOICES_COLLECTION)
+        .where("storeId", "==", id)
+        .limit(120)
+        .get();
+
+      if (snap.empty) {
+        return [];
+      }
+
+      return snap.docs
+        .map(function (doc) {
+          return normalizeInvoiceToPayment(doc.data() || {});
+        })
+        .filter(function (payment) {
+          return cleanText(payment && payment.status).toLowerCase() === "paid";
+        });
+    } catch (error) {
+      console.warn("[owner-admin/plans] failed to load billing_invoices:", error);
+      return [];
+    }
+  }
+
+  async function hydratePaymentHistoryFromInvoices(store) {
+    var safeStore = store || {};
+    var storeId = cleanText(safeStore.storeId);
+    if (!storeId || !activeStoreId || activeStoreId !== storeId) {
+      return;
+    }
+
+    var invoicePayments = await fetchInvoicePaymentsForStore(storeId);
+    if (!activeStoreId || activeStoreId !== storeId) {
+      return;
+    }
+
+    if (!invoicePayments.length) {
+      return;
+    }
+
+    var billingPayments = Array.isArray(safeStore.billing && safeStore.billing.payments)
+      ? safeStore.billing.payments
+      : [];
+    var merged = dedupePayments(billingPayments.concat(invoicePayments));
+    renderPaymentHistory(merged);
   }
 
   function closeModal() {
@@ -441,7 +608,7 @@
   }
 
   function renderPaymentHistory(payments) {
-    var list = Array.isArray(payments) ? payments.slice() : [];
+    var list = dedupePayments(Array.isArray(payments) ? payments : []);
     if (!list.length) {
       detailPaymentsBodyEl.innerHTML = '<tr><td colspan="6">Оплат ще немає.</td></tr>';
       return;
@@ -518,7 +685,7 @@
       return;
     }
 
-    var planId = cleanText(detailPlanSelectEl && detailPlanSelectEl.value).toLowerCase();
+    var planId = normalizePlanId(cleanText(detailPlanSelectEl && detailPlanSelectEl.value).toLowerCase());
     var plan = PLAN_CONFIG[planId];
     if (!plan) {
       setModalStatus("Оберіть коректний тариф.", "error");
@@ -597,7 +764,7 @@
       return;
     }
 
-    var prevPlanId = cleanText(store.billing && store.billing.currentPlanId).toLowerCase();
+    var prevPlanId = normalizePlanId(cleanText(store.billing && store.billing.currentPlanId).toLowerCase());
     var prevPlan = PLAN_CONFIG[prevPlanId] || null;
     var currentPayments = Array.isArray(store.billing && store.billing.payments) ? store.billing.payments : [];
     var nowIso = new Date().toISOString();
@@ -689,7 +856,7 @@
       : new Date(now);
     baseDate.setDate(baseDate.getDate() + days);
 
-    var prevPlanId = cleanText(store.billing && store.billing.currentPlanId).toLowerCase();
+    var prevPlanId = normalizePlanId(cleanText(store.billing && store.billing.currentPlanId).toLowerCase());
     var nextPlanId = PLAN_CONFIG[prevPlanId] ? prevPlanId : "starter";
 
     var grantRecord = {

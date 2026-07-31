@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Товар — Lavka Keramiky</title>
+<title>Товар</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="product.css?v=20260730a">
+<link rel="stylesheet" href="product.css?v=20260731c">
 </head>
 <body>
   <main class="product-page">
@@ -28,6 +28,11 @@
         <path d="M14 10a4 4 0 0 0-5.66 0l-2.83 2.83a4 4 0 1 0 5.66 5.66L13 17" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </button>
+
+    <p id="storeOrderStatusBadge" class="store-order-status" hidden>
+      <span class="store-order-status-dot" aria-hidden="true"></span>
+      Магазин тимчасово не приймає замовлення
+    </p>
 
     <section class="product-card" id="productCard">
       <div class="main-image-wrap">
@@ -118,7 +123,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
-<script src="firebase-sync.js?v=20260730c"></script>
-<script src="product.js?v=20260730a"></script>
+<script src="firebase-sync.js?v=20260731a"></script>
+<script src="product.js?v=20260731d"></script>
 </body>
 </html>

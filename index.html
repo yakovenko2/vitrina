@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lavka Keramiky — Вітрина товарів</title>
+<title>Вітрина товарів</title>
 <script>
   (function () {
     var host = String(window.location.hostname || "").toLowerCase();
@@ -29,7 +29,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20260730a">
+<link rel="stylesheet" href="style.css?v=20260731c">
 </head>
 <body>
   <main class="card">
@@ -58,6 +58,11 @@
       </div>
 
     </section>
+
+    <p id="storeOrderStatusBadge" class="store-order-status" hidden>
+      <span class="store-order-status-dot" aria-hidden="true"></span>
+      Магазин тимчасово не приймає замовлення
+    </p>
 
     <!-- Категорії -->
     <nav class="categories" aria-label="Категорії товарів"></nav>
@@ -125,7 +130,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
-<script src="firebase-sync.js?v=20260730c"></script>
-<script src="script.js?v=20260730a"></script>
+<script src="firebase-sync.js?v=20260731a"></script>
+<script src="script.js?v=20260731d"></script>
 </body>
 </html>

@@ -883,6 +883,27 @@
     }
   }
 
+  async function deleteQueryDocs(queryRef, chunkSize) {
+    var size = Number(chunkSize) > 0 ? Number(chunkSize) : 100;
+
+    while (true) {
+      var pageSnap = await queryRef.limit(size).get();
+      if (pageSnap.empty) {
+        break;
+      }
+
+      var batch = initDb().batch();
+      pageSnap.docs.forEach(function (doc) {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+
+      if (pageSnap.size < size) {
+        break;
+      }
+    }
+  }
+
   async function archiveClientBeforeDelete(db, storeId) {
     var safeStoreId = sanitizeStoreId(storeId);
     if (!safeStoreId) {
@@ -942,18 +963,46 @@
 
   async function deleteStoreAccount(storeId) {
     var db = initDb();
-    var storeRef = db.collection("stores").doc(storeId);
+    var safeStoreId = sanitizeStoreId(storeId);
+    if (!safeStoreId) {
+      throw new Error("invalid-store-id");
+    }
+
+    var storeRef = db.collection("stores").doc(safeStoreId);
     var dataCollectionRef = storeRef.collection("data");
 
-    await archiveClientBeforeDelete(db, storeId);
+    await archiveClientBeforeDelete(db, safeStoreId);
+
+    var snapshots = await Promise.all([
+      dataCollectionRef.doc("lavkaAuth").get().catch(function () { return null; }),
+      db.collection("store_subdomains").doc(safeStoreId).get().catch(function () { return null; }),
+      db.collection("stores_registry").doc(safeStoreId).get().catch(function () { return null; })
+    ]);
+
+    var authValue = (snapshots[0] && snapshots[0].exists ? snapshots[0].data() || {} : {}).value || {};
+    var subdomainValue = snapshots[1] && snapshots[1].exists ? snapshots[1].data() || {} : {};
+    var registryValue = snapshots[2] && snapshots[2].exists ? snapshots[2].data() || {} : {};
+    var normalizedIp = normalizeIp(
+      authValue.lastIpAddress
+      || authValue.ipAddress
+      || subdomainValue.lastIpAddress
+      || registryValue.lastIpAddress
+      || ""
+    );
 
     await deleteCollectionDocs(dataCollectionRef, 200);
 
     var batch = db.batch();
     batch.delete(storeRef);
-    batch.delete(db.collection("stores_registry").doc(storeId));
-    batch.delete(db.collection("store_subdomains").doc(storeId));
+    batch.delete(db.collection("stores_registry").doc(safeStoreId));
+    batch.delete(db.collection("store_subdomains").doc(safeStoreId));
+    batch.delete(db.collection("store_telegram").doc(safeStoreId));
+    if (normalizedIp) {
+      batch.delete(db.collection("blocked_ips").doc(encodeIpKey(normalizedIp)));
+    }
     await batch.commit();
+
+    await deleteQueryDocs(db.collection("billing_invoices").where("storeId", "==", safeStoreId), 200);
   }
 
   async function handleDeleteClick(storeId) {

@@ -386,6 +386,12 @@
       color: #46607f;
     }
 
+    .auth-card .status:empty {
+      margin-top: 0;
+      min-height: 0;
+      display: none;
+    }
+
     .status.error {
       color: #b33b47;
     }
@@ -395,12 +401,39 @@
     }
 
     .auth-time-note {
-      margin: 14px 0 0;
+      margin: 8px 0 0;
       text-align: center;
       color: rgba(72, 89, 112, 0.58);
       font-size: 12px;
       font-weight: 700;
       letter-spacing: 0.2px;
+    }
+
+    .auth-switch-note {
+      margin: 12px 0 0;
+      padding: 10px 12px;
+      border-radius: 11px;
+      border: 1px solid #dbe6f4;
+      background: linear-gradient(180deg, #f8fbff 0%, #f2f7ff 100%);
+      text-align: center;
+      font-size: 12.5px;
+      line-height: 1.4;
+      color: #5b6d84;
+      font-weight: 700;
+    }
+
+    .auth-switch-note a {
+      color: #2f74bd;
+      font-weight: 800;
+      text-decoration: none;
+      border-bottom: 1px solid rgba(47, 116, 189, 0.35);
+      transition: color 0.16s ease, border-color 0.16s ease;
+    }
+
+    .auth-switch-note a:hover,
+    .auth-switch-note a:focus-visible {
+      color: var(--blue-dark);
+      border-bottom-color: rgba(43, 109, 177, 0.6);
     }
 
     @media (min-width: 560px) {
@@ -495,12 +528,13 @@
         </div>
       </form>
       <p class="auth-time-note">Авторизація триває не більше 30 сек</p>
+      <p class="auth-switch-note">Немає акаунта? <a href="registration.html">Зареєструйтеся прямо зараз</a></p>
     </section>
   </div>
 
   <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-sync.js?v=20260730c"></script>
+  <script src="firebase-sync.js?v=20260731a"></script>
   <script>
     (function () {
       var AUTH_KEY = "lavkaAuth";

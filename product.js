@@ -166,27 +166,52 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
-  const canRemoveWatermark = () => {
-    let billing = null;
+  const readBilling = () => {
     try {
       const raw = localStorage.getItem("lavkaBilling");
-      billing = raw ? JSON.parse(raw) : null;
+      return raw ? JSON.parse(raw) : null;
     } catch {
-      billing = null;
+      return null;
     }
+  };
+
+  const canRemoveWatermark = () => {
+    const billing = readBilling();
     const planId = String(billing?.currentPlanId || "").trim().toLowerCase();
     if (planId !== "business" && planId !== "pro") return false;
     const until = new Date(billing?.validUntil || "");
     return Number.isFinite(until.getTime()) && until.getTime() > Date.now();
   };
 
+  const hasExpiredSubscription = () => {
+    const until = new Date(readBilling()?.validUntil || "");
+    if (!Number.isFinite(until.getTime())) return true;
+    return until.getTime() <= Date.now();
+  };
+
+  const ensureSiteWatermark = () => {
+    let watermark = document.querySelector(".site-watermark");
+    if (watermark) return watermark;
+
+    const mount = document.querySelector("main.product-page") || document.querySelector("main") || document.body;
+    if (!mount) return null;
+
+    watermark = document.createElement("footer");
+    watermark.className = "site-watermark";
+    watermark.innerHTML =
+      '<a class="site-watermark-link" href="landing.html" title="Створити власний магазин на Вітрина">'
+      + '<span class="site-watermark-text">Створено на <strong>Вітрина</strong></span>'
+      + '</a>';
+
+    mount.appendChild(watermark);
+    return watermark;
+  };
+
   const applyWatermarkVisibility = () => {
-    const watermark = document.querySelector(".site-watermark");
+    const watermark = ensureSiteWatermark();
     if (!watermark) return;
-    const settings = readSettings() || {};
-    const hide = Boolean(settings.hideWatermark) && canRemoveWatermark();
-    watermark.hidden = hide;
-    watermark.style.display = hide ? "none" : "";
+    watermark.hidden = false;
+    watermark.style.display = "";
   };
   applyWatermarkVisibility();
 
@@ -264,6 +289,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const savedSettings = readSettings();
   const activeCurrency = normalizeCurrencyCode(savedSettings?.currency || "uah");
+  const storeTitleName = String(savedSettings?.name || savedSettings?.storeName || "").trim();
   if (savedSettings) {
     const backgroundType = savedSettings.siteBackgroundType === "image" ? "image" : "color";
     const backgroundColor = isHexColor(savedSettings.siteBackgroundColor) ? savedSettings.siteBackgroundColor : "#eef1f4";
@@ -318,6 +344,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const productSizesList = document.getElementById("productSizesList");
   const productSizesHint = document.getElementById("productSizesHint");
   const productStockStatus = document.getElementById("productStockStatus");
+  const storeOrderStatusBadge = document.getElementById("storeOrderStatusBadge");
   const backToCategory = document.getElementById("backToCategory");
   const openCartLinkBtn = document.getElementById("openCartLinkBtn");
   const copyProductLinkBtn = document.getElementById("copyProductLinkBtn");
@@ -330,8 +357,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const productCartMinimumHint = document.getElementById("productCartMinimumHint");
   const productCheckoutCartBtn = document.getElementById("productCheckoutCartBtn");
   const productClearCartBtn = document.getElementById("productClearCartBtn");
+  const qtyInput = document.getElementById("qtyInput");
+  const minusQty = document.getElementById("minusQty");
+  const plusQty = document.getElementById("plusQty");
+  const addToCart = document.getElementById("addToCart");
 
   let selectedSize = "";
+  let isOrderingBlockedByPlanExpiry = false;
 
   const hasSizesEnabled = Boolean(product.isClothing && Array.isArray(product.sizes) && product.sizes.length);
 
@@ -393,6 +425,33 @@ document.addEventListener("DOMContentLoaded", () => {
     productCartOverlay.classList.toggle("open", open);
     productCartDrawer.setAttribute("aria-hidden", open ? "false" : "true");
     productCartOverlay.setAttribute("aria-hidden", open ? "false" : "true");
+  };
+
+  const syncOrderLockUi = () => {
+    isOrderingBlockedByPlanExpiry = hasExpiredSubscription();
+
+    if (storeOrderStatusBadge) {
+      storeOrderStatusBadge.hidden = !isOrderingBlockedByPlanExpiry;
+    }
+
+    if (openCartLinkBtn) {
+      openCartLinkBtn.disabled = isOrderingBlockedByPlanExpiry;
+      openCartLinkBtn.setAttribute("aria-disabled", isOrderingBlockedByPlanExpiry ? "true" : "false");
+    }
+
+    if (minusQty) {
+      minusQty.disabled = isOrderingBlockedByPlanExpiry;
+    }
+    if (plusQty) {
+      plusQty.disabled = isOrderingBlockedByPlanExpiry;
+    }
+    if (qtyInput) {
+      qtyInput.disabled = isOrderingBlockedByPlanExpiry;
+    }
+
+    if (isOrderingBlockedByPlanExpiry) {
+      setProductCartOpen(false);
+    }
   };
 
   const animateAddToCart = () => {
@@ -484,7 +543,10 @@ document.addEventListener("DOMContentLoaded", () => {
     productCartTotal.textContent = toCurrency(totalAmount);
 
     if (productCartMinimumHint) {
-      if (isMinimumActive && totalItems > 0 && !minimumReached) {
+      if (isOrderingBlockedByPlanExpiry) {
+        productCartMinimumHint.hidden = false;
+        productCartMinimumHint.textContent = "Магазин тимчасово не приймає замовлення: строк дії тарифу завершився.";
+      } else if (isMinimumActive && totalItems > 0 && !minimumReached) {
         productCartMinimumHint.hidden = false;
         productCartMinimumHint.textContent = `До мінімальної суми замовлення залишилось ${toCurrency(minimumLeft)}.`;
       } else {
@@ -495,7 +557,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (productCheckoutCartBtn) {
       const blockedByMinimum = totalItems > 0 && !minimumReached;
-      const shouldDisableCheckout = totalItems === 0 || blockedByMinimum;
+      const shouldDisableCheckout = totalItems === 0 || blockedByMinimum || isOrderingBlockedByPlanExpiry;
       productCheckoutCartBtn.disabled = shouldDisableCheckout;
       productCheckoutCartBtn.setAttribute("aria-disabled", shouldDisableCheckout ? "true" : "false");
     }
@@ -526,7 +588,9 @@ document.addEventListener("DOMContentLoaded", () => {
   productDescription.textContent = product.description;
   mainImage.src = product.images[0];
   mainImage.alt = product.name;
-  document.title = `${product.name} — Lavka Keramiky`;
+  document.title = storeTitleName
+    ? `${product.name} — ${storeTitleName}`
+    : product.name;
 
   if (mainImage) {
     mainImage.addEventListener("click", () => setPhotoFullscreenOpen(true));
@@ -559,6 +623,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (openCartLinkBtn) {
     openCartLinkBtn.addEventListener("click", () => {
+      if (isOrderingBlockedByPlanExpiry) {
+        renderProductCart();
+        return;
+      }
       renderProductCart();
       setProductCartOpen(true);
     });
@@ -627,6 +695,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (productCheckoutCartBtn) {
     productCheckoutCartBtn.addEventListener("click", () => {
+      if (isOrderingBlockedByPlanExpiry) {
+        renderProductCart();
+        return;
+      }
       const cartState = readCartState();
       if (!cartState.length) return;
 
@@ -671,13 +743,22 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  syncOrderLockUi();
   renderProductCart();
   renderProductCartBadge();
 
   window.addEventListener("storage", (event) => {
-    if (event.key !== CART_KEY) return;
-    renderProductCart();
-    renderProductCartBadge();
+    if (event.key === CART_KEY) {
+      renderProductCart();
+      renderProductCartBadge();
+      return;
+    }
+
+    if (event.key === "lavkaBilling") {
+      syncOrderLockUi();
+      renderProductCart();
+      renderStockStatus();
+    }
   });
 
   renderSizeOptions();
@@ -696,11 +777,6 @@ document.addEventListener("DOMContentLoaded", () => {
       renderStockStatus();
     });
   }
-
-  const qtyInput = document.getElementById("qtyInput");
-  const minusQty = document.getElementById("minusQty");
-  const plusQty = document.getElementById("plusQty");
-  const addToCart = document.getElementById("addToCart");
 
   const getAvailableStock = () => {
     if (hasSizesEnabled) {
@@ -727,11 +803,13 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    const disabled = overallOut || Boolean(selectedSizeOut);
+    const disabled = isOrderingBlockedByPlanExpiry || overallOut || Boolean(selectedSizeOut);
     if (addToCart) {
       addToCart.disabled = disabled;
       addToCart.setAttribute("aria-disabled", disabled ? "true" : "false");
-      if (disabled) {
+      if (isOrderingBlockedByPlanExpiry) {
+        addToCart.textContent = "Замовлення недоступні";
+      } else if (disabled) {
         addToCart.textContent = "Немає в наявності";
       } else if (!addToCart.classList.contains("added")) {
         addToCart.textContent = "Додати в кошик";
@@ -764,6 +842,10 @@ document.addEventListener("DOMContentLoaded", () => {
   renderStockStatus();
 
   addToCart.addEventListener("click", () => {
+    if (isOrderingBlockedByPlanExpiry) {
+      renderStockStatus();
+      return;
+    }
     if (product.stock <= 0) {
       return;
     }

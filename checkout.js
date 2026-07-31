@@ -98,6 +98,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const promoMessage = document.getElementById("promoMessage");
   const submitOrderBtn = document.getElementById("submitOrderBtn");
   const checkoutMessage = document.getElementById("checkoutMessage");
+  const checkoutOrderStatusBadge = document.getElementById("checkoutOrderStatusBadge");
   const checkoutCard = document.querySelector(".checkout-card");
 
   const readSettings = () => {
@@ -120,6 +121,21 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {
       return {};
     }
+  };
+
+  const readBilling = () => {
+    try {
+      const raw = localStorage.getItem("lavkaBilling");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const hasExpiredSubscription = () => {
+    const until = new Date(readBilling()?.validUntil || "");
+    if (!Number.isFinite(until.getTime())) return true;
+    return until.getTime() <= Date.now();
   };
 
   const normalizeCurrencyCode = (value) => {
@@ -284,8 +300,13 @@ document.addEventListener("DOMContentLoaded", () => {
     .replace(/'/g, "&#39;");
 
   let settings = readSettings();
+  const storeTitleName = String(settings?.name || settings?.storeName || "").trim();
+  document.title = storeTitleName
+    ? `Оформлення замовлення — ${storeTitleName}`
+    : "Оформлення замовлення";
   let cartState = readCart();
   let appliedPromo = null;
+  let isOrderingBlockedByPlanExpiry = false;
   let novaCitySearchTimer = null;
   let novaLastCities = [];
   let novaLastBranches = [];
@@ -1176,11 +1197,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const baseCheckoutEnabled = () => {
     const { totalItems } = getCartTotals();
-    return totalItems > 0 && shippingMethods.length > 0 && paymentMethods.length > 0;
+    return !isOrderingBlockedByPlanExpiry && totalItems > 0 && shippingMethods.length > 0 && paymentMethods.length > 0;
   };
 
   const updateAvailabilityMessage = () => {
     if (!checkoutMessage) return;
+
+    if (isOrderingBlockedByPlanExpiry) {
+      checkoutMessage.classList.add("error");
+      checkoutMessage.textContent = "Магазин тимчасово не приймає замовлення: строк дії тарифу завершився.";
+      return;
+    }
 
     if (baseCheckoutEnabled()) {
       if (checkoutMessage.classList.contains("error")) {
@@ -1213,6 +1240,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  const syncOrderLockUi = () => {
+    isOrderingBlockedByPlanExpiry = hasExpiredSubscription();
+    if (checkoutOrderStatusBadge) {
+      checkoutOrderStatusBadge.hidden = !isOrderingBlockedByPlanExpiry;
+    }
+  };
+
+  syncOrderLockUi();
   updateCheckoutSummary();
   renderCartSummary();
 
@@ -1308,6 +1343,17 @@ document.addEventListener("DOMContentLoaded", () => {
     checkoutForm.addEventListener("submit", (event) => {
       event.preventDefault();
 
+      syncOrderLockUi();
+
+      if (isOrderingBlockedByPlanExpiry) {
+        if (checkoutMessage) {
+          checkoutMessage.classList.add("error");
+          checkoutMessage.textContent = "Магазин тимчасово не приймає замовлення: строк дії тарифу завершився.";
+        }
+        updateSubmitState();
+        return;
+      }
+
       if (!baseCheckoutEnabled()) {
         return;
       }
@@ -1400,6 +1446,13 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   window.addEventListener("storage", (event) => {
+    if (event.key === "lavkaBilling") {
+      syncOrderLockUi();
+      updateSubmitState();
+      updateAvailabilityMessage();
+      return;
+    }
+
     if (event.key !== SETTINGS_KEY && event.key !== CHECKOUT_SETTINGS_KEY) return;
 
     const prevDelivery = String(checkoutForm?.querySelector('input[name="deliveryMethod"]:checked')?.value || "").trim();
@@ -1423,6 +1476,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const selectedDelivery = String(checkoutForm?.querySelector('input[name="deliveryMethod"]:checked')?.value || "").trim();
     setAddressView(selectedDelivery);
+    syncOrderLockUi();
     updateSubmitState();
     updateBankTransferInfo();
     updateAvailabilityMessage();
@@ -1445,6 +1499,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const selectedDelivery = String(checkoutForm?.querySelector('input[name="deliveryMethod"]:checked')?.value || "").trim();
     setAddressView(selectedDelivery);
+    syncOrderLockUi();
     updateSubmitState();
     updateBankTransferInfo();
     updateAvailabilityMessage();

@@ -23,6 +23,7 @@
  */
 
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { defineSecret } = require("firebase-functions/params");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const admin = require("firebase-admin");
@@ -36,6 +37,7 @@ const FieldValue = admin.firestore.FieldValue;
 const CLOUDFLARE_API_TOKEN = defineSecret("CLOUDFLARE_API_TOKEN");
 const CLOUDFLARE_ZONE_ID = defineSecret("CLOUDFLARE_ZONE_ID");
 const TELEGRAM_BOT_TOKEN = defineSecret("TELEGRAM_BOT_TOKEN");
+const MONO_X_TOKEN = defineSecret("MONO_X_TOKEN");
 
 // Хост, на який клієнти вказують CNAME свого домену.
 const CNAME_TARGET = "cname.vitryna-shop.com";
@@ -579,6 +581,689 @@ exports.notifyOrder = onRequest(
     } catch (error) {
       console.error("notifyOrder error:", error);
       res.status(500).json({ ok: false, error: "internal" });
+    }
+  }
+);
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Monobank acquiring: оплата тарифів
+ * ──────────────────────────────────────────────────────────────────────── */
+
+const MONO_API_BASE = "https://api.monobank.ua";
+const MONO_CCY_UAH = 980;
+const BILLING_INVOICES_COLLECTION = "billing_invoices";
+const BILLING_KEY = "lavkaBilling";
+const TARIFF_PLANS = {
+  start: {
+    id: "start",
+    name: "Старт",
+    amountKop: 10900,
+    periodMonths: 1,
+    code: "tariff_start_1m"
+  },
+  business: {
+    id: "business",
+    name: "Бізнес",
+    amountKop: 20900,
+    periodMonths: 1,
+    code: "tariff_business_1m"
+  },
+  pro: {
+    id: "pro",
+    name: "Про",
+    amountKop: 44900,
+    periodMonths: 1,
+    code: "tariff_pro_1m"
+  }
+};
+
+const sanitizeStoreIdStrict = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "")
+    .slice(0, 64);
+
+const sanitizeUserIdentity = (value) => String(value || "").trim().slice(0, 160);
+
+const normalizeTariffId = (value) => String(value || "").trim().toLowerCase();
+
+const sanitizeReturnBaseUrl = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    const protocol = String(url.protocol || "").toLowerCase();
+    const isLocalhost = ["localhost", "127.0.0.1"].includes(String(url.hostname || "").toLowerCase());
+    if (protocol === "https:" || (isLocalhost && protocol === "http:")) {
+      url.hash = "";
+      url.search = "";
+      return url.toString().replace(/\/$/, "");
+    }
+  } catch (error) {
+    return "";
+  }
+  return "";
+};
+
+const buildPaymentUrls = (baseUrl) => {
+  const normalizedBase = sanitizeReturnBaseUrl(baseUrl);
+  const fallback = "https://lavka-shop.web.app";
+  const origin = normalizedBase || fallback;
+  return {
+    redirectUrl: `${origin}/admin.html#/billing?payment=processing`,
+    successUrl: `${origin}/admin.html#/billing?payment=success`,
+    failUrl: `${origin}/admin.html#/billing?payment=fail`
+  };
+};
+
+const toSafeMonoError = async (response) => {
+  let details = "";
+  try {
+    const payload = await response.json();
+    details = payload && (payload.errText || payload.errorDescription || payload.message || "");
+  } catch (error) {
+    details = "";
+  }
+  return `${response.status}${details ? `:${details}` : ""}`;
+};
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+
+const monoRequest = async (path, token, options = {}) => {
+  const maxAttempts = 4;
+  const baseDelayMs = 350;
+  let attempt = 0;
+
+  while (attempt < maxAttempts) {
+    attempt += 1;
+    const response = await fetch(`${MONO_API_BASE}${path}`, {
+      ...options,
+      headers: {
+        "X-Token": token,
+        "Content-Type": "application/json",
+        ...(options.headers || {})
+      }
+    });
+
+    if (response.ok) {
+      return response.json();
+    }
+
+    const shouldRetry = response.status === 429 || response.status >= 500;
+    if (!shouldRetry || attempt >= maxAttempts) {
+      const detail = await toSafeMonoError(response);
+      const error = new Error(`mono-request-failed:${detail}`);
+      error.httpStatus = response.status;
+      throw error;
+    }
+
+    const jitter = Math.floor(Math.random() * 120);
+    const delayMs = baseDelayMs * (2 ** (attempt - 1)) + jitter;
+    await sleep(delayMs);
+  }
+
+  throw new Error("mono-request-failed:retry-exhausted");
+};
+
+const parseMonoModifiedDate = (value) => {
+  const asNumber = Number(value);
+  if (Number.isFinite(asNumber)) {
+    // Monobank may send unix time in seconds; normalize to milliseconds.
+    return asNumber > 0 && asNumber < 1e12 ? asNumber * 1000 : asNumber;
+  }
+  const asDate = new Date(value || "");
+  const time = asDate.getTime();
+  return Number.isFinite(time) ? time : 0;
+};
+
+const createTariffReference = (storeId) => {
+  const randomPart = Math.random().toString(36).slice(2, 9);
+  return `tariff_${storeId}_${Date.now()}_${randomPart}`;
+};
+
+const addMonthsIso = (baseDate, months) => {
+  const base = new Date(baseDate || Date.now());
+  base.setMonth(base.getMonth() + Math.max(1, Number(months) || 1));
+  return base.toISOString();
+};
+
+const readBillingForStore = async (storeId) => {
+  const snap = await db.collection("stores").doc(storeId).collection("data").doc(BILLING_KEY).get();
+  const payload = snap.exists ? (snap.data() || {}) : {};
+  const value = payload && payload.value && typeof payload.value === "object" ? payload.value : {};
+  const payments = Array.isArray(value.payments) ? value.payments.filter((item) => item && typeof item === "object") : [];
+  return {
+    currentPlanId: String(value.currentPlanId || ""),
+    validUntil: String(value.validUntil || ""),
+    trial: Boolean(value.trial),
+    trialStartedAt: String(value.trialStartedAt || ""),
+    payments
+  };
+};
+
+const writeBillingForStore = async (storeId, billingValue) => {
+  const payload = {
+    key: BILLING_KEY,
+    value: billingValue,
+    updatedAt: new Date().toISOString()
+  };
+
+  await db.collection("stores").doc(storeId).collection("data").doc(BILLING_KEY).set(payload, { merge: true });
+};
+
+const activateTariffForStore = async ({ storeId, invoiceId, tariff, amountKop }) => {
+  const billing = await readBillingForStore(storeId);
+  const existingPayment = (billing.payments || []).find((item) => {
+    const ref = String(item && item.reference || "").trim();
+    const id = String(item && item.id || "").trim();
+    return ref === String(invoiceId) || id === `mono-${invoiceId}`;
+  });
+
+  // Idempotency guard: if this invoice was already applied, do nothing.
+  if (existingPayment) {
+    return;
+  }
+
+  const nowIso = new Date().toISOString();
+  const currentUntil = new Date(billing.validUntil || "");
+  const isCurrentActive = Number.isFinite(currentUntil.getTime()) && currentUntil.getTime() > Date.now();
+  const baseDate = isCurrentActive ? currentUntil : new Date();
+  const nextValidUntil = addMonthsIso(baseDate, tariff.periodMonths);
+
+  const payment = {
+    id: `mono-${invoiceId}`,
+    planId: tariff.id,
+    planName: tariff.name,
+    amount: Math.round((Number(amountKop) || 0) / 100),
+    periodMonths: tariff.periodMonths,
+    paidAt: nowIso,
+    actorRole: "user",
+    source: "monobank-acquiring",
+    reference: invoiceId
+  };
+
+  const nextBilling = {
+    currentPlanId: tariff.id,
+    validUntil: nextValidUntil,
+    trial: false,
+    trialStartedAt: billing.trialStartedAt || "",
+    payments: [payment, ...billing.payments].slice(0, 40)
+  };
+
+  await writeBillingForStore(storeId, nextBilling);
+};
+
+const resolveWebhookUrl = () => "https://us-central1-lavka-shop.cloudfunctions.net/monoTariffWebhook";
+
+exports.createTariffInvoice = onRequest(
+  { secrets: [MONO_X_TOKEN], cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
+    if (req.method !== "POST") {
+      res.status(405).json({ ok: false, error: "method-not-allowed" });
+      return;
+    }
+
+    const token = MONO_X_TOKEN.value();
+    if (!token) {
+      res.status(500).json({ ok: false, error: "mono-token-missing" });
+      return;
+    }
+
+    const tariffId = normalizeTariffId(req.body && req.body.tariffId);
+    const storeId = sanitizeStoreIdStrict(req.body && req.body.storeId);
+    const userId = sanitizeUserIdentity((req.body && req.body.userId) || (req.body && req.body.email));
+    const returnBaseUrl = sanitizeReturnBaseUrl(req.body && req.body.returnBaseUrl);
+    const withAppUrl = Boolean(req.body && req.body.withAppUrl);
+
+    const tariff = TARIFF_PLANS[tariffId] || null;
+    if (!tariff) {
+      res.status(400).json({ ok: false, error: "invalid-tariff" });
+      return;
+    }
+
+    if (!storeId) {
+      res.status(400).json({ ok: false, error: "invalid-store-id" });
+      return;
+    }
+
+    try {
+      const storeSnap = await db.collection("stores_registry").doc(storeId).get();
+      if (!storeSnap.exists) {
+        res.status(404).json({ ok: false, error: "store-not-found" });
+        return;
+      }
+
+      const urls = buildPaymentUrls(returnBaseUrl);
+      const reference = createTariffReference(storeId);
+      const nowMs = Date.now();
+      const validitySec = 3600;
+      const expiresAtMs = nowMs + validitySec * 1000;
+      const commentUser = userId ? ` для ${userId}` : "";
+
+      const body = {
+        amount: tariff.amountKop,
+        ccy: MONO_CCY_UAH,
+        merchantPaymInfo: {
+          reference,
+          destination: `Оплата тарифу \u00ab${tariff.name}\u00bb`,
+          comment: `Оплата тарифу \u00ab${tariff.name}\u00bb${commentUser}`,
+          basketOrder: [
+            {
+              code: tariff.code,
+              name: `Тариф ${tariff.name} (${tariff.periodMonths} міс.)`,
+              qty: 1,
+              sum: tariff.amountKop,
+              total: tariff.amountKop,
+              unit: "шт."
+            }
+          ]
+        },
+        redirectUrl: urls.redirectUrl,
+        successUrl: urls.successUrl,
+        failUrl: urls.failUrl,
+        webHookUrl: resolveWebhookUrl(),
+        validity: validitySec,
+        paymentType: "debit",
+        withAppUrl
+      };
+
+      const monoPayload = await monoRequest("/api/merchant/invoice/create", token, {
+        method: "POST",
+        body: JSON.stringify(body)
+      });
+
+      const invoiceId = String(monoPayload && monoPayload.invoiceId || "").trim();
+      const pageUrl = String(monoPayload && monoPayload.pageUrl || "").trim();
+      const appUrl = String(monoPayload && monoPayload.appUrl || "").trim();
+
+      if (!invoiceId || !pageUrl) {
+        res.status(500).json({ ok: false, error: "mono-invalid-response" });
+        return;
+      }
+
+      const invoiceDoc = {
+        invoiceId,
+        reference,
+        storeId,
+        userId,
+        tariffId: tariff.id,
+        tariffName: tariff.name,
+        periodMonths: tariff.periodMonths,
+        amountKop: tariff.amountKop,
+        ccy: MONO_CCY_UAH,
+        status: "created",
+        monoStatus: "created",
+        modifiedDate: 0,
+        createdAtMs: nowMs,
+        pageUrl,
+        appUrl,
+        validitySec,
+        expiresAtMs,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+
+      await db.collection(BILLING_INVOICES_COLLECTION).doc(invoiceId).set(invoiceDoc, { merge: true });
+
+      res.status(200).json({
+        ok: true,
+        invoiceId,
+        pageUrl,
+        appUrl: appUrl || ""
+      });
+    } catch (error) {
+      console.error("createTariffInvoice error:", error);
+      const status = Number(error && error.httpStatus) || 500;
+      if (status === 400) {
+        res.status(400).json({ ok: false, error: "mono-bad-request" });
+        return;
+      }
+      if (status === 403) {
+        res.status(500).json({ ok: false, error: "mono-invalid-token" });
+        return;
+      }
+      if (status === 404) {
+        res.status(404).json({ ok: false, error: "mono-entity-not-found" });
+        return;
+      }
+      if (status === 429) {
+        res.status(429).json({ ok: false, error: "mono-rate-limit" });
+        return;
+      }
+      res.status(500).json({ ok: false, error: "internal" });
+    }
+  }
+);
+
+const verifyInvoiceWithMono = async (token, invoiceId) => {
+  try {
+    const payload = await monoRequest(`/api/merchant/invoice/status?invoiceId=${encodeURIComponent(invoiceId)}`, token, {
+      method: "GET"
+    });
+    return {
+      verified: true,
+      payload
+    };
+  } catch (error) {
+    console.error("verifyInvoiceWithMono error:", error);
+    return {
+      verified: false,
+      payload: null
+    };
+  }
+};
+
+const applyMonoInvoiceStatus = async (webhookPayload, monoStatusPayload, tokenPresent) => {
+  const source = (monoStatusPayload && typeof monoStatusPayload === "object") ? monoStatusPayload : webhookPayload;
+  const invoiceId = String(source && source.invoiceId || "").trim();
+  if (!invoiceId) return;
+
+  const modifiedDate = parseMonoModifiedDate(source.modifiedDate || source.createdDate || Date.now());
+  const status = String(source.status || webhookPayload.status || "").trim().toLowerCase();
+
+  const invoiceRef = db.collection(BILLING_INVOICES_COLLECTION).doc(invoiceId);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(invoiceRef);
+    if (!snap.exists) return;
+
+    const data = snap.data() || {};
+    const previousModifiedDate = Number(data.modifiedDate) || 0;
+    if (modifiedDate <= previousModifiedDate) {
+      return;
+    }
+
+    tx.set(invoiceRef, {
+      monoStatus: status || String(data.monoStatus || "created"),
+      status: status || String(data.status || "created"),
+      modifiedDate,
+      rawLastWebhook: webhookPayload,
+      rawLastStatus: monoStatusPayload || null,
+      verifiedByStatusApi: Boolean(tokenPresent && monoStatusPayload),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    const shouldActivate = status === "success" && !Boolean(data.activatedAt);
+    if (!shouldActivate) {
+      return;
+    }
+
+    const storeId = sanitizeStoreIdStrict(data.storeId);
+    const tariff = TARIFF_PLANS[normalizeTariffId(data.tariffId)] || null;
+    if (!storeId || !tariff) {
+      return;
+    }
+
+    tx.set(invoiceRef, {
+      activatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      activatedStatus: "queued"
+    }, { merge: true });
+  });
+
+  const latestSnap = await invoiceRef.get();
+  if (!latestSnap.exists) return;
+  const latestData = latestSnap.data() || {};
+  const shouldActivateNow = String(latestData.status || "").toLowerCase() === "success"
+    && Boolean(latestData.activatedAt)
+    && String(latestData.activatedStatus || "").toLowerCase() !== "done";
+  if (!shouldActivateNow) return;
+
+  const storeId = sanitizeStoreIdStrict(latestData.storeId);
+  const tariff = TARIFF_PLANS[normalizeTariffId(latestData.tariffId)] || null;
+  if (!storeId || !tariff) return;
+
+  try {
+    await activateTariffForStore({
+      storeId,
+      invoiceId,
+      tariff,
+      amountKop: Number(latestData.amountKop) || tariff.amountKop
+    });
+
+    await invoiceRef.set({
+      activatedStatus: "done",
+      activatedDoneAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  } catch (error) {
+    console.error("activateTariffForStore error:", error);
+    await invoiceRef.set({
+      activatedStatus: "failed",
+      activationError: String(error && error.message || "activation-failed").slice(0, 500),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  }
+};
+
+exports.monoTariffWebhook = onRequest(
+  { secrets: [MONO_X_TOKEN], cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
+    if (req.method !== "POST") {
+      res.status(405).json({ ok: false, error: "method-not-allowed" });
+      return;
+    }
+
+    const webhookPayload = req.body && typeof req.body === "object" ? req.body : {};
+    const invoiceId = String(webhookPayload.invoiceId || "").trim();
+    if (!invoiceId) {
+      res.status(200).send("ok");
+      return;
+    }
+
+    try {
+      const token = MONO_X_TOKEN.value();
+      const monoStatusResult = token ? await verifyInvoiceWithMono(token, invoiceId) : { verified: false, payload: null };
+
+      await applyMonoInvoiceStatus(
+        webhookPayload,
+        monoStatusResult.verified ? monoStatusResult.payload : null,
+        Boolean(token)
+      );
+      res.status(200).send("ok");
+    } catch (error) {
+      console.error("monoTariffWebhook error:", error);
+      // Return 200 to avoid aggressive retries; reconciliation job will recover state.
+      res.status(200).send("ok");
+    }
+  }
+);
+
+exports.getTariffInvoiceStatus = onRequest(
+  { cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
+    if (req.method !== "GET") {
+      res.status(405).json({ ok: false, error: "method-not-allowed" });
+      return;
+    }
+
+    const invoiceId = String((req.query && req.query.invoiceId) || "").trim();
+    if (!invoiceId) {
+      res.status(400).json({ ok: false, error: "invoice-id-required" });
+      return;
+    }
+
+    try {
+      const snap = await db.collection(BILLING_INVOICES_COLLECTION).doc(invoiceId).get();
+      if (!snap.exists) {
+        res.status(404).json({ ok: false, error: "not-found" });
+        return;
+      }
+
+      const data = snap.data() || {};
+      res.status(200).json({
+        ok: true,
+        invoiceId,
+        status: String(data.status || "created"),
+        monoStatus: String(data.monoStatus || "created"),
+        modifiedDate: Number(data.modifiedDate) || 0,
+        activatedStatus: String(data.activatedStatus || ""),
+        tariffId: String(data.tariffId || ""),
+        amountKop: Number(data.amountKop) || 0
+      });
+    } catch (error) {
+      console.error("getTariffInvoiceStatus error:", error);
+      res.status(500).json({ ok: false, error: "internal" });
+    }
+  }
+);
+
+exports.reconcileStoreTariffInvoices = onRequest(
+  { secrets: [MONO_X_TOKEN], cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
+    if (req.method !== "POST") {
+      res.status(405).json({ ok: false, error: "method-not-allowed" });
+      return;
+    }
+
+    const token = MONO_X_TOKEN.value();
+    if (!token) {
+      res.status(500).json({ ok: false, error: "mono-token-missing" });
+      return;
+    }
+
+    const storeId = sanitizeStoreIdStrict(req.body && req.body.storeId);
+    if (!storeId) {
+      res.status(400).json({ ok: false, error: "invalid-store-id" });
+      return;
+    }
+
+    try {
+      const snap = await db
+        .collection(BILLING_INVOICES_COLLECTION)
+        .where("storeId", "==", storeId)
+        .where("status", "==", "created")
+        .limit(20)
+        .get();
+
+      if (snap.empty) {
+        res.status(200).json({ ok: true, processed: 0 });
+        return;
+      }
+
+      let processed = 0;
+      for (const docSnap of snap.docs) {
+        const data = docSnap.data() || {};
+        const invoiceId = String(data.invoiceId || docSnap.id || "").trim();
+        if (!invoiceId) continue;
+
+        try {
+          const monoStatusPayload = await monoRequest(`/api/merchant/invoice/status?invoiceId=${encodeURIComponent(invoiceId)}`, token, {
+            method: "GET"
+          });
+
+          await applyMonoInvoiceStatus(
+            { invoiceId, source: "manual-reconcile" },
+            monoStatusPayload,
+            true
+          );
+          processed += 1;
+        } catch (error) {
+          console.error("reconcileStoreTariffInvoices item error:", invoiceId, error);
+        }
+      }
+
+      res.status(200).json({ ok: true, processed });
+    } catch (error) {
+      console.error("reconcileStoreTariffInvoices error:", error);
+      res.status(500).json({ ok: false, error: "internal" });
+    }
+  }
+);
+
+exports.expireMonoTariffInvoices = onSchedule(
+  {
+    schedule: "every 15 minutes",
+    timeZone: "Europe/Kyiv"
+  },
+  async () => {
+    const nowMs = Date.now();
+    const snap = await db
+      .collection(BILLING_INVOICES_COLLECTION)
+      .where("status", "==", "created")
+      .where("expiresAtMs", "<=", nowMs)
+      .limit(200)
+      .get();
+
+    if (snap.empty) {
+      return;
+    }
+
+    const batch = db.batch();
+    snap.docs.forEach((docSnap) => {
+      batch.set(docSnap.ref, {
+        status: "expired",
+        monoStatus: "expired",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        modifiedDate: nowMs
+      }, { merge: true });
+    });
+
+    await batch.commit();
+  }
+);
+
+exports.reconcileMonoTariffInvoices = onSchedule(
+  {
+    schedule: "every 10 minutes",
+    timeZone: "Europe/Kyiv",
+    secrets: [MONO_X_TOKEN]
+  },
+  async () => {
+    const token = MONO_X_TOKEN.value();
+    if (!token) {
+      return;
+    }
+
+    const nowMs = Date.now();
+    const snap = await db
+      .collection(BILLING_INVOICES_COLLECTION)
+      .where("status", "==", "created")
+      .where("expiresAtMs", ">", nowMs)
+      .limit(60)
+      .get();
+
+    if (snap.empty) {
+      return;
+    }
+
+    for (const docSnap of snap.docs) {
+      const data = docSnap.data() || {};
+      const invoiceId = String(data.invoiceId || docSnap.id || "").trim();
+      if (!invoiceId) continue;
+
+      try {
+        const monoStatusPayload = await monoRequest(`/api/merchant/invoice/status?invoiceId=${encodeURIComponent(invoiceId)}`, token, {
+          method: "GET"
+        });
+
+        await applyMonoInvoiceStatus(
+          { invoiceId, source: "scheduler-reconcile" },
+          monoStatusPayload,
+          true
+        );
+      } catch (error) {
+        console.error("reconcileMonoTariffInvoices item error:", invoiceId, error);
+      }
     }
   }
 );

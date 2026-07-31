@@ -38,6 +38,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const TELEGRAM_ADMIN_SUBSCRIBER_KEY = "lavkaTelegramAdminSubscriberId";
   const ADMIN_ACTIVE_SECTION_KEY = "lavkaAdminActiveSection";
   const TELEGRAM_BOT_USERNAME = "lavkaorders_bot";
+  const SUPPORT_TELEGRAM_URL = "https://t.me/vitryna_manager";
   const FUNCTIONS_REGION = "us-central1";
   const FIREBASE_CONFIG = {
     apiKey: "<SECRET>",
@@ -625,6 +626,11 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      if (item.dataset.section === "support") {
+        window.location.href = SUPPORT_TELEGRAM_URL;
+        return;
+      }
+
       if (isSectionLocked(item.dataset.section)) {
         notifyPlanRestriction(item.dataset.section);
         activateSection("billing");
@@ -761,6 +767,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (event.key === REGISTRATION_KEY || event.key === SETTINGS_KEY) {
       applyStorefrontContextUi();
+      updateAdminDocumentTitle();
     }
   });
 
@@ -804,6 +811,25 @@ document.addEventListener("DOMContentLoaded", () => {
     const callable = functionsClient.httpsCallable(name);
     const response = await callable(payload || {});
     return (response && response.data) || {};
+  };
+
+  const reconcileTariffInvoicesForCurrentStore = async () => {
+    const authState = readAuthState();
+    const storeContext = getCurrentStoreContext();
+    const storeId = sanitizeStoreId(authState?.storeId || storeContext?.subdomain || "") || "default-store";
+    if (!storeId || storeId === "default-store") {
+      return;
+    }
+
+    try {
+      await fetch("https://us-central1-lavka-shop.cloudfunctions.net/reconcileStoreTariffInvoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storeId })
+      });
+    } catch (error) {
+      console.warn("reconcileTariffInvoicesForCurrentStore error:", error);
+    }
   };
 
   const applyDomainResult = (result) => {
@@ -1164,6 +1190,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const ordersBulkDelete = document.getElementById("ordersBulkDelete");
   const ordersBulkClear = document.getElementById("ordersBulkClear");
   const ordersNewBadge = document.getElementById("ordersNewBadge");
+  const ordersKpiCards = Array.from(document.querySelectorAll(".orders-kpi-card"));
+  const ordersKpiNewToday = document.getElementById("ordersKpiNewToday");
+  const ordersKpiProcessing = document.getElementById("ordersKpiProcessing");
+  const ordersKpiShipped = document.getElementById("ordersKpiShipped");
   const orderDetailsModal = document.getElementById("orderDetailsModal");
   const closeOrderDetailsModal = document.getElementById("closeOrderDetailsModal");
   const orderUpdateForm = document.getElementById("orderUpdateForm");
@@ -1298,6 +1328,33 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {
       return null;
     }
+  };
+
+  const getAdminStoreNameForTitle = () => {
+    const settings = readSettings() || {};
+    const registration = readJsonFromStorage(REGISTRATION_KEY) || {};
+    const authState = readAuthState();
+
+    const candidates = [
+      settings.name,
+      settings.storeName,
+      registration.storeName,
+      authState?.storeName
+    ];
+
+    for (let index = 0; index < candidates.length; index += 1) {
+      const value = String(candidates[index] || "").trim();
+      if (value) {
+        return value;
+      }
+    }
+
+    return "";
+  };
+
+  const updateAdminDocumentTitle = (explicitName) => {
+    const resolvedName = String(explicitName || "").trim() || getAdminStoreNameForTitle();
+    document.title = resolvedName ? `${resolvedName} Admin` : "Admin";
   };
 
   const MATRIX_DELIVERY_IDS = [
@@ -2252,7 +2309,7 @@ document.addEventListener("DOMContentLoaded", () => {
           badge = document.createElement("span");
           badge.className = "plan-lock-badge";
           badge.setAttribute("aria-hidden", "true");
-          badge.textContent = "🔒";
+          badge.innerHTML = '<svg class="plan-lock-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7 10V8a5 5 0 0 1 10 0v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><rect x="5" y="10" width="14" height="10" rx="3" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="15" r="1.2" fill="currentColor"/><path d="M12 16.2v1.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
           item.append(badge);
         }
         item.setAttribute("aria-disabled", "true");
@@ -2314,12 +2371,17 @@ document.addEventListener("DOMContentLoaded", () => {
   const renderBillingSection = () => {
     const billing = readBilling();
     const currentPlan = BILLING_PLANS.find((plan) => plan.id === billing.currentPlanId) || null;
+    const hasActiveSubscription = isSubscriptionActive();
+
+    if (!hasActiveSubscription) {
+      void reconcileTariffInvoicesForCurrentStore();
+    }
 
     if (billingCurrentPlanName) {
-      const trialLabel = billing.trial && isSubscriptionActive() ? " (пробний)" : "";
-      billingCurrentPlanName.textContent = currentPlan
-        ? `${currentPlan.name}${trialLabel}`
-        : (billing.trial ? `Про${trialLabel}` : "Без тарифу");
+      const trialLabel = billing.trial && hasActiveSubscription ? " (пробний)" : "";
+      billingCurrentPlanName.textContent = hasActiveSubscription
+        ? (currentPlan ? `${currentPlan.name}${trialLabel}` : (billing.trial ? `Про${trialLabel}` : "Прострочено"))
+        : "Прострочено";
     }
 
     if (billingValidUntil) {
@@ -2327,7 +2389,19 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (billingTrialBanner) {
-      if (isSubscriptionExpired()) {
+      const paymentStatus = String(new URLSearchParams(window.location.search).get("payment") || "").trim().toLowerCase();
+      if (paymentStatus === "success") {
+        void reconcileTariffInvoicesForCurrentStore();
+        billingTrialBanner.hidden = false;
+        billingTrialBanner.className = "billing-trial-banner active";
+        billingTrialBanner.innerHTML =
+          "<strong>Оплату отримано.</strong> Тариф оновлюється, зачекайте кілька секунд і оновіть сторінку.";
+      } else if (paymentStatus === "fail") {
+        billingTrialBanner.hidden = false;
+        billingTrialBanner.className = "billing-trial-banner expired";
+        billingTrialBanner.innerHTML =
+          "<strong>Оплата не завершена.</strong> Спробуйте ще раз або оберіть інший спосіб оплати.";
+      } else if (isSubscriptionExpired()) {
         billingTrialBanner.hidden = false;
         billingTrialBanner.className = "billing-trial-banner expired";
         billingTrialBanner.innerHTML =
@@ -2407,45 +2481,74 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!selectedPlan) return;
 
     const confirmed = window.confirm(
-      `Підтвердьте оплату тарифу ${selectedPlan.name} на ${selectedPlan.periodMonths} міс. за ${formatNumber(selectedPlan.price)} ${getCurrencyLabel(getCurrentCurrency())}.`
+      `Переходимо до оплати Monobank: тариф ${selectedPlan.name}, ${selectedPlan.periodMonths} міс., ${formatNumber(selectedPlan.price)} ${getCurrencyLabel(getCurrentCurrency())}. Продовжити?`
     );
     if (!confirmed) return;
 
-    const billing = readBilling();
-    const now = new Date();
-    const nowIso = now.toISOString();
-    const baseDate = billing.validUntil && new Date(billing.validUntil) > now
-      ? new Date(billing.validUntil)
-      : new Date(now);
+    const authState = readAuthState();
+    const storeContext = getCurrentStoreContext();
+    const storeId = sanitizeStoreId(authState?.storeId || storeContext?.subdomain || "") || "default-store";
+    if (!storeId || storeId === "default-store") {
+      window.alert("Не вдалося визначити магазин для оплати. Увійдіть повторно в адмінку.");
+      return;
+    }
 
-    baseDate.setMonth(baseDate.getMonth() + selectedPlan.periodMonths);
+    const userId = String(authState?.phone || authState?.storeId || storeId).trim();
+    const createInvoiceUrl = "https://us-central1-lavka-shop.cloudfunctions.net/createTariffInvoice";
 
-    const payment = {
-      id: `pay-${Date.now()}`,
-      planId: selectedPlan.id,
-      planName: selectedPlan.name,
-      amount: selectedPlan.price,
-      periodMonths: selectedPlan.periodMonths,
-      paidAt: nowIso,
-      actorRole: "user",
-      source: "store-admin-self-service"
-    };
+    const payButtons = billingPlansGrid
+      ? Array.from(billingPlansGrid.querySelectorAll(".billing-pay-btn"))
+      : [];
 
-    const nextBilling = {
-      currentPlanId: selectedPlan.id,
-      validUntil: baseDate.toISOString(),
-      trial: false,
-      trialStartedAt: billing.trialStartedAt || "",
-      payments: [payment, ...billing.payments].slice(0, 30)
-    };
+    payButtons.forEach((button) => {
+      button.disabled = true;
+      button.setAttribute("aria-disabled", "true");
+    });
 
-    saveBilling(nextBilling);
-    renderBillingSection();
-    refreshPlanLocks();
-    syncWatermarkControl();
-    updateProductLimitBadge();
-    updateCategoryLimitBadge();
-    updateProductPhotoPolicyUi();
+    fetch(createInvoiceUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tariffId: selectedPlan.id,
+        storeId,
+        userId,
+        returnBaseUrl: window.location.origin
+      })
+    })
+      .then(async (response) => {
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch {
+          payload = null;
+        }
+
+        if (!response.ok || !payload?.ok || !payload?.pageUrl) {
+          const errorCode = String(payload?.error || "payment-create-failed");
+          throw new Error(errorCode);
+        }
+
+        window.location.href = String(payload.pageUrl);
+      })
+      .catch((error) => {
+        console.error("createTariffInvoice error:", error);
+        const code = String(error?.message || "payment-create-failed");
+        if (code === "mono-rate-limit") {
+          window.alert("Забагато запитів до платіжного сервісу. Спробуйте ще раз за хвилину.");
+          return;
+        }
+        if (code === "mono-invalid-token") {
+          window.alert("Платіжний сервіс тимчасово недоступний. Зверніться до підтримки.");
+          return;
+        }
+        window.alert("Не вдалося створити рахунок для оплати. Спробуйте ще раз.");
+      })
+      .finally(() => {
+        payButtons.forEach((button) => {
+          button.disabled = false;
+          button.setAttribute("aria-disabled", "false");
+        });
+      });
   };
 
   const generatePromoCode = (charset = "letters", length = 8) => {
@@ -2700,6 +2803,59 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  const isSameCalendarDay = (isoLikeValue, dateValue) => {
+    const parsed = new Date(isoLikeValue);
+    if (Number.isNaN(parsed.getTime())) return false;
+    return parsed.getFullYear() === dateValue.getFullYear()
+      && parsed.getMonth() === dateValue.getMonth()
+      && parsed.getDate() === dateValue.getDate();
+  };
+
+  const updateOrdersKpiCards = (allOrders) => {
+    if (!ordersKpiCards.length) return;
+    const now = new Date();
+    const list = Array.isArray(allOrders) ? allOrders : [];
+
+    const newTodayCount = list.reduce((count, order) => {
+      const status = String(order?.status || "").trim().toLowerCase();
+      const createdSource = order?.createdAt || order?.updatedAt;
+      return status.includes("нов") && isSameCalendarDay(createdSource, now) ? count + 1 : count;
+    }, 0);
+
+    const processingCount = list.reduce((count, order) => {
+      const status = String(order?.status || "").trim().toLowerCase();
+      return status.includes("оброб") ? count + 1 : count;
+    }, 0);
+
+    const shippedCount = list.reduce((count, order) => {
+      const status = String(order?.status || "").trim().toLowerCase();
+      return status.includes("відправ") ? count + 1 : count;
+    }, 0);
+
+    if (ordersKpiNewToday) {
+      ordersKpiNewToday.textContent = String(newTodayCount);
+    }
+    if (ordersKpiProcessing) {
+      ordersKpiProcessing.textContent = String(processingCount);
+    }
+    if (ordersKpiShipped) {
+      ordersKpiShipped.textContent = String(shippedCount);
+    }
+
+    const activeMap = {
+      "new-today": currentOrderStatusFilter === "Нове",
+      processing: currentOrderStatusFilter === "В обробці",
+      shipped: currentOrderStatusFilter === "Відправлено"
+    };
+
+    ordersKpiCards.forEach((card) => {
+      const key = String(card.dataset.ordersKpiFilter || "");
+      const isActive = Boolean(activeMap[key]);
+      card.classList.toggle("is-active", isActive);
+      card.setAttribute("aria-pressed", isActive ? "true" : "false");
+    });
+  };
+
   const updateOrdersBulkUI = () => {
     const selectedCount = selectedOrderIds.size;
     if (ordersBulkBar) {
@@ -2718,6 +2874,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const renderOrdersTable = (orders) => {
     if (!ordersTableBody) return;
+    updateOrdersKpiCards(orders);
     ordersTableBody.innerHTML = "";
     const query = String(currentOrdersSearch || "").trim().toLowerCase();
     const searchedOrders = !query
@@ -2817,7 +2974,13 @@ document.addEventListener("DOMContentLoaded", () => {
               title="Видалити замовлення"
               aria-label="Видалити замовлення"
             >
-              <span aria-hidden="true" class="trash-icon">🗑</span>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 6h18"/>
+                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                <path d="M10 11v6"/>
+                <path d="M14 11v6"/>
+              </svg>
             </button>
           </div>
         </td>
@@ -4406,6 +4569,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   applySettings(readSettings());
+  updateAdminDocumentTitle();
   mergeAndSaveSettings({
     currency: normalizeCurrencyCode(readSettings()?.currency || "uah"),
     telegramBotUsername: TELEGRAM_BOT_USERNAME,
@@ -4534,6 +4698,41 @@ document.addEventListener("DOMContentLoaded", () => {
     control.addEventListener("input", applyOrdersFilters);
     control.addEventListener("change", applyOrdersFilters);
   });
+
+  if (ordersKpiCards.length) {
+    const applyKpiFilter = (filterKey) => {
+      let nextStatus = "all";
+      if (filterKey === "new-today") nextStatus = "Нове";
+      if (filterKey === "processing") nextStatus = "В обробці";
+      if (filterKey === "shipped") nextStatus = "Відправлено";
+
+      const shouldResetToAll = currentOrderStatusFilter === nextStatus;
+      const finalStatus = shouldResetToAll ? "all" : nextStatus;
+
+      if (ordersStatusFilter) {
+        ordersStatusFilter.value = finalStatus;
+        ordersStatusFilter.dispatchEvent(new Event("change", { bubbles: true }));
+      } else {
+        currentOrderStatusFilter = finalStatus;
+        renderOrdersTable(orders);
+      }
+    };
+
+    ordersKpiCards.forEach((card) => {
+      const filterKey = String(card.dataset.ordersKpiFilter || "");
+      if (!filterKey) return;
+
+      card.addEventListener("click", () => {
+        applyKpiFilter(filterKey);
+      });
+
+      card.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        applyKpiFilter(filterKey);
+      });
+    });
+  }
 
   const enhanceCustomSelect = (selectEl) => {
     if (!selectEl || selectEl.dataset.enhanced === "true") return;
@@ -5853,6 +6052,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (storeName.value.length > MAX_NAME_LENGTH) {
         storeName.value = storeName.value.slice(0, MAX_NAME_LENGTH);
       }
+      updateAdminDocumentTitle(storeName.value);
       updateNameCounter();
     });
 
@@ -5942,6 +6142,8 @@ document.addEventListener("DOMContentLoaded", () => {
         tiktok: socialTiktok.value.trim(),
         tiktokEnabled: socialTiktokEnabled.checked
       });
+
+      updateAdminDocumentTitle(normalizedName);
 
       savedMessage.textContent = "Зміни збережено";
       setTimeout(() => {

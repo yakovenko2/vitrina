@@ -536,6 +536,35 @@ body {
   line-height: 1.2;
 }
 
+.store-order-status {
+  margin: 10px 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid #ffd9b0;
+  background: #fff2e2;
+  color: #955213;
+  font-size: 12.5px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.store-order-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #e18a2f;
+  box-shadow: 0 0 0 3px rgba(225, 138, 47, 0.2);
+  flex: 0 0 8px;
+}
+
+.store-order-status[hidden] {
+  display: none !important;
+}
+
 .sku {
   margin: 0;
   color: var(--text-muted);
@@ -1005,6 +1034,17 @@ body {
   display: flex;
   justify-content: center;
   border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+/* Always keep storefront watermark visible on product page, even with stale JS cache. */
+.site-watermark[hidden] {
+  display: flex !important;
+}
+
+.site-watermark {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 .site-watermark-link {

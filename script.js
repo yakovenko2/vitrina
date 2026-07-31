@@ -38,6 +38,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const clearCartBtn = document.getElementById("clearCartBtn");
   const checkoutCartBtn = document.getElementById("checkoutCartBtn");
   const cartMinimumHint = document.getElementById("cartMinimumHint");
+  const storeOrderStatusBadge = document.getElementById("storeOrderStatusBadge");
   const photoViewer = document.getElementById("photoViewer");
   const photoViewerImage = document.getElementById("photoViewerImage");
   const photoViewerCaption = document.getElementById("photoViewerCaption");
@@ -51,6 +52,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let products = [];
   let galleryItems = [];
   let activePhotoIndex = -1;
+  let isOrderingBlockedByPlanExpiry = false;
 
   const sanitizeStoreId = (value) => String(value || "")
     .trim()
@@ -250,6 +252,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const categoryToken = tokenizedCategories.join(" ") || "all";
       const inStock = product.stock > 0;
       const stockLabel = inStock ? "В наявності" : "Немає в наявності";
+      const disableCartButton = isOrderingBlockedByPlanExpiry || !inStock;
+      const cartButtonAttrs = isOrderingBlockedByPlanExpiry
+        ? ' disabled aria-disabled="true" title="Магазин тимчасово не приймає замовлення"'
+        : (inStock ? "" : ' disabled aria-disabled="true"');
       return `
         <article class="product${inStock ? "" : " out-of-stock"}" data-cat="${categoryToken}" data-product-id="${product.id}" data-product-sku="${product.sku}" data-product-stock="${product.stock}" tabindex="0" role="button" aria-label="Відкрити товар ${product.name}">
           <div class="thumb">
@@ -260,7 +266,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <p class="p-stock${inStock ? "" : " out"}">${stockLabel}</p>
             <div class="p-footer">
               <p class="p-price">${Math.round(product.price)} грн</p>
-              <button class="cart-btn" aria-label="Додати в кошик"${inStock ? "" : " disabled aria-disabled=\"true\""}>
+              <button class="cart-btn" aria-label="Додати в кошик"${disableCartButton ? cartButtonAttrs : ""}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M2 3h2l2.2 11.4a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L20 7H5.2"/></svg>
               </button>
             </div>
@@ -368,27 +374,69 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
-  const canRemoveWatermark = () => {
-    let billing = null;
+  const readBilling = () => {
     try {
       const raw = localStorage.getItem("lavkaBilling");
-      billing = raw ? JSON.parse(raw) : null;
+      return raw ? JSON.parse(raw) : null;
     } catch {
-      billing = null;
+      return null;
     }
+  };
+
+  const canRemoveWatermark = () => {
+    const billing = readBilling();
     const planId = String(billing?.currentPlanId || "").trim().toLowerCase();
     if (planId !== "business" && planId !== "pro") return false;
     const until = new Date(billing?.validUntil || "");
     return Number.isFinite(until.getTime()) && until.getTime() > Date.now();
   };
 
+  const hasExpiredSubscription = () => {
+    const until = new Date(readBilling()?.validUntil || "");
+    if (!Number.isFinite(until.getTime())) return true;
+    return until.getTime() <= Date.now();
+  };
+
+  const syncOrderLockUi = () => {
+    isOrderingBlockedByPlanExpiry = hasExpiredSubscription();
+
+    if (storeOrderStatusBadge) {
+      storeOrderStatusBadge.hidden = !isOrderingBlockedByPlanExpiry;
+    }
+
+    if (openCartBtn) {
+      openCartBtn.disabled = isOrderingBlockedByPlanExpiry;
+      openCartBtn.setAttribute("aria-disabled", isOrderingBlockedByPlanExpiry ? "true" : "false");
+    }
+
+    if (isOrderingBlockedByPlanExpiry) {
+      setCartOpen(false);
+    }
+  };
+
+  const ensureSiteWatermark = () => {
+    let watermark = document.querySelector(".site-watermark");
+    if (watermark) return watermark;
+
+    const mount = document.querySelector("main.card") || document.querySelector("main") || document.body;
+    if (!mount) return null;
+
+    watermark = document.createElement("footer");
+    watermark.className = "site-watermark";
+    watermark.innerHTML =
+      '<a class="site-watermark-link" href="landing.html" title="Створити власний магазин на Вітрина">'
+      + '<span class="site-watermark-text">Створено на <strong>Вітрина</strong></span>'
+      + '</a>';
+
+    mount.appendChild(watermark);
+    return watermark;
+  };
+
   const applyWatermarkVisibility = () => {
-    const watermark = document.querySelector(".site-watermark");
+    const watermark = ensureSiteWatermark();
     if (!watermark) return;
-    const settings = readSettings() || {};
-    const hide = Boolean(settings.hideWatermark) && canRemoveWatermark();
-    watermark.hidden = hide;
-    watermark.style.display = hide ? "none" : "";
+    watermark.hidden = false;
+    watermark.style.display = "";
   };
 
   const getMinimumOrderRequirement = () => {
@@ -524,7 +572,10 @@ document.addEventListener("DOMContentLoaded", () => {
     cartTotal.textContent = toCurrency(totalAmount);
 
     if (cartMinimumHint) {
-      if (isMinimumActive && totalItems > 0 && !minimumReached) {
+      if (isOrderingBlockedByPlanExpiry) {
+        cartMinimumHint.hidden = false;
+        cartMinimumHint.textContent = "Магазин тимчасово не приймає замовлення: строк дії тарифу завершився.";
+      } else if (isMinimumActive && totalItems > 0 && !minimumReached) {
         cartMinimumHint.hidden = false;
         cartMinimumHint.textContent = `До мінімальної суми замовлення залишилось ${toCurrency(minimumLeft)}.`;
       } else {
@@ -535,13 +586,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (checkoutCartBtn) {
       const blockedByMinimum = totalItems > 0 && !minimumReached;
-      const shouldDisableCheckout = totalItems === 0 || blockedByMinimum;
+      const shouldDisableCheckout = totalItems === 0 || blockedByMinimum || isOrderingBlockedByPlanExpiry;
       checkoutCartBtn.disabled = shouldDisableCheckout;
       checkoutCartBtn.setAttribute("aria-disabled", shouldDisableCheckout ? "true" : "false");
     }
   };
 
   const addProductToCart = (productNode, quantity = 1) => {
+    if (isOrderingBlockedByPlanExpiry) {
+      return;
+    }
     const productId = String(productNode.dataset.productId || "").trim();
     const productSku = String(productNode.dataset.productSku || "").trim();
     const productStock = Number.parseInt(productNode.dataset.productStock, 10) || 0;
@@ -788,6 +842,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   applyStorefrontCurrencyLabels();
+  syncOrderLockUi();
 
   const applyCategoryFilter = (category) => {
     const selected = resolveCategoryToken(category);
@@ -855,6 +910,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const cartButton = event.target.closest(".cart-btn");
       if (cartButton) {
+        if (isOrderingBlockedByPlanExpiry) {
+          renderCart();
+          return;
+        }
         addProductToCart(productNode, 1);
         animateAddToCart(productNode);
 
@@ -904,6 +963,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (checkoutCartBtn) {
     checkoutCartBtn.addEventListener("click", () => {
+      if (isOrderingBlockedByPlanExpiry) {
+        renderCart();
+        return;
+      }
       if (!cartState.length) return;
       const { enabled, minimumAmount } = getMinimumOrderRequirement();
       if (enabled && minimumAmount > 0) {
@@ -920,6 +983,11 @@ document.addEventListener("DOMContentLoaded", () => {
   window.addEventListener("storage", (event) => {
     if (event.key === "lavkaBilling") {
       applyWatermarkVisibility();
+      syncOrderLockUi();
+      renderStorefrontProducts();
+      buildCategoryButtons();
+      activateCategoryButton(hashParams.get("cat") || params.get("cat") || "all");
+      renderCart();
       return;
     }
     if (event.key !== SETTINGS_KEY && event.key !== CART_KEY && event.key !== PRODUCTS_KEY && event.key !== CATEGORIES_KEY) return;

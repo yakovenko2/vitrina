@@ -166,6 +166,30 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  const canRemoveWatermark = () => {
+    let billing = null;
+    try {
+      const raw = localStorage.getItem("lavkaBilling");
+      billing = raw ? JSON.parse(raw) : null;
+    } catch {
+      billing = null;
+    }
+    const planId = String(billing?.currentPlanId || "").trim().toLowerCase();
+    if (planId !== "business" && planId !== "pro") return false;
+    const until = new Date(billing?.validUntil || "");
+    return Number.isFinite(until.getTime()) && until.getTime() > Date.now();
+  };
+
+  const applyWatermarkVisibility = () => {
+    const watermark = document.querySelector(".site-watermark");
+    if (!watermark) return;
+    const settings = readSettings() || {};
+    const hide = Boolean(settings.hideWatermark) && canRemoveWatermark();
+    watermark.hidden = hide;
+    watermark.style.display = hide ? "none" : "";
+  };
+  applyWatermarkVisibility();
+
   const normalizeCurrencyCode = (value) => {
     const normalized = String(value || "").trim().toLowerCase();
     if (normalized === "usd") return "usd";

@@ -305,6 +305,10 @@
     const fromCustomDomain = await resolveStoreIdFromCustomDomain();
     if (fromCustomDomain) return fromCustomDomain;
 
+    const auth = readJson("lavkaAuth") || {};
+    const fromAuth = sanitizeStoreId(auth.storeId || auth.subdomain || "");
+    if (fromAuth) return fromAuth;
+
     const reg = readJson("lavkaRegistration") || {};
     const fromRegistration = sanitizeStoreId(reg.subdomain || "");
     if (fromRegistration) return fromRegistration;
@@ -422,7 +426,10 @@
           .get();
 
         if (!snap.exists) {
-          localStorage.removeItem(key);
+          // No remote document yet for this key. Do NOT wipe local data:
+          // a missing doc means "never synced", not "deleted". Real deletions
+          // are stored as an existing doc with an empty value. Keeping local
+          // data lets it be pushed up to remote below.
           return;
         }
 

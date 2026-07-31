@@ -368,6 +368,29 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  const canRemoveWatermark = () => {
+    let billing = null;
+    try {
+      const raw = localStorage.getItem("lavkaBilling");
+      billing = raw ? JSON.parse(raw) : null;
+    } catch {
+      billing = null;
+    }
+    const planId = String(billing?.currentPlanId || "").trim().toLowerCase();
+    if (planId !== "business" && planId !== "pro") return false;
+    const until = new Date(billing?.validUntil || "");
+    return Number.isFinite(until.getTime()) && until.getTime() > Date.now();
+  };
+
+  const applyWatermarkVisibility = () => {
+    const watermark = document.querySelector(".site-watermark");
+    if (!watermark) return;
+    const settings = readSettings() || {};
+    const hide = Boolean(settings.hideWatermark) && canRemoveWatermark();
+    watermark.hidden = hide;
+    watermark.style.display = hide ? "none" : "";
+  };
+
   const getMinimumOrderRequirement = () => {
     const settings = readSettings() || {};
     const enabled = Boolean(settings.minimumOrderEnabled);
@@ -672,6 +695,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     applySiteBackground();
+    applyWatermarkVisibility();
 
     if (isHexColor(savedSettings.siteColor)) {
       const rgb = hexToRgb(savedSettings.siteColor);
@@ -894,7 +918,14 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   window.addEventListener("storage", (event) => {
+    if (event.key === "lavkaBilling") {
+      applyWatermarkVisibility();
+      return;
+    }
     if (event.key !== SETTINGS_KEY && event.key !== CART_KEY && event.key !== PRODUCTS_KEY && event.key !== CATEGORIES_KEY) return;
+    if (event.key === SETTINGS_KEY) {
+      applyWatermarkVisibility();
+    }
     if (event.key === PRODUCTS_KEY || event.key === CATEGORIES_KEY) {
       renderStorefrontProducts();
       buildCategoryButtons();

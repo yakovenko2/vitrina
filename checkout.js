@@ -1367,7 +1367,7 @@ document.addEventListener("DOMContentLoaded", () => {
         deliveryAddress: deliveryAddressResult.value,
         comment: commentValue || "Коментар відсутній",
         managerComment: "",
-        status: "Очікує",
+        status: "Нове",
         paymentStatus: "Не оплачено",
         trackingNumber: "",
         total: totalAmount,

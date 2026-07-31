@@ -93,6 +93,43 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const settingsSections = ["settings", "notifications", "payments", "shipping", "domain"];
+  // Maps each section id to a readable URL slug (shown in the address bar hash).
+  const SECTION_SLUGS = {
+    home: "home",
+    orders: "orders",
+    products: "products",
+    stock: "stock",
+    categories: "categories",
+    views: "stats/views",
+    sales: "stats/sales",
+    billing: "billing",
+    promocodes: "promocodes",
+    settings: "settings/osnova",
+    notifications: "settings/notifications",
+    payments: "settings/payments",
+    shipping: "settings/shipping",
+    domain: "settings/domain"
+  };
+  const SLUG_TO_SECTION = Object.keys(SECTION_SLUGS).reduce((acc, key) => {
+    acc[SECTION_SLUGS[key]] = key;
+    return acc;
+  }, {});
+  const parseSectionFromHash = () => {
+    const raw = String(window.location.hash || "").replace(/^#\/?/, "").trim().toLowerCase();
+    if (!raw) return "";
+    return SLUG_TO_SECTION[raw] || "";
+  };
+  const syncSectionHash = (sectionId) => {
+    const slug = SECTION_SLUGS[sectionId];
+    if (!slug) return;
+    const target = "#/" + slug;
+    if (window.location.hash === target) return;
+    try {
+      window.history.replaceState(null, "", target);
+    } catch {
+      window.location.hash = target;
+    }
+  };
   let currentSection = "home";
   let authSessionWatcher = null;
   let isRedirectingToLogin = false;
@@ -518,6 +555,7 @@ document.addEventListener("DOMContentLoaded", () => {
     currentSection = sectionId;
 
     localStorage.setItem(ADMIN_ACTIVE_SECTION_KEY, sectionId);
+    syncSectionHash(sectionId);
 
     primaryMenuItems.forEach((item) => {
       const isSettingsRoot = item.dataset.section === "settings";
@@ -558,9 +596,23 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
       stopTelegramStatusPolling();
     }
+
+    if (sectionId === "products") {
+      setProductsLoading(true);
+      window.setTimeout(() => {
+        renderProductsTable(products);
+        setProductsLoading(false);
+      }, 0);
+    }
   };
 
   const notifyPlanRestriction = (sectionId) => {
+    if (isSubscriptionExpired()) {
+      window.alert(
+        "Пробний період завершився. Оплатіть будь-який тариф, щоб продовжити користуватися магазином."
+      );
+      return;
+    }
     const requiredPlan = SECTION_PLAN_REQUIREMENT[sectionId] || "вищому";
     const sectionName = titles[sectionId] || "Ця функція";
     window.alert(`«${sectionName}» доступна на тарифі «${requiredPlan}». Оберіть відповідний тариф, щоб розблокувати цю функцію.`);
@@ -629,6 +681,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  window.addEventListener("hashchange", () => {
+    const section = parseSectionFromHash();
+    if (!section || section === currentSection) return;
+    if (isSectionLocked(section)) {
+      syncSectionHash(currentSection);
+      return;
+    }
+    activateSection(section);
+  });
+
   const settingsForm = document.getElementById("storeSettingsForm");
   const personalizationForm = document.getElementById("personalizationForm");
   const productCreateForm = document.getElementById("productCreateForm");
@@ -657,6 +719,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const socialTiktokEnabled = document.getElementById("socialTiktokEnabled");
   const minimumOrderEnabled = document.getElementById("minimumOrderEnabled");
   const minimumOrderAmount = document.getElementById("minimumOrderAmount");
+  const hideWatermarkEnabled = document.getElementById("hideWatermarkEnabled");
+  const watermarkFieldset = document.getElementById("watermarkFieldset");
+  const watermarkPlanNote = document.getElementById("watermarkPlanNote");
   const cartIconColor = document.getElementById("cartIconColor");
   const siteColor = document.getElementById("siteColor");
   const siteBackgroundType = document.getElementById("siteBackgroundType");
@@ -1045,6 +1110,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const productNewPrice = document.getElementById("productNewPrice");
   const productVisible = document.getElementById("productVisible");
   const productPhotos = document.getElementById("productPhotos");
+  const productPhotosPolicyLabel = document.getElementById("productPhotosPolicyLabel");
+  const productPhotosPolicyHint = document.getElementById("productPhotosPolicyHint");
   const productSavedMessage = document.getElementById("productSavedMessage");
   const productEditingId = document.getElementById("productEditingId");
   const productModalTitle = document.getElementById("productModalTitle");
@@ -1052,7 +1119,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const productNameCounter = document.getElementById("productNameCounter");
   const productDescriptionCounter = document.getElementById("productDescriptionCounter");
   const productsTableBody = document.getElementById("productsTableBody");
+  const productsPanel = document.getElementById("products");
+  const productsTableWrap = document.querySelector("#products .products-table-wrap");
+  const productsLoadingOverlay = document.getElementById("productsLoadingOverlay");
   const productsPagination = document.getElementById("productsPagination");
+  const productLimitBadge = document.getElementById("productLimitBadge");
+  const categoryLimitBadge = document.getElementById("categoryLimitBadge");
   const showVisibleProducts = document.getElementById("showVisibleProducts");
   const showHiddenProducts = document.getElementById("showHiddenProducts");
   const selectAllProductsOnPage = document.getElementById("selectAllProductsOnPage");
@@ -1075,6 +1147,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const categoryNameCounter = document.getElementById("categoryNameCounter");
   const categorySavedMessage = document.getElementById("categorySavedMessage");
   const categoriesList = document.getElementById("categoriesList");
+  let productsLoadingTimer = null;
+  let productsLoadingStartedAt = Date.now();
   const ordersTableBody = document.getElementById("ordersTableBody");
   const ordersSearchInput = document.getElementById("ordersSearchInput");
   const ordersStatusFilter = document.getElementById("ordersStatusFilter");
@@ -1082,6 +1156,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const ordersAmountFromFilter = document.getElementById("ordersAmountFromFilter");
   const ordersAmountToFilter = document.getElementById("ordersAmountToFilter");
   const ordersFiltersReset = document.getElementById("ordersFiltersReset");
+  const ordersSelectAll = document.getElementById("ordersSelectAll");
+  const ordersBulkBar = document.getElementById("ordersBulkBar");
+  const ordersBulkCount = document.getElementById("ordersBulkCount");
+  const ordersBulkStatusSelect = document.getElementById("ordersBulkStatusSelect");
+  const ordersBulkStatusApply = document.getElementById("ordersBulkStatusApply");
+  const ordersBulkDelete = document.getElementById("ordersBulkDelete");
+  const ordersBulkClear = document.getElementById("ordersBulkClear");
+  const ordersNewBadge = document.getElementById("ordersNewBadge");
   const orderDetailsModal = document.getElementById("orderDetailsModal");
   const closeOrderDetailsModal = document.getElementById("closeOrderDetailsModal");
   const orderUpdateForm = document.getElementById("orderUpdateForm");
@@ -1154,6 +1236,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const salesRangePresets = document.getElementById("salesRangePresets");
   const billingCurrentPlanName = document.getElementById("billingCurrentPlanName");
   const billingValidUntil = document.getElementById("billingValidUntil");
+  const billingTrialBanner = document.getElementById("billingTrialBanner");
   const billingPlansGrid = document.getElementById("billingPlansGrid");
   const billingHistoryBody = document.getElementById("billingHistoryBody");
 
@@ -1926,6 +2009,8 @@ document.addEventListener("DOMContentLoaded", () => {
         return {
           currentPlanId: "",
           validUntil: "",
+          trial: false,
+          trialStartedAt: "",
           payments: []
         };
       }
@@ -1937,12 +2022,16 @@ document.addEventListener("DOMContentLoaded", () => {
       return {
         currentPlanId: String(parsed.currentPlanId || ""),
         validUntil: String(parsed.validUntil || ""),
+        trial: Boolean(parsed.trial),
+        trialStartedAt: String(parsed.trialStartedAt || ""),
         payments
       };
     } catch {
       return {
         currentPlanId: "",
         validUntil: "",
+        trial: false,
+        trialStartedAt: "",
         payments: []
       };
     }
@@ -1950,6 +2039,58 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const saveBilling = (billing) => {
     localStorage.setItem(BILLING_KEY, JSON.stringify(billing));
+  };
+
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+  const TRIAL_PLAN_ID = "pro";
+  const TRIAL_DAYS = 7;
+
+  const parseBillingValidUntil = (billing) => {
+    const date = new Date(billing?.validUntil || "");
+    return Number.isFinite(date.getTime()) ? date : null;
+  };
+
+  const isSubscriptionActive = () => {
+    const until = parseBillingValidUntil(readBilling());
+    return !!until && until.getTime() > Date.now();
+  };
+
+  // Expired = there was a plan/trial period (validUntil set) that has now passed.
+  const isSubscriptionExpired = () => {
+    const until = parseBillingValidUntil(readBilling());
+    return !!until && until.getTime() <= Date.now();
+  };
+
+  const getTrialDaysLeft = () => {
+    const billing = readBilling();
+    if (!billing.trial) return 0;
+    const until = parseBillingValidUntil(billing);
+    if (!until) return 0;
+    const diff = until.getTime() - Date.now();
+    return diff > 0 ? Math.ceil(diff / MS_PER_DAY) : 0;
+  };
+
+  // Grants a one-time 7-day Pro trial to brand-new accounts. Remote billing is
+  // hydrated into localStorage by firebase-sync before this runs, so existing
+  // paid/trial accounts (which carry validUntil / payments) are never reset.
+  const ensureTrialInitialized = () => {
+    const billing = readBilling();
+    const hasHistory =
+      Boolean(billing.trialStartedAt) ||
+      Boolean(billing.currentPlanId) ||
+      Boolean(parseBillingValidUntil(billing)) ||
+      billing.payments.length > 0;
+    if (hasHistory) return;
+
+    const now = new Date();
+    const until = new Date(now.getTime() + TRIAL_DAYS * MS_PER_DAY);
+    saveBilling({
+      currentPlanId: TRIAL_PLAN_ID,
+      validUntil: until.toISOString(),
+      trial: true,
+      trialStartedAt: now.toISOString(),
+      payments: []
+    });
   };
 
   const getPhotoPolicyByPlan = () => {
@@ -2030,11 +2171,47 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  // Capabilities when the trial/subscription has expired: everything locked
+  // until the user pays for any plan.
+  const EXPIRED_CAPABILITIES = {
+    planId: "expired",
+    planName: "Не активний",
+    maxProducts: 0,
+    maxCategories: 0,
+    maxPhotos: 0,
+    promoCodes: false,
+    statistics: false,
+    telegramNotifications: false,
+    removeWatermark: false,
+    customDomain: false,
+    seo: "none"
+  };
+
   const getPlanCapabilities = () => {
+    if (isSubscriptionExpired()) {
+      return EXPIRED_CAPABILITIES;
+    }
     const billing = readBilling();
     const planId = String(billing?.currentPlanId || "").trim().toLowerCase();
     return PLAN_CAPABILITIES[planId] || PLAN_CAPABILITIES.starter;
   };
+
+  // Sections that get locked when the subscription/trial has expired (all except billing).
+  const ALL_LOCKABLE_SECTIONS = [
+    "home",
+    "orders",
+    "products",
+    "categories",
+    "stock",
+    "promocodes",
+    "sales",
+    "views",
+    "settings",
+    "notifications",
+    "payments",
+    "shipping",
+    "domain"
+  ];
 
   // Maps a locked section id to the minimum plan name required to unlock it.
   const SECTION_PLAN_REQUIREMENT = {
@@ -2046,6 +2223,9 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const getLockedSections = () => {
+    if (isSubscriptionExpired()) {
+      return new Set(ALL_LOCKABLE_SECTIONS);
+    }
     const caps = getPlanCapabilities();
     const locked = new Set();
     if (!caps.promoCodes) locked.add("promocodes");
@@ -2088,6 +2268,25 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   };
 
+  // Enables the "hide watermark" toggle only for plans that allow it
+  // (Business/Pro). On other plans the toggle is forced off and disabled.
+  const syncWatermarkControl = () => {
+    if (!hideWatermarkEnabled) return;
+    const canRemove = Boolean(getPlanCapabilities().removeWatermark);
+    hideWatermarkEnabled.disabled = !canRemove;
+    if (watermarkFieldset) {
+      watermarkFieldset.classList.toggle("plan-locked-field", !canRemove);
+    }
+    if (!canRemove) {
+      hideWatermarkEnabled.checked = false;
+    }
+    if (watermarkPlanNote) {
+      watermarkPlanNote.textContent = canRemove
+        ? "Увімкніть, щоб прибрати водяний знак «Створено на Вітрина» з вашого магазину."
+        : "Доступно на тарифах «Бізнес» та «Про». На інших тарифах водяний знак показується завжди.";
+    }
+  };
+
   const formatDateLong = (value) => {
     if (!value) return "-";
     const date = new Date(value);
@@ -2117,11 +2316,33 @@ document.addEventListener("DOMContentLoaded", () => {
     const currentPlan = BILLING_PLANS.find((plan) => plan.id === billing.currentPlanId) || null;
 
     if (billingCurrentPlanName) {
-      billingCurrentPlanName.textContent = currentPlan ? currentPlan.name : "Без тарифу";
+      const trialLabel = billing.trial && isSubscriptionActive() ? " (пробний)" : "";
+      billingCurrentPlanName.textContent = currentPlan
+        ? `${currentPlan.name}${trialLabel}`
+        : (billing.trial ? `Про${trialLabel}` : "Без тарифу");
     }
 
     if (billingValidUntil) {
       billingValidUntil.textContent = formatDateLong(billing.validUntil);
+    }
+
+    if (billingTrialBanner) {
+      if (isSubscriptionExpired()) {
+        billingTrialBanner.hidden = false;
+        billingTrialBanner.className = "billing-trial-banner expired";
+        billingTrialBanner.innerHTML =
+          "<strong>Доступ обмежено.</strong> Пробний період завершився. Оплатіть будь-який тариф нижче, щоб розблокувати всі функції магазину.";
+      } else if (billing.trial && isSubscriptionActive()) {
+        const daysLeft = getTrialDaysLeft();
+        const daysWord = daysLeft === 1 ? "день" : daysLeft >= 2 && daysLeft <= 4 ? "дні" : "днів";
+        billingTrialBanner.hidden = false;
+        billingTrialBanner.className = "billing-trial-banner active";
+        billingTrialBanner.innerHTML =
+          `<strong>Пробний період «Про».</strong> Залишилось ${daysLeft} ${daysWord} (до ${formatDateLong(billing.validUntil)}). Оберіть тариф, щоб зберегти доступ після завершення.`;
+      } else {
+        billingTrialBanner.hidden = true;
+        billingTrialBanner.innerHTML = "";
+      }
     }
 
     if (billingPlansGrid) {
@@ -2213,12 +2434,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const nextBilling = {
       currentPlanId: selectedPlan.id,
       validUntil: baseDate.toISOString(),
+      trial: false,
+      trialStartedAt: billing.trialStartedAt || "",
       payments: [payment, ...billing.payments].slice(0, 30)
     };
 
     saveBilling(nextBilling);
     renderBillingSection();
     refreshPlanLocks();
+    syncWatermarkControl();
+    updateProductLimitBadge();
+    updateCategoryLimitBadge();
+    updateProductPhotoPolicyUi();
   };
 
   const generatePromoCode = (charset = "letters", length = 8) => {
@@ -2401,6 +2628,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const getOrderStatusClass = (status) => {
     const normalized = String(status || "").toLowerCase();
+    if (normalized.includes("нов")) return "new";
     if (normalized.includes("очіку")) return "wait";
     if (normalized.includes("оброб")) return "progress";
     if (normalized.includes("відправ") || normalized.includes("достав")) return "done";
@@ -2454,10 +2682,43 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   };
 
+  const selectedOrderIds = new Set();
+  let lastVisibleOrderIds = [];
+
+  const updateOrdersNewBadge = () => {
+    if (!ordersNewBadge) return;
+    const newCount = orders.reduce((count, order) => {
+      const status = String(order?.status || "").trim().toLowerCase();
+      return status.includes("нов") ? count + 1 : count;
+    }, 0);
+    if (newCount > 0) {
+      ordersNewBadge.textContent = newCount > 99 ? "99+" : String(newCount);
+      ordersNewBadge.hidden = false;
+    } else {
+      ordersNewBadge.textContent = "0";
+      ordersNewBadge.hidden = true;
+    }
+  };
+
+  const updateOrdersBulkUI = () => {
+    const selectedCount = selectedOrderIds.size;
+    if (ordersBulkBar) {
+      ordersBulkBar.hidden = selectedCount === 0;
+    }
+    if (ordersBulkCount) {
+      ordersBulkCount.textContent = `Обрано: ${selectedCount}`;
+    }
+    if (ordersSelectAll) {
+      const visibleCount = lastVisibleOrderIds.length;
+      const visibleSelected = lastVisibleOrderIds.filter((id) => selectedOrderIds.has(id)).length;
+      ordersSelectAll.checked = visibleCount > 0 && visibleSelected === visibleCount;
+      ordersSelectAll.indeterminate = visibleSelected > 0 && visibleSelected < visibleCount;
+    }
+  };
+
   const renderOrdersTable = (orders) => {
     if (!ordersTableBody) return;
     ordersTableBody.innerHTML = "";
-
     const query = String(currentOrdersSearch || "").trim().toLowerCase();
     const searchedOrders = !query
       ? orders
@@ -2508,10 +2769,23 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!filteredOrders.length) {
       const row = document.createElement("tr");
       row.className = "empty-row";
-      row.innerHTML = '<td colspan="8">За вашим запитом замовлень не знайдено.</td>';
+      row.innerHTML = '<td colspan="9">За вашим запитом замовлень не знайдено.</td>';
       ordersTableBody.append(row);
+      lastVisibleOrderIds = [];
+      const existingIds = new Set(orders.map((order) => String(order.id || "").trim()));
+      Array.from(selectedOrderIds).forEach((id) => {
+        if (!existingIds.has(id)) selectedOrderIds.delete(id);
+      });
+      updateOrdersBulkUI();
+      updateOrdersNewBadge();
       return;
     }
+
+    const existingIds = new Set(orders.map((order) => String(order.id || "").trim()));
+    Array.from(selectedOrderIds).forEach((id) => {
+      if (!existingIds.has(id)) selectedOrderIds.delete(id);
+    });
+    lastVisibleOrderIds = filteredOrders.map((order) => String(order.id || "").trim());
 
     filteredOrders.forEach((order) => {
       const row = document.createElement("tr");
@@ -2522,8 +2796,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const statusClass = getOrderStatusClass(order.status);
       const paymentStatusClass = getPaymentStatusClass(order.paymentStatus);
       const createdAtLabel = formatDateTime(order.createdAt || order.updatedAt);
+      const isSelected = selectedOrderIds.has(String(order.id || "").trim());
 
       row.innerHTML = `
+        <td class="orders-select-cell"><input type="checkbox" class="order-select" data-order-id="${order.id}"${isSelected ? " checked" : ""} aria-label="Обрати замовлення ${order.id}"></td>
         <td>${order.id}</td>
         <td>${createdAtLabel}</td>
         <td>${order.customerName}</td>
@@ -2549,6 +2825,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
       ordersTableBody.append(row);
     });
+
+    updateOrdersBulkUI();
+    updateOrdersNewBadge();
   };
 
   const formatPromoDiscount = (promoCode) => {
@@ -3128,7 +3407,34 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   };
 
+  const updateCategoryLimitBadge = (count) => {
+    if (!categoryLimitBadge) return;
+    const total = typeof count === "number" ? count : readCategories().length;
+    const caps = getPlanCapabilities();
+    const max = caps.maxCategories;
+
+    if (max === Infinity) {
+      categoryLimitBadge.textContent = `${total} без ліміту`;
+      categoryLimitBadge.setAttribute("aria-label", `Категорії: ${total}, без ліміту`);
+      categoryLimitBadge.classList.remove("is-full");
+      categoryLimitBadge.classList.add("is-unlimited");
+      categoryLimitBadge.title = `Тариф «${caps.planName}»: без обмежень`;
+      return;
+    }
+
+    categoryLimitBadge.textContent = `${total} з ${max}`;
+    categoryLimitBadge.setAttribute("aria-label", `Категорії: ${total} з ${max}`);
+    categoryLimitBadge.classList.remove("is-unlimited");
+    const isFull = total >= max;
+    categoryLimitBadge.classList.toggle("is-full", isFull);
+    const remaining = Math.max(0, max - total);
+    categoryLimitBadge.title = isFull
+      ? `Ліміт вичерпано: ${total} з ${max}. Оновіть тариф, щоб додати більше.`
+      : `Залишилось ${remaining} із ${max}`;
+  };
+
   const renderCategoriesList = (categories) => {
+    updateCategoryLimitBadge(categories.length);
     if (!categoriesList) return;
     categoriesList.innerHTML = "";
 
@@ -3184,6 +3490,11 @@ document.addEventListener("DOMContentLoaded", () => {
       saveButton.className = "mini-btn save";
       saveButton.textContent = "Зберегти";
       saveButton.disabled = true;
+
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "mini-btn danger";
+      deleteButton.textContent = "Видалити";
 
       const dragHandle = document.createElement("button");
       dragHandle.type = "button";
@@ -3293,14 +3604,105 @@ document.addEventListener("DOMContentLoaded", () => {
         categorySavedMessage.textContent = "Категорію оновлено";
       });
 
-      actions.append(editButton, saveButton, dragHandle);
+      deleteButton.addEventListener("click", () => {
+        const confirmed = window.confirm(`Видалити категорію «${category.name}»?`);
+        if (!confirmed) return;
+
+        const removedName = String(category.name || "").trim().toLowerCase();
+        categories = categories.filter((itemCategory) => itemCategory.id !== category.id);
+
+        products = products.map((product) => {
+          const currentCategories = Array.isArray(product.categories) && product.categories.length
+            ? product.categories
+            : [product.category].filter(Boolean);
+
+          const nextCategories = currentCategories.filter(
+            (categoryName) => String(categoryName || "").trim().toLowerCase() !== removedName
+          );
+
+          return {
+            ...product,
+            categories: nextCategories,
+            category: nextCategories[0] || ""
+          };
+        });
+
+        saveProducts(products);
+        saveCategories(categories);
+        renderProductsTable(products);
+        renderCategoryOptions(getCategoryNames(categories));
+        renderCategoriesList(categories);
+
+        categorySavedMessage.classList.remove("error");
+        categorySavedMessage.textContent = "Категорію видалено";
+      });
+
+      actions.append(editButton, saveButton, deleteButton, dragHandle);
       item.append(nameInput, actions);
       categoriesList.append(item);
     });
   };
 
+  const setProductsLoading = (isLoading) => {
+    if (!productsLoadingOverlay) return;
+
+    if (productsLoadingTimer) {
+      window.clearTimeout(productsLoadingTimer);
+      productsLoadingTimer = null;
+    }
+
+    if (isLoading) {
+      productsLoadingStartedAt = Date.now();
+      productsLoadingOverlay.hidden = false;
+      productsPanel?.setAttribute("aria-busy", "true");
+      productsTableWrap?.classList.add("is-loading");
+      return;
+    }
+
+    const elapsed = Date.now() - productsLoadingStartedAt;
+    const minVisibleMs = 450;
+    const delay = elapsed >= minVisibleMs ? 0 : minVisibleMs - elapsed;
+    productsLoadingTimer = window.setTimeout(() => {
+      productsLoadingOverlay.hidden = true;
+      productsPanel?.setAttribute("aria-busy", "false");
+      productsTableWrap?.classList.remove("is-loading");
+      productsLoadingTimer = null;
+    }, delay);
+  };
+
+  // Shows how many products are added versus the current plan's limit (e.g. 7/10).
+  const updateProductLimitBadge = (count) => {
+    if (!productLimitBadge) return;
+    const total = typeof count === "number" ? count : readProducts().length;
+    const caps = getPlanCapabilities();
+    const max = caps.maxProducts;
+
+    if (max === Infinity) {
+      productLimitBadge.textContent = `${total} без ліміту`;
+      productLimitBadge.setAttribute("aria-label", `Товари: ${total}, без ліміту`);
+      productLimitBadge.classList.remove("is-full");
+      productLimitBadge.classList.add("is-unlimited");
+      productLimitBadge.title = `Тариф «${caps.planName}»: без обмежень`;
+      return;
+    }
+
+    productLimitBadge.textContent = `${total} з ${max}`;
+    productLimitBadge.setAttribute("aria-label", `Товари: ${total} з ${max}`);
+    productLimitBadge.classList.remove("is-unlimited");
+    const isFull = total >= max;
+    productLimitBadge.classList.toggle("is-full", isFull);
+    const remaining = Math.max(0, max - total);
+    productLimitBadge.title = isFull
+      ? `Ліміт вичерпано: ${total} з ${max}. Оновіть тариф, щоб додати більше.`
+      : `Залишилось ${remaining} із ${max}`;
+  };
+
   const renderProductsTable = (products) => {
-    if (!productsTableBody) return;
+    updateProductLimitBadge(products.length);
+    if (!productsTableBody) {
+      setProductsLoading(false);
+      return;
+    }
     productsTableBody.innerHTML = "";
 
     const escapeHtml = (value) =>
@@ -3347,6 +3749,7 @@ document.addEventListener("DOMContentLoaded", () => {
       updateBulkSelectionState();
       renderProductsPagination(filteredProducts.length);
       renderStockTable(products);
+      setProductsLoading(false);
       return;
     }
 
@@ -3394,6 +3797,16 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="product-actions">
             <button type="button" class="mini-btn product-edit-btn" data-product-id="${escapeHtml(product.id)}">Редагувати</button>
             <button type="button" class="mini-btn warn product-toggle-visibility-btn" data-product-id="${escapeHtml(product.id)}">${toggleLabel}</button>
+            <button type="button" class="mini-btn danger product-delete-btn" data-product-id="${escapeHtml(product.id)}" title="Видалити товар" aria-label="Видалити товар ${escapeHtml(product.name)}">
+              <span class="product-delete-label">Видалити</span>
+              <svg class="product-delete-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 6h18"/>
+                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                <path d="M10 11v6"/>
+                <path d="M14 11v6"/>
+              </svg>
+            </button>
           </div>
         </td>
       `;
@@ -3403,6 +3816,7 @@ document.addEventListener("DOMContentLoaded", () => {
     updateBulkSelectionState();
     renderProductsPagination(filteredProducts.length);
     renderStockTable(products);
+    setProductsLoading(false);
   };
 
   const renderProductsPagination = (totalItems) => {
@@ -3458,10 +3872,35 @@ document.addEventListener("DOMContentLoaded", () => {
     productDescriptionCounter.textContent = `${length}/${MAX_PRODUCT_DESCRIPTION_LENGTH}`;
   };
 
+  const formatMegabytes = (bytes) => {
+    const value = Number(bytes) / (1024 * 1024);
+    if (!Number.isFinite(value) || value <= 0) return "0";
+    const rounded = Math.round(value * 10) / 10;
+    return Number.isInteger(rounded) ? String(rounded) : String(rounded).replace(".", ",");
+  };
+
+  const updateProductPhotoPolicyUi = () => {
+    if (!productPhotos) return;
+    const policy = getPhotoPolicyByPlan();
+    const maxMb = formatMegabytes(policy.maxUploadBytes);
+    const filesLabel = policy.maxPhotos === 1 ? "файлу" : "файлів";
+    const eachLabel = policy.maxPhotos === 1 ? "файл" : "кожен";
+
+    if (productPhotosPolicyLabel) {
+      productPhotosPolicyLabel.textContent = `Фото товару (до ${policy.maxPhotos} ${filesLabel}, ${eachLabel} до ${maxMb} МБ)`;
+    }
+
+    if (productPhotosPolicyHint) {
+      productPhotosPolicyHint.textContent = `Тариф «${policy.planName}»: максимум ${policy.maxPhotos} фото, до ${maxMb} МБ на файл.`;
+    }
+
+    productPhotos.multiple = policy.maxPhotos > 1;
+  };
+
   const getPhotoPolicyHint = () => {
     const policy = getPhotoPolicyByPlan();
-    const maxMb = Math.round(policy.maxUploadBytes / (1024 * 1024));
-    return `Тариф ${policy.planName}: до ${policy.maxPhotos} фото, до ${maxMb} МБ кожне.`;
+    const maxMb = formatMegabytes(policy.maxUploadBytes);
+    return `Тариф «${policy.planName}»: до ${policy.maxPhotos} фото, до ${maxMb} МБ на файл.`;
   };
 
   const validatePhotos = (files) => {
@@ -3469,12 +3908,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const policy = getPhotoPolicyByPlan();
 
     if (list.length > policy.maxPhotos) {
-      return `${getPhotoPolicyHint()} Обрано: ${list.length}.`;
+      return `${getPhotoPolicyHint()} Обрано ${list.length}, дозволено ${policy.maxPhotos}.`;
     }
 
     const oversized = list.find((file) => Number(file?.size) > policy.maxUploadBytes);
     if (oversized) {
-      return `${getPhotoPolicyHint()} Файл ${oversized.name} перевищує ліміт.`;
+      return `${getPhotoPolicyHint()} Файл ${oversized.name} перевищує ліміт ${formatMegabytes(policy.maxUploadBytes)} МБ.`;
     }
 
     return "";
@@ -3779,6 +4218,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!productCreateForm) return;
 
     productCreateForm.reset();
+    updateProductPhotoPolicyUi();
     updateProductNameCounter();
     updateProductDescriptionCounter();
     productSavedMessage.classList.remove("error");
@@ -3881,6 +4321,10 @@ document.addEventListener("DOMContentLoaded", () => {
         : "";
     }
     syncMinimumOrderControls();
+    if (hideWatermarkEnabled) {
+      hideWatermarkEnabled.checked = Boolean(settings.hideWatermark);
+    }
+    syncWatermarkControl();
     if (cartIconColor) {
       cartIconColor.value = settings.cartIconColor || "#2b4c85";
     }
@@ -4091,6 +4535,102 @@ document.addEventListener("DOMContentLoaded", () => {
     control.addEventListener("change", applyOrdersFilters);
   });
 
+  const enhanceCustomSelect = (selectEl) => {
+    if (!selectEl || selectEl.dataset.enhanced === "true") return;
+    selectEl.dataset.enhanced = "true";
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "custom-select-field";
+    wrapper.setAttribute("role", "combobox");
+    wrapper.setAttribute("aria-haspopup", "listbox");
+    wrapper.setAttribute("aria-expanded", "false");
+
+    const trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "custom-select-field-trigger";
+    const ariaLabel = selectEl.getAttribute("aria-label");
+    if (ariaLabel) {
+      trigger.setAttribute("aria-label", ariaLabel);
+    }
+
+    const valueSpan = document.createElement("span");
+    valueSpan.className = "custom-select-field-value";
+
+    const caret = document.createElement("span");
+    caret.className = "custom-select-field-caret";
+    caret.setAttribute("aria-hidden", "true");
+    caret.textContent = "▾";
+
+    trigger.appendChild(valueSpan);
+    trigger.appendChild(caret);
+
+    const list = document.createElement("ul");
+    list.className = "custom-select-field-options";
+    list.setAttribute("role", "listbox");
+    list.hidden = true;
+
+    Array.from(selectEl.options).forEach((opt) => {
+      const li = document.createElement("li");
+      const optionBtn = document.createElement("button");
+      optionBtn.type = "button";
+      optionBtn.className = "custom-select-field-option";
+      optionBtn.setAttribute("role", "option");
+      optionBtn.dataset.value = opt.value;
+      optionBtn.textContent = opt.textContent;
+      li.appendChild(optionBtn);
+      list.appendChild(li);
+    });
+
+    selectEl.parentNode.insertBefore(wrapper, selectEl);
+    wrapper.appendChild(selectEl);
+    wrapper.appendChild(trigger);
+    wrapper.appendChild(list);
+    selectEl.classList.add("custom-select-native-hidden");
+    selectEl.setAttribute("tabindex", "-1");
+
+    const syncLabel = () => {
+      const selected = selectEl.options[selectEl.selectedIndex];
+      valueSpan.textContent = selected ? selected.textContent : "";
+      Array.from(list.querySelectorAll(".custom-select-field-option")).forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.value === selectEl.value);
+      });
+    };
+
+    const setOpen = (open) => {
+      list.hidden = !open;
+      wrapper.classList.toggle("open", open);
+      wrapper.setAttribute("aria-expanded", open ? "true" : "false");
+    };
+
+    trigger.addEventListener("click", () => setOpen(list.hidden));
+
+    list.addEventListener("click", (event) => {
+      const optionBtn = event.target.closest(".custom-select-field-option");
+      if (!optionBtn) return;
+      selectEl.value = optionBtn.dataset.value;
+      syncLabel();
+      setOpen(false);
+      selectEl.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    selectEl.addEventListener("change", syncLabel);
+
+    document.addEventListener("mousedown", (event) => {
+      if (wrapper.contains(event.target)) return;
+      setOpen(false);
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !list.hidden) {
+        setOpen(false);
+      }
+    });
+
+    syncLabel();
+  };
+
+  [ordersStatusFilter, ordersPaymentFilter, ordersBulkStatusSelect].forEach(enhanceCustomSelect);
+
   if (ordersFiltersReset) {
     ordersFiltersReset.addEventListener("click", () => {
       currentOrdersSearch = "";
@@ -4104,9 +4644,11 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       if (ordersStatusFilter) {
         ordersStatusFilter.value = "all";
+        ordersStatusFilter.dispatchEvent(new Event("change", { bubbles: true }));
       }
       if (ordersPaymentFilter) {
         ordersPaymentFilter.value = "all";
+        ordersPaymentFilter.dispatchEvent(new Event("change", { bubbles: true }));
       }
       if (ordersAmountFromFilter) {
         ordersAmountFromFilter.value = "";
@@ -4116,6 +4658,90 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       renderOrdersTable(orders);
+    });
+  }
+
+  if (ordersTableBody) {
+    ordersTableBody.addEventListener("change", (event) => {
+      const checkbox = event.target.closest(".order-select");
+      if (!checkbox) return;
+      const orderId = String(checkbox.dataset.orderId || "").trim();
+      if (!orderId) return;
+      if (checkbox.checked) {
+        selectedOrderIds.add(orderId);
+      } else {
+        selectedOrderIds.delete(orderId);
+      }
+      updateOrdersBulkUI();
+    });
+  }
+
+  if (ordersSelectAll) {
+    ordersSelectAll.addEventListener("change", () => {
+      if (ordersSelectAll.checked) {
+        lastVisibleOrderIds.forEach((id) => selectedOrderIds.add(id));
+      } else {
+        lastVisibleOrderIds.forEach((id) => selectedOrderIds.delete(id));
+      }
+      if (ordersTableBody) {
+        ordersTableBody.querySelectorAll(".order-select").forEach((cb) => {
+          cb.checked = selectedOrderIds.has(String(cb.dataset.orderId || "").trim());
+        });
+      }
+      updateOrdersBulkUI();
+    });
+  }
+
+  if (ordersBulkClear) {
+    ordersBulkClear.addEventListener("click", () => {
+      selectedOrderIds.clear();
+      renderOrdersTable(orders);
+    });
+  }
+
+  if (ordersBulkDelete) {
+    ordersBulkDelete.addEventListener("click", () => {
+      if (!selectedOrderIds.size) return;
+
+      const confirmed = window.confirm(
+        `Підтвердіть видалення обраних замовлень (${selectedOrderIds.size}).\n\nЦю дію неможливо скасувати.`
+      );
+      if (!confirmed) return;
+
+      const deletedIds = new Set(selectedOrderIds);
+      orders = orders.filter((item) => !deletedIds.has(String(item.id || "").trim()));
+      selectedOrderIds.clear();
+      saveOrders(orders);
+      renderOrdersTable(orders);
+      if (currentSection === "sales") {
+        renderSalesFromForm();
+      }
+
+      if (orderDetailsModal?.classList.contains("open") && deletedIds.has(String(orderEditingId?.value || "").trim())) {
+        setOrderDetailsModalOpen(false);
+      }
+    });
+  }
+
+  if (ordersBulkStatusApply) {
+    ordersBulkStatusApply.addEventListener("click", () => {
+      if (!selectedOrderIds.size) return;
+
+      const nextStatus = String(ordersBulkStatusSelect?.value || "").trim();
+      if (!nextStatus) return;
+
+      const nowIso = new Date().toISOString();
+      orders = orders.map((item) => {
+        if (selectedOrderIds.has(String(item.id || "").trim())) {
+          return { ...item, status: nextStatus, updatedAt: nowIso };
+        }
+        return item;
+      });
+      saveOrders(orders);
+      renderOrdersTable(orders);
+      if (currentSection === "sales") {
+        renderSalesFromForm();
+      }
     });
   }
 
@@ -4300,6 +4926,8 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentProductsPage = 1;
   let currentProductsVisibilityFilter = "visible";
   let currentStockPage = 1;
+
+  setProductsLoading(true);
 
   let products = readProducts();
   if (!Array.isArray(products)) {
@@ -4738,9 +5366,11 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
       if (files.length) {
-        productSavedMessage.textContent = getPhotoPolicyHint();
+        const totalBytes = files.reduce((sum, file) => sum + (Number(file?.size) || 0), 0);
+        const policy = getPhotoPolicyByPlan();
+        productSavedMessage.textContent = `Обрано ${files.length} з ${policy.maxPhotos}. Загальна вага: ${formatMegabytes(totalBytes)} МБ.`;
       } else {
-        productSavedMessage.textContent = "";
+        productSavedMessage.textContent = getPhotoPolicyHint();
       }
       productSavedMessage.classList.remove("error");
     });
@@ -4916,6 +5546,24 @@ document.addEventListener("DOMContentLoaded", () => {
             updatedAt: new Date().toISOString()
           };
         });
+        saveProducts(products);
+        renderProductsTable(products);
+        return;
+      }
+
+      const deleteButton = event.target.closest(".product-delete-btn");
+      if (deleteButton) {
+        const { productId } = deleteButton.dataset;
+        const product = products.find((item) => item.id === productId);
+        if (!product) return;
+
+        const confirmed = window.confirm(
+          `Видалити товар «${product.name}»?\n\nЦю дію неможливо скасувати.`
+        );
+        if (!confirmed) return;
+
+        products = products.filter((item) => item.id !== productId);
+        selectedProductIds.delete(productId);
         saveProducts(products);
         renderProductsTable(products);
         return;
@@ -5284,6 +5932,7 @@ document.addEventListener("DOMContentLoaded", () => {
         currency: normalizeCurrencyCode(storeCurrency?.value || "uah"),
         minimumOrderEnabled: minimumEnabled,
         minimumOrderAmount: minimumEnabled ? minimumValue : null,
+        hideWatermark: Boolean(getPlanCapabilities().removeWatermark) && Boolean(hideWatermarkEnabled?.checked),
         instagram: socialInstagram.value.trim(),
         instagramEnabled: socialInstagramEnabled.checked,
         facebook: socialFacebook.value.trim(),
@@ -5588,12 +6237,28 @@ document.addEventListener("DOMContentLoaded", () => {
   renderViewsStats();
   ensureSalesRangeDefaults();
   renderSalesFromForm();
+  ensureTrialInitialized();
   renderBillingSection();
 
   const availableSections = new Set(Array.from(panels).map((panel) => panel.id));
+  const hashSection = parseSectionFromHash();
   const savedSection = localStorage.getItem(ADMIN_ACTIVE_SECTION_KEY);
-  const initialSection = savedSection && availableSections.has(savedSection) ? savedSection : "home";
+  let initialSection = "home";
+  if (hashSection && availableSections.has(hashSection)) {
+    initialSection = hashSection;
+  } else if (savedSection && availableSections.has(savedSection)) {
+    initialSection = savedSection;
+  }
 
   refreshPlanLocks();
+  syncWatermarkControl();
+  updateProductLimitBadge();
+  updateCategoryLimitBadge();
+  updateProductPhotoPolicyUi();
   activateSection(initialSection);
+
+  // Remove the early anti-flash boot styles now that JS controls panel visibility.
+  const bootSectionStyle = document.getElementById("bootSectionStyle");
+  if (bootSectionStyle) bootSectionStyle.remove();
+  document.documentElement.removeAttribute("data-boot-section");
 });

@@ -997,3 +997,46 @@ body {
     transform: scale(1);
   }
 }
+
+/* Водяний знак у підвалі */
+.site-watermark {
+  margin: 32px auto 24px;
+  padding: 16px 0 calc(24px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  justify-content: center;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.site-watermark-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
+}
+
+.site-watermark-link:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(59, 130, 224, 0.18);
+  color: #3b82e0;
+}
+
+.site-watermark-logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  flex: 0 0 auto;
+}
+
+.site-watermark-text strong {
+  color: #3b82e0;
+  font-weight: 800;
+}

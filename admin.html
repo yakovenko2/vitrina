@@ -7,15 +7,73 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="admin.css">
+<link rel="stylesheet" href="admin.css?v=20260731f">
+<script>
+  // Early boot: show the correct section instantly (no flash) based on the URL
+  // hash or the last active section, before the main script runs.
+  (function () {
+    try {
+      var SLUG_TO_SECTION = {
+        "home": "home",
+        "orders": "orders",
+        "products": "products",
+        "stock": "stock",
+        "categories": "categories",
+        "stats/views": "views",
+        "stats/sales": "sales",
+        "billing": "billing",
+        "promocodes": "promocodes",
+        "settings/osnova": "settings",
+        "settings/notifications": "notifications",
+        "settings/payments": "payments",
+        "settings/shipping": "shipping",
+        "settings/domain": "domain"
+      };
+      var VALID = ["home", "orders", "products", "stock", "categories", "views", "sales", "billing", "promocodes", "settings", "notifications", "payments", "shipping", "domain"];
+      var raw = String(window.location.hash || "").replace(/^#\/?/, "").trim().toLowerCase();
+      var section = SLUG_TO_SECTION[raw] || localStorage.getItem("lavkaAdminActiveSection") || "home";
+      if (VALID.indexOf(section) === -1) section = "home";
+      document.documentElement.setAttribute("data-boot-section", section);
+      var style = document.createElement("style");
+      style.id = "bootSectionStyle";
+      style.textContent = "html[data-boot-section] .panel{display:none!important}html[data-boot-section] #" + section + "{display:block!important}";
+      document.head.appendChild(style);
+    } catch (e) {}
+  })();
+</script>
 </head>
 <body>
   <div class="admin-layout">
     <aside class="sidebar" id="adminSidebar">
       <div class="sidebar-head">
-        <a class="brand" href="index.html">
-          <span class="brand-dot"></span>
-          Lavka Admin
+        <a class="brand" href="index.html" aria-label="Вітрина">
+          <svg class="brand-logo brand-logo-full" viewBox="150 240 1180 290" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Вітрина">
+            <rect x="150" y="240" width="290" height="290" rx="55" fill="#3B82E0"/>
+            <g fill="none" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M215 350 L235 300 L355 300 L375 350"/>
+              <path d="M215 350 Q225 372 245 372 Q265 372 275 350"/>
+              <path d="M275 350 Q285 372 305 372 Q325 372 335 350"/>
+              <path d="M335 350 Q345 372 355 372 Q365 372 375 350"/>
+              <line x1="235" y1="372" x2="235" y2="450"/>
+              <line x1="355" y1="372" x2="355" y2="450"/>
+              <path d="M225 400 L365 400 L365 450 L225 450 Z"/>
+              <line x1="205" y1="470" x2="385" y2="470"/>
+            </g>
+            <text x="490" y="450" font-family="Nunito, 'Segoe UI', sans-serif" font-weight="800" font-size="180" fill="#FFFFFF" letter-spacing="-2">Вітрина</text>
+          </svg>
+          <svg class="brand-logo brand-logo-icon" viewBox="150 240 290 290" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Вітрина">
+            <rect x="150" y="240" width="290" height="290" rx="55" fill="#3B82E0"/>
+            <g fill="none" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M215 350 L235 300 L355 300 L375 350"/>
+              <path d="M215 350 Q225 372 245 372 Q265 372 275 350"/>
+              <path d="M275 350 Q285 372 305 372 Q325 372 335 350"/>
+              <path d="M335 350 Q345 372 355 372 Q365 372 375 350"/>
+              <line x1="235" y1="372" x2="235" y2="450"/>
+              <line x1="355" y1="372" x2="355" y2="450"/>
+              <path d="M225 400 L365 400 L365 450 L225 450 Z"/>
+              <line x1="205" y1="470" x2="385" y2="470"/>
+            </g>
+          </svg>
         </a>
         <button class="menu-toggle" id="mobileMenuToggle" type="button" aria-label="Відкрити меню" aria-expanded="false" aria-controls="sidebarNav">
           <span></span>
@@ -37,6 +95,7 @@
               <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </span>
             <span class="menu-item-label">Замовлення</span>
+            <span class="menu-item-badge" id="ordersNewBadge" hidden aria-label="Нові замовлення">0</span>
           </button>
           <button class="menu-item" data-section="products">
             <span class="menu-item-icon" aria-hidden="true">
@@ -225,6 +284,7 @@
                 Статус замовлення
                 <select id="ordersStatusFilter">
                   <option value="all">Усі</option>
+                  <option value="Нове">Нове</option>
                   <option value="Очікує">Очікує</option>
                   <option value="В обробці">В обробці</option>
                   <option value="Відправлено">Відправлено</option>
@@ -258,9 +318,27 @@
             </div>
           </div>
 
+          <div class="orders-bulk-bar" id="ordersBulkBar" hidden>
+            <span class="orders-bulk-count" id="ordersBulkCount">Обрано: 0</span>
+            <div class="orders-bulk-actions">
+              <select id="ordersBulkStatusSelect" aria-label="Новий статус для обраних замовлень">
+                <option value="Нове">Нове</option>
+                <option value="Очікує">Очікує</option>
+                <option value="В обробці">В обробці</option>
+                <option value="Відправлено">Відправлено</option>
+                <option value="Доставлено">Доставлено</option>
+                <option value="Скасовано">Скасовано</option>
+              </select>
+              <button id="ordersBulkStatusApply" type="button" class="mini-btn">Змінити статус</button>
+              <button id="ordersBulkDelete" type="button" class="mini-btn danger">Видалити обрані</button>
+              <button id="ordersBulkClear" type="button" class="mini-btn">Зняти виділення</button>
+            </div>
+          </div>
+
           <table id="ordersTable" class="orders-list-table">
             <thead>
               <tr>
+                <th class="orders-select-cell"><input type="checkbox" id="ordersSelectAll" aria-label="Обрати всі замовлення"></th>
                 <th>№</th>
                 <th>Оформлено</th>
                 <th>Клієнт</th>
@@ -340,6 +418,7 @@
                 <label>
                   Статус замовлення
                   <select id="orderStatusSelect" required>
+                    <option value="Нове">Нове</option>
                     <option value="Очікує">Очікує</option>
                     <option value="В обробці">В обробці</option>
                     <option value="Відправлено">Відправлено</option>
@@ -379,7 +458,10 @@
       <section class="panel" id="products">
         <div class="panel-box">
           <div class="box-head">
-            <h2>Каталог товарів</h2>
+            <div class="box-head-title">
+              <h2>Каталог товарів</h2>
+              <span id="productLimitBadge" class="product-limit-badge" aria-live="polite" title="Кількість доданих товарів на вашому тарифі"></span>
+            </div>
             <button class="action-btn" id="openProductModal" type="button">+ Додати товар</button>
           </div>
 
@@ -533,8 +615,9 @@
                 </label>
 
                 <label>
-                  Фото товару (до 4 файлів, кожен до 3 МБ)
+                  <span id="productPhotosPolicyLabel">Фото товару</span>
                   <input id="productPhotos" type="file" accept="image/*" multiple>
+                  <small id="productPhotosPolicyHint" class="input-hint"></small>
                 </label>
 
                 <button id="productSubmitButton" type="submit" class="action-btn">Створити товар</button>
@@ -544,6 +627,10 @@
           </div>
 
           <div class="products-table-wrap">
+            <div id="productsLoadingOverlay" class="products-loading-overlay" role="status" aria-live="polite" aria-label="Завантаження товарів" hidden>
+              <span class="products-loading-spinner" aria-hidden="true"></span>
+              <span class="products-loading-text">Завантажуємо товари...</span>
+            </div>
             <table class="products-table">
               <thead>
                 <tr>
@@ -626,7 +713,12 @@
 
       <section class="panel" id="categories">
         <div class="panel-box">
-          <h2>Керування категоріями</h2>
+          <div class="box-head">
+            <div class="box-head-title">
+              <h2>Керування категоріями</h2>
+              <span id="categoryLimitBadge" class="category-limit-badge" aria-live="polite" title="Кількість доданих категорій на вашому тарифі"></span>
+            </div>
+          </div>
           <p class="categories-hint">Перетягуйте категорії мишкою або пальцем, щоб змінити порядок.</p>
 
           <form id="categoryCreateForm" class="category-create-form">
@@ -747,6 +839,7 @@
       </section>
 
       <section class="panel" id="billing">
+        <div id="billingTrialBanner" class="billing-trial-banner" hidden></div>
         <div class="cards-row">
           <article class="kpi">
             <p>Поточний тариф</p>
@@ -989,6 +1082,20 @@
                   <input id="socialTiktok" type="url" placeholder="https://tiktok.com/@...">
                 </label>
               </div>
+            </fieldset>
+
+            <fieldset class="social-fieldset" id="watermarkFieldset">
+              <legend>Водяний знак</legend>
+              <label class="social-item">
+                <span class="social-item-top">
+                  <span>Приховати водяний знак «Створено на Вітрина»</span>
+                  <span class="switch-wrap">
+                    <input id="hideWatermarkEnabled" type="checkbox">
+                    <span class="switch-slider"></span>
+                  </span>
+                </span>
+                <small class="settings-note" id="watermarkPlanNote">Доступно на тарифах «Бізнес» та «Про». На інших тарифах водяний знак показується завжди.</small>
+              </label>
             </fieldset>
 
             <button type="submit" class="action-btn">Зберегти зміни</button>
@@ -1354,8 +1461,70 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-functions-compat.js"></script>
-<script src="firebase-sync.js?v=20260729b"></script>
-<script src="admin.js"></script>
+<script src="firebase-sync.js?v=20260730c"></script>
+<script src="admin.js?v=20260731f"></script>
+<script>
+  // Instant section activation: runs synchronously after the DOM is parsed but
+  // BEFORE admin.js init (which firebase-sync defers by 1-2s). This makes the
+  // correct section appear immediately, with no flash or delayed jump.
+  (function () {
+    try {
+      var SLUG_TO_SECTION = {
+        "home": "home",
+        "orders": "orders",
+        "products": "products",
+        "stock": "stock",
+        "categories": "categories",
+        "stats/views": "views",
+        "stats/sales": "sales",
+        "billing": "billing",
+        "promocodes": "promocodes",
+        "settings/osnova": "settings",
+        "settings/notifications": "notifications",
+        "settings/payments": "payments",
+        "settings/shipping": "shipping",
+        "settings/domain": "domain"
+      };
+      var TITLES = {
+        home: "Головна", orders: "Замовлення", products: "Товари", stock: "Склад",
+        categories: "Категорії", views: "Статистика переглядів", sales: "Статистика продажів",
+        billing: "Тарифний план", promocodes: "Промо-коди", settings: "Налаштування",
+        notifications: "Сповіщення", payments: "Оплата", shipping: "Доставка", domain: "Домен"
+      };
+      var SETTINGS_SECTIONS = ["settings", "notifications", "payments", "shipping", "domain"];
+      var panels = document.querySelectorAll(".panel");
+      var validIds = {};
+      panels.forEach(function (panel) { validIds[panel.id] = true; });
+
+      var raw = String(window.location.hash || "").replace(/^#\/?/, "").trim().toLowerCase();
+      var section = SLUG_TO_SECTION[raw] || localStorage.getItem("lavkaAdminActiveSection") || "home";
+      if (!validIds[section]) section = "home";
+
+      panels.forEach(function (panel) {
+        panel.classList.toggle("active", panel.id === section);
+      });
+      document.querySelectorAll(".menu-item[data-section]").forEach(function (item) {
+        var isSettingsRoot = item.dataset.section === "settings";
+        var isActive = item.dataset.section === section || (isSettingsRoot && SETTINGS_SECTIONS.indexOf(section) !== -1);
+        item.classList.toggle("active", isActive);
+      });
+      document.querySelectorAll(".settings-subnav .settings-item").forEach(function (item) {
+        item.classList.toggle("active", item.dataset.section === section);
+      });
+      var subnav = document.getElementById("settingsSubnav");
+      if (subnav) {
+        subnav.classList.toggle("open", SETTINGS_SECTIONS.indexOf(section) !== -1);
+      }
+      var titleEl = document.getElementById("sectionTitle");
+      if (titleEl) titleEl.textContent = TITLES[section] || "Адмін панель";
+
+      // Real classes are now set, so the early anti-flash boot style is no longer needed.
+      var bootStyle = document.getElementById("bootSectionStyle");
+      if (bootStyle) bootStyle.remove();
+      document.documentElement.removeAttribute("data-boot-section");
+    } catch (e) {}
+  })();
+</script>
 <script>
   (function () {
     var REGISTRATION_KEY = "lavkaRegistration";

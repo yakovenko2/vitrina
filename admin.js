@@ -1095,7 +1095,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const telegramNotificationsSavedMessage = document.getElementById("telegramNotificationsSavedMessage");
   const paymentMethodsForm = document.getElementById("paymentMethodsForm");
   const paymentMonoEnabled = document.getElementById("paymentMonoEnabled");
-  const paymentMonoMerchantId = document.getElementById("paymentMonoMerchantId");
   const paymentMonoSecret = document.getElementById("paymentMonoSecret");
   const paymentLiqpayEnabled = document.getElementById("paymentLiqpayEnabled");
   const paymentLiqpayPublicKey = document.getElementById("paymentLiqpayPublicKey");
@@ -1104,6 +1103,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const paymentCodFee = document.getElementById("paymentCodFee");
   const paymentPrepaymentEnabled = document.getElementById("paymentPrepaymentEnabled");
   const paymentPrepaymentAmount = document.getElementById("paymentPrepaymentAmount");
+  const paymentPrepaymentHint = document.getElementById("paymentPrepaymentHint");
   const paymentBankTransferEnabled = document.getElementById("paymentBankTransferEnabled");
   const paymentBankRequisites = document.getElementById("paymentBankRequisites");
   const paymentsSavedMessage = document.getElementById("paymentsSavedMessage");
@@ -1427,7 +1427,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const CHECKOUT_SETTINGS_FIELDS = [
     "paymentMonoEnabled",
-    "paymentMonoMerchantId",
     "paymentMonoSecret",
     "paymentLiqpayEnabled",
     "paymentLiqpayPublicKey",
@@ -4510,9 +4509,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (paymentMonoEnabled) {
       paymentMonoEnabled.checked = Boolean(settings.paymentMonoEnabled);
     }
-    if (paymentMonoMerchantId) {
-      paymentMonoMerchantId.value = String(settings.paymentMonoMerchantId || "").trim();
-    }
     if (paymentMonoSecret) {
       paymentMonoSecret.value = String(settings.paymentMonoSecret || "").trim();
     }
@@ -4568,8 +4564,36 @@ document.addEventListener("DOMContentLoaded", () => {
     updateDescriptionCounter();
   };
 
+  const hasEnabledAcquiring = () => Boolean(paymentMonoEnabled?.checked || paymentLiqpayEnabled?.checked);
+
+  const syncPrepaymentControls = () => {
+    const acquiringEnabled = hasEnabledAcquiring();
+
+    if (paymentPrepaymentEnabled) {
+      paymentPrepaymentEnabled.disabled = !acquiringEnabled;
+      if (!acquiringEnabled && paymentPrepaymentEnabled.checked) {
+        paymentPrepaymentEnabled.checked = false;
+      }
+    }
+
+    const prepaymentChecked = Boolean(paymentPrepaymentEnabled?.checked);
+    if (paymentPrepaymentAmount) {
+      paymentPrepaymentAmount.disabled = !acquiringEnabled || !prepaymentChecked;
+      if (!prepaymentChecked) {
+        paymentPrepaymentAmount.value = "";
+      }
+    }
+
+    if (paymentPrepaymentHint) {
+      paymentPrepaymentHint.textContent = acquiringEnabled
+        ? "Клієнт сплачує вказану суму онлайн через підключений еквайринг, а залишок — при отриманні."
+        : "Клієнт сплачує вказану суму онлайн через підключений еквайринг, а залишок — при отриманні. Щоб увімкнути Передоплату, активуйте Plata by mono або LiqPay.";
+    }
+  };
+
   applySettings(readSettings());
   updateAdminDocumentTitle();
+  syncPrepaymentControls();
   mergeAndSaveSettings({
     currency: normalizeCurrencyCode(readSettings()?.currency || "uah"),
     telegramBotUsername: TELEGRAM_BOT_USERNAME,
@@ -6308,15 +6332,25 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   if (paymentMethodsForm) {
+    if (paymentMonoEnabled) {
+      paymentMonoEnabled.addEventListener("change", syncPrepaymentControls);
+    }
+    if (paymentLiqpayEnabled) {
+      paymentLiqpayEnabled.addEventListener("change", syncPrepaymentControls);
+    }
+    if (paymentPrepaymentEnabled) {
+      paymentPrepaymentEnabled.addEventListener("change", syncPrepaymentControls);
+    }
+
     paymentMethodsForm.addEventListener("submit", (event) => {
       event.preventDefault();
 
       const monoEnabled = Boolean(paymentMonoEnabled?.checked);
       const liqpayEnabled = Boolean(paymentLiqpayEnabled?.checked);
       const codEnabled = Boolean(paymentCodEnabled?.checked);
-      const prepaymentEnabled = Boolean(paymentPrepaymentEnabled?.checked);
+      const acquiringEnabled = Boolean(monoEnabled || liqpayEnabled);
+      const prepaymentEnabled = acquiringEnabled && Boolean(paymentPrepaymentEnabled?.checked);
       const bankTransferEnabled = Boolean(paymentBankTransferEnabled?.checked);
-      const monoMerchantId = String(paymentMonoMerchantId?.value || "").trim();
       const monoSecret = String(paymentMonoSecret?.value || "").trim();
       const liqpayPublicKey = String(paymentLiqpayPublicKey?.value || "").trim();
       const liqpayPrivateKey = String(paymentLiqpayPrivateKey?.value || "").trim();
@@ -6328,9 +6362,9 @@ document.addEventListener("DOMContentLoaded", () => {
         paymentsSavedMessage.classList.remove("error");
       }
 
-      if (monoEnabled && (!monoMerchantId || !monoSecret)) {
+      if (monoEnabled && !monoSecret) {
         if (paymentsSavedMessage) {
-          paymentsSavedMessage.textContent = "Для Plata by mono вкажіть Merchant ID і Secret key.";
+          paymentsSavedMessage.textContent = "Для Plata by mono вкажіть Secret key (API key).";
           paymentsSavedMessage.classList.add("error");
         }
         return;
@@ -6360,9 +6394,17 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      if (!acquiringEnabled && Boolean(paymentPrepaymentEnabled?.checked)) {
+        if (paymentsSavedMessage) {
+          paymentsSavedMessage.textContent = "Передоплата доступна лише з активним еквайрингом (Plata by mono або LiqPay).";
+          paymentsSavedMessage.classList.add("error");
+        }
+        syncPrepaymentControls();
+        return;
+      }
+
       mergeAndSaveSettings({
         paymentMonoEnabled: monoEnabled,
-        paymentMonoMerchantId: monoMerchantId,
         paymentMonoSecret: monoSecret,
         paymentLiqpayEnabled: liqpayEnabled,
         paymentLiqpayPublicKey: liqpayPublicKey,
@@ -6375,6 +6417,8 @@ document.addEventListener("DOMContentLoaded", () => {
         paymentBankRequisites: bankRequisites,
         paymentDeliveryMatrix: collectPaymentDeliveryMatrixFromUi()
       });
+
+      syncPrepaymentControls();
 
       if (paymentsSavedMessage) {
         paymentsSavedMessage.textContent = "Способи оплати збережено.";

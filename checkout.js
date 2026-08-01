@@ -8,6 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const NOVA_POSHTA_API_URL = "https://api.novaposhta.ua/v2.0/json/";
   const NOVA_POSHTA_API_KEY = "8e24dc6bb36a0ee95f254d203bb3cc92";
   const NOTIFY_ORDER_URL = "https://us-central1-lavka-shop.cloudfunctions.net/notifyOrder";
+  const CREATE_ORDER_MONO_INVOICE_URL = "https://us-central1-lavka-shop.cloudfunctions.net/createStoreOrderMonoInvoice";
 
   const resolveStoreIdForNotify = async () => {
     if (window.__lavkaStoreId) return String(window.__lavkaStoreId);
@@ -52,6 +53,90 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (error) {
       // Сповіщення не має блокувати оформлення замовлення.
     }
+  };
+
+  const isMonoPaymentMethod = (value) => {
+    const normalized = String(value || "").trim().toLowerCase();
+    return normalized.includes("mono");
+  };
+
+  const isMonoPaymentMethodById = (value) => String(value || "").trim().toLowerCase() === "payment-mono";
+
+  const mapMonoCreateErrorMessage = (errorCode) => {
+    const code = String(errorCode || "").trim().toLowerCase();
+    if (code === "mono-config-missing") {
+      return "Оплата mono тимчасово недоступна: власник магазину ще не додав API key.";
+    }
+    if (code === "mono-disabled") {
+      return "Оплата mono вимкнена в налаштуваннях магазину.";
+    }
+    if (code === "mono-invalid-token") {
+      return "Не вдалося створити платіж mono: перевірте API key в адмінці магазину.";
+    }
+    if (code === "invalid-store-id") {
+      return "Не вдалося визначити магазин для оплати.";
+    }
+    if (code === "invalid-order") {
+      return "Невірні дані замовлення. Перевірте кошик та спробуйте знову.";
+    }
+    if (code === "mono-rate-limit") {
+      return "Сервіс mono тимчасово перевантажений. Спробуйте ще раз через хвилину.";
+    }
+    return "Не вдалося створити платіж mono. Спробуйте ще раз.";
+  };
+
+  const createMonoInvoiceForOrder = async (order) => {
+    const storeId = await resolveStoreIdForNotify();
+    if (!storeId || storeId === "default-store") {
+      throw new Error("invalid-store-id");
+    }
+
+    const amount = Math.max(0, Math.round(Number(order?.payableNow) || 0));
+    if (amount <= 0) {
+      throw new Error("invalid-order");
+    }
+
+    const payload = {
+      storeId,
+      orderId: String(order?.id || "").trim(),
+      amount,
+      currency: normalizeCurrencyCode(settings?.currency || "uah"),
+      customerName: String(order?.customerName || "").trim(),
+      customerPhone: String(order?.customerPhone || "").trim(),
+      paymentMethod: String(order?.paymentMethod || "").trim(),
+      returnBaseUrl: window.location.origin,
+      items: Array.isArray(order?.items)
+        ? order.items.map((item) => ({
+            code: String(item?.sku || "-").trim().slice(0, 64),
+            name: String(item?.name || "Товар").trim().slice(0, 120),
+            qty: Math.max(1, Math.round(Number(item?.qty) || 1)),
+            price: Math.max(0, Math.round(Number(item?.price) || 0))
+          }))
+        : []
+    };
+
+    const response = await fetch(CREATE_ORDER_MONO_INVOICE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    let data = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+
+    if (!response.ok || !data || !data.ok) {
+      throw new Error(String(data && data.error || "create-invoice-failed"));
+    }
+
+    return {
+      invoiceId: String(data.invoiceId || "").trim(),
+      pageUrl: String(data.pageUrl || "").trim(),
+      appUrl: String(data.appUrl || "").trim()
+    };
   };
 
   const checkoutForm = document.getElementById("checkoutForm");
@@ -100,6 +185,23 @@ document.addEventListener("DOMContentLoaded", () => {
   const checkoutMessage = document.getElementById("checkoutMessage");
   const checkoutOrderStatusBadge = document.getElementById("checkoutOrderStatusBadge");
   const checkoutCard = document.querySelector(".checkout-card");
+
+  const showPaymentReturnStatus = () => {
+    if (!checkoutMessage) return;
+    const params = new URLSearchParams(window.location.search || "");
+    const status = String(params.get("payment") || "").trim().toLowerCase();
+    if (!status) return;
+
+    checkoutMessage.classList.remove("error");
+    if (status === "success") {
+      checkoutMessage.textContent = "Оплату через mono отримано. Дякуємо за замовлення!";
+    } else if (status === "processing") {
+      checkoutMessage.textContent = "Платіж mono обробляється. Зачекайте кілька секунд.";
+    } else if (status === "fail") {
+      checkoutMessage.classList.add("error");
+      checkoutMessage.textContent = "Оплата mono не завершена. Спробуйте ще раз.";
+    }
+  };
 
   const readSettings = () => {
     try {
@@ -402,7 +504,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const isPrepaymentMethod = (value) => {
     const normalized = String(value || "").trim().toLowerCase();
-    return normalized.includes("передоплат");
+    return normalized === "payment-prepayment" || normalized.includes("передоплат");
   };
 
   const buildDefaultPaymentDeliveryMatrix = () => CHECKOUT_DELIVERY_IDS.reduce((acc, deliveryId) => {
@@ -450,10 +552,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const renderOptions = (container, options, fieldName, autoSelectFirst = true) => {
     if (!container) return;
     const requiredAttr = (fieldName === "deliveryMethod" || fieldName === "paymentMethod") ? "required" : "";
+    const isPaymentField = fieldName === "paymentMethod";
     container.innerHTML = options
       .map((option, index) => `
         <label class="option-item">
-          <input type="radio" name="${fieldName}" value="${option.value}" ${autoSelectFirst && index === 0 ? "checked" : ""} ${requiredAttr}>
+          <input type="radio" name="${fieldName}" value="${isPaymentField ? escapeHtml(String(option.id || "")) : escapeHtml(String(option.value || ""))}" data-option-id="${escapeHtml(String(option.id || ""))}" data-option-title="${escapeHtml(String(option.value || ""))}" ${autoSelectFirst && index === 0 ? "checked" : ""} ${requiredAttr}>
           ${option.logo ? `<img class="option-logo" src="${option.logo}" alt="">` : ""}
           <span class="option-meta">
             <span class="option-title">${option.title}</span>
@@ -984,7 +1087,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const isBankTransferMethod = (value) => {
     const normalized = String(value || "").trim().toLowerCase();
-    return normalized.includes("реквізит");
+    return normalized === "payment-bank-transfer" || normalized.includes("реквізит");
   };
 
   const updateBankTransferInfo = () => {
@@ -1250,6 +1353,7 @@ document.addEventListener("DOMContentLoaded", () => {
   syncOrderLockUi();
   updateCheckoutSummary();
   renderCartSummary();
+  showPaymentReturnStatus();
 
   updateSubmitState();
   updateBankTransferInfo();
@@ -1340,7 +1444,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const createOrderId = () => `#${Date.now().toString().slice(-6)}`;
 
   if (checkoutForm) {
-    checkoutForm.addEventListener("submit", (event) => {
+    checkoutForm.addEventListener("submit", async (event) => {
       event.preventDefault();
 
       syncOrderLockUi();
@@ -1371,7 +1475,31 @@ document.addEventListener("DOMContentLoaded", () => {
       const nameValue = String(customerName?.value || "").trim();
       const phoneValue = String(customerPhone?.value || "").trim();
       const deliveryMethod = String(checkoutForm.querySelector('input[name="deliveryMethod"]:checked')?.value || "").trim();
-      const paymentMethod = String(checkoutForm.querySelector('input[name="paymentMethod"]:checked')?.value || "").trim();
+      const selectedPaymentInput = checkoutForm.querySelector('input[name="paymentMethod"]:checked');
+      const selectedPaymentValue = String(selectedPaymentInput?.value || "").trim();
+      const selectedPaymentOptionId = String(selectedPaymentInput?.dataset?.optionId || "").trim();
+      const selectedPaymentTitle = String(selectedPaymentInput?.dataset?.optionTitle || "").trim();
+      const selectedPaymentMeta = paymentMethods.find((method) => {
+        const methodId = String(method?.id || "").trim();
+        const methodValue = String(method?.value || "").trim();
+        return methodId === selectedPaymentValue
+          || methodId === selectedPaymentOptionId
+          || methodValue === selectedPaymentValue
+          || methodValue === selectedPaymentTitle;
+      }) || null;
+
+      const paymentMethodId = String(
+        selectedPaymentMeta?.id
+        || selectedPaymentOptionId
+        || selectedPaymentValue
+        || ""
+      ).trim();
+      const paymentMethod = String(
+        selectedPaymentMeta?.value
+        || selectedPaymentTitle
+        || selectedPaymentValue
+        || ""
+      ).trim();
       const commentValue = String(orderComment?.value || "").trim();
       const deliveryAddressResult = buildDeliveryAddress(deliveryMethod);
 
@@ -1423,9 +1551,57 @@ document.addEventListener("DOMContentLoaded", () => {
         promoCode: appliedPromo?.code || "",
         promoDiscount,
         inventoryApplied: false,
+        paymentMethodId,
         paymentMethod,
         items: orderItems
       };
+
+      const selectedMonoPayment = isMonoPaymentMethodById(paymentMethodId) || isMonoPaymentMethod(paymentMethod);
+      if (selectedMonoPayment) {
+        if (submitOrderBtn) {
+          submitOrderBtn.disabled = true;
+        }
+
+        if (checkoutMessage) {
+          checkoutMessage.classList.remove("error");
+          checkoutMessage.textContent = "Створюємо платіж mono...";
+        }
+
+        try {
+          const invoice = await createMonoInvoiceForOrder(nextOrder);
+          if (!invoice.pageUrl) {
+            throw new Error("mono-invalid-response");
+          }
+
+          nextOrder.paymentStatus = "Очікує оплати";
+          nextOrder.monoInvoiceId = invoice.invoiceId;
+          nextOrder.monoStatus = "created";
+          nextOrder.monoPageUrl = invoice.pageUrl;
+          nextOrder.updatedAt = new Date().toISOString();
+
+          const orders = readOrders();
+          saveOrders([nextOrder, ...orders]);
+          cartState = [];
+          saveCart(cartState);
+
+          void sendOrderTelegramNotification(nextOrder);
+
+          if (checkoutMessage) {
+            checkoutMessage.classList.remove("error");
+            checkoutMessage.textContent = "Перенаправляємо на оплату mono...";
+          }
+
+          window.location.href = invoice.pageUrl;
+          return;
+        } catch (error) {
+          if (checkoutMessage) {
+            checkoutMessage.classList.add("error");
+            checkoutMessage.textContent = mapMonoCreateErrorMessage(error && error.message);
+          }
+          updateSubmitState();
+          return;
+        }
+      }
 
       const orders = readOrders();
       saveOrders([nextOrder, ...orders]);

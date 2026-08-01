@@ -282,6 +282,37 @@ exports.disconnectCustomDomain = onCall(
   }
 );
 
+/**
+ * Очистити кеш Cloudflare для всієї зони (кастомні домени клієнтів +
+ * *.vitryna-shop.com отдають статичні файли через Cloudflare, тож після
+ * кожного `firebase deploy` край-кеш може ще довго віддавати старі
+ * HTML/JS. Викликається вручну з owner-admin після деплою.
+ */
+exports.purgeStorefrontCache = onCall(
+  { secrets: [CLOUDFLARE_API_TOKEN, CLOUDFLARE_ZONE_ID] },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Потрібна автентифікація.");
+    }
+
+    const token = CLOUDFLARE_API_TOKEN.value();
+    const zoneId = CLOUDFLARE_ZONE_ID.value();
+    if (!token || !zoneId) {
+      throw new HttpsError("failed-precondition", "Cloudflare ще не налаштовано на сервері.");
+    }
+
+    try {
+      await cfRequest(`/zones/${zoneId}/purge_cache`, token, {
+        method: "POST",
+        body: JSON.stringify({ purge_everything: true })
+      });
+      return { ok: true };
+    } catch (error) {
+      throw mapCfError(error);
+    }
+  }
+);
+
 /* ────────────────────────────────────────────────────────────────────────
  * Telegram-сповіщення про нові замовлення (Deep Linking)
  *
@@ -1264,6 +1295,385 @@ exports.reconcileMonoTariffInvoices = onSchedule(
       } catch (error) {
         console.error("reconcileMonoTariffInvoices item error:", invoiceId, error);
       }
+    }
+  }
+);
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Monobank acquiring: оплата замовлень магазину (store checkout)
+ * ──────────────────────────────────────────────────────────────────────── */
+
+const STORE_CHECKOUT_KEY = "lavkaCheckoutSettings";
+const STORE_SETTINGS_KEY = "lavkaStoreSettings";
+const STORE_ORDERS_KEY = "lavkaOrders";
+const STORE_ORDER_INVOICES_COLLECTION = "store_order_invoices";
+
+const sanitizeOrderId = (value) => String(value || "").trim().slice(0, 64);
+
+const resolveStoreOrderWebhookUrl = () => "https://us-central1-lavka-shop.cloudfunctions.net/monoStoreOrderWebhook";
+
+const normalizeStoreCurrency = (value) => {
+  const code = String(value || "").trim().toLowerCase();
+  if (code === "uah" || code === "980") {
+    return MONO_CCY_UAH;
+  }
+  return MONO_CCY_UAH;
+};
+
+const readStoreCheckoutConfig = async (storeId) => {
+  const baseRef = db.collection("stores").doc(storeId).collection("data");
+  const [checkoutSnap, settingsSnap] = await Promise.all([
+    baseRef.doc(STORE_CHECKOUT_KEY).get(),
+    baseRef.doc(STORE_SETTINGS_KEY).get()
+  ]);
+
+  const checkoutValue = checkoutSnap.exists ? ((checkoutSnap.data() || {}).value || {}) : {};
+  const settingsValue = settingsSnap.exists ? ((settingsSnap.data() || {}).value || {}) : {};
+
+  const enabled = Boolean(
+    checkoutValue.paymentMonoEnabled !== undefined
+      ? checkoutValue.paymentMonoEnabled
+      : settingsValue.paymentMonoEnabled
+  );
+  const token = String(checkoutValue.paymentMonoSecret || settingsValue.paymentMonoSecret || "").trim();
+  const merchantId = String(checkoutValue.paymentMonoMerchantId || settingsValue.paymentMonoMerchantId || "").trim();
+
+  return {
+    enabled,
+    token,
+    merchantId
+  };
+};
+
+const buildStoreOrderPaymentUrls = (baseUrl, orderId) => {
+  const normalizedBase = sanitizeReturnBaseUrl(baseUrl);
+  const fallback = "https://lavka-shop.web.app";
+  const origin = normalizedBase || fallback;
+  const encodedOrder = encodeURIComponent(String(orderId || ""));
+
+  return {
+    redirectUrl: `${origin}/checkout.html?payment=processing&order=${encodedOrder}`,
+    successUrl: `${origin}/checkout.html?payment=success&order=${encodedOrder}`,
+    failUrl: `${origin}/checkout.html?payment=fail&order=${encodedOrder}`
+  };
+};
+
+const createStoreOrderReference = (storeId, orderId) => {
+  const randomPart = Math.random().toString(36).slice(2, 9);
+  const compactOrder = String(orderId || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 24) || "order";
+  return `store_${storeId}_${compactOrder}_${Date.now()}_${randomPart}`;
+};
+
+const updateStoreOrderPaymentStatus = async ({
+  storeId,
+  orderId,
+  paymentStatus,
+  monoInvoiceId,
+  monoStatus,
+  pageUrl
+}) => {
+  const safeStoreId = sanitizeStoreIdStrict(storeId);
+  const safeOrderId = sanitizeOrderId(orderId);
+  if (!safeStoreId || !safeOrderId) {
+    return false;
+  }
+
+  const orderDocRef = db.collection("stores").doc(safeStoreId).collection("data").doc(STORE_ORDERS_KEY);
+  const snap = await orderDocRef.get();
+  if (!snap.exists) {
+    return false;
+  }
+
+  const payload = snap.data() || {};
+  const list = Array.isArray(payload.value) ? payload.value.slice() : [];
+  const index = list.findIndex((item) => String(item && item.id || "").trim() === safeOrderId);
+  if (index < 0) {
+    return false;
+  }
+
+  const current = list[index] && typeof list[index] === "object" ? list[index] : {};
+  list[index] = {
+    ...current,
+    paymentStatus: String(paymentStatus || current.paymentStatus || "Не оплачено"),
+    monoInvoiceId: String(monoInvoiceId || current.monoInvoiceId || ""),
+    monoStatus: String(monoStatus || current.monoStatus || ""),
+    monoPageUrl: String(pageUrl || current.monoPageUrl || ""),
+    updatedAt: new Date().toISOString()
+  };
+
+  await orderDocRef.set({
+    key: STORE_ORDERS_KEY,
+    value: list,
+    updatedAt: new Date().toISOString()
+  }, { merge: true });
+
+  return true;
+};
+
+exports.createStoreOrderMonoInvoice = onRequest(
+  { cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
+    if (req.method !== "POST") {
+      res.status(405).json({ ok: false, error: "method-not-allowed" });
+      return;
+    }
+
+    const storeId = sanitizeStoreIdStrict(req.body && req.body.storeId);
+    const orderId = sanitizeOrderId(req.body && req.body.orderId);
+    const amount = Math.max(0, Math.round(Number(req.body && req.body.amount) || 0));
+    const amountKop = amount * 100;
+    const returnBaseUrl = String(req.body && req.body.returnBaseUrl || "");
+    const customerName = sanitizeUserIdentity(req.body && req.body.customerName);
+    const customerPhone = sanitizeUserIdentity(req.body && req.body.customerPhone);
+    const paymentMethod = sanitizeUserIdentity(req.body && req.body.paymentMethod);
+    const currency = normalizeStoreCurrency(req.body && req.body.currency);
+    const items = Array.isArray(req.body && req.body.items) ? req.body.items : [];
+
+    if (!storeId) {
+      res.status(400).json({ ok: false, error: "invalid-store-id" });
+      return;
+    }
+    if (!orderId || amountKop <= 0) {
+      res.status(400).json({ ok: false, error: "invalid-order" });
+      return;
+    }
+
+    try {
+      const monoConfig = await readStoreCheckoutConfig(storeId);
+      if (!monoConfig.enabled) {
+        res.status(400).json({ ok: false, error: "mono-disabled" });
+        return;
+      }
+      if (!monoConfig.token) {
+        res.status(400).json({ ok: false, error: "mono-config-missing" });
+        return;
+      }
+
+      const nowMs = Date.now();
+      const validitySec = 60 * 45;
+      const expiresAtMs = nowMs + (validitySec * 1000);
+      const reference = createStoreOrderReference(storeId, orderId);
+      const urls = buildStoreOrderPaymentUrls(returnBaseUrl, orderId);
+
+      const basketOrder = items.slice(0, 50).map((item) => {
+        const qty = Math.max(1, Math.round(Number(item && item.qty) || 1));
+        const unitSum = Math.max(0, Math.round(Number(item && item.price) || 0)) * 100;
+        const total = qty * unitSum;
+        return {
+          code: sanitizeUserIdentity(item && item.code).slice(0, 64) || "item",
+          name: sanitizeUserIdentity(item && item.name).slice(0, 120) || "Товар",
+          qty,
+          sum: unitSum,
+          total,
+          unit: "шт."
+        };
+      });
+
+      const body = {
+        amount: amountKop,
+        ccy: currency,
+        merchantPaymInfo: {
+          reference,
+          destination: `Оплата замовлення ${orderId}`,
+          comment: `Магазин ${storeId}. ${paymentMethod || "Plata by mono"}. ${customerName || "Клієнт"} ${customerPhone || ""}`.trim(),
+          basketOrder: basketOrder.length
+            ? basketOrder
+            : [
+              {
+                code: "order",
+                name: `Замовлення ${orderId}`,
+                qty: 1,
+                sum: amountKop,
+                total: amountKop,
+                unit: "шт."
+              }
+            ]
+        },
+        redirectUrl: urls.redirectUrl,
+        successUrl: urls.successUrl,
+        failUrl: urls.failUrl,
+        webHookUrl: resolveStoreOrderWebhookUrl(),
+        validity: validitySec,
+        paymentType: "debit",
+        withAppUrl: true
+      };
+
+      const monoPayload = await monoRequest("/api/merchant/invoice/create", monoConfig.token, {
+        method: "POST",
+        body: JSON.stringify(body)
+      });
+
+      const invoiceId = String(monoPayload && monoPayload.invoiceId || "").trim();
+      const pageUrl = String(monoPayload && monoPayload.pageUrl || "").trim();
+      const appUrl = String(monoPayload && monoPayload.appUrl || "").trim();
+
+      if (!invoiceId || !pageUrl) {
+        res.status(500).json({ ok: false, error: "mono-invalid-response" });
+        return;
+      }
+
+      const invoiceDoc = {
+        invoiceId,
+        reference,
+        storeId,
+        orderId,
+        amount,
+        amountKop,
+        ccy: currency,
+        paymentMethod: paymentMethod || "Plata by mono",
+        status: "created",
+        monoStatus: "created",
+        modifiedDate: 0,
+        createdAtMs: nowMs,
+        expiresAtMs,
+        pageUrl,
+        appUrl,
+        merchantId: monoConfig.merchantId || "",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+
+      await db.collection(STORE_ORDER_INVOICES_COLLECTION).doc(invoiceId).set(invoiceDoc, { merge: true });
+
+      await updateStoreOrderPaymentStatus({
+        storeId,
+        orderId,
+        paymentStatus: "Очікує оплати",
+        monoInvoiceId: invoiceId,
+        monoStatus: "created",
+        pageUrl
+      });
+
+      res.status(200).json({
+        ok: true,
+        invoiceId,
+        pageUrl,
+        appUrl: appUrl || ""
+      });
+    } catch (error) {
+      console.error("createStoreOrderMonoInvoice error:", error);
+      const status = Number(error && error.httpStatus) || 500;
+      if (status === 400) {
+        res.status(400).json({ ok: false, error: "mono-bad-request" });
+        return;
+      }
+      if (status === 403) {
+        res.status(500).json({ ok: false, error: "mono-invalid-token" });
+        return;
+      }
+      if (status === 429) {
+        res.status(429).json({ ok: false, error: "mono-rate-limit" });
+        return;
+      }
+      res.status(500).json({ ok: false, error: "internal" });
+    }
+  }
+);
+
+exports.monoStoreOrderWebhook = onRequest(
+  { cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
+    if (req.method !== "POST") {
+      res.status(405).json({ ok: false, error: "method-not-allowed" });
+      return;
+    }
+
+    const webhookPayload = req.body && typeof req.body === "object" ? req.body : {};
+    const invoiceId = String(webhookPayload.invoiceId || "").trim();
+    if (!invoiceId) {
+      res.status(200).send("ok");
+      return;
+    }
+
+    try {
+      const invoiceRef = db.collection(STORE_ORDER_INVOICES_COLLECTION).doc(invoiceId);
+      const snap = await invoiceRef.get();
+      if (!snap.exists) {
+        res.status(200).send("ok");
+        return;
+      }
+
+      const current = snap.data() || {};
+      const storeId = sanitizeStoreIdStrict(current.storeId);
+      if (!storeId) {
+        res.status(200).send("ok");
+        return;
+      }
+
+      const monoConfig = await readStoreCheckoutConfig(storeId);
+      if (!monoConfig.token) {
+        await invoiceRef.set({
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          status: "config-missing",
+          monoStatus: "config-missing",
+          rawLastWebhook: webhookPayload
+        }, { merge: true });
+        res.status(200).send("ok");
+        return;
+      }
+
+      const monoStatusPayload = await monoRequest(
+        `/api/merchant/invoice/status?invoiceId=${encodeURIComponent(invoiceId)}`,
+        monoConfig.token,
+        { method: "GET" }
+      );
+
+      const status = String(monoStatusPayload && monoStatusPayload.status || "").trim().toLowerCase() || "created";
+      const modifiedDate = toMonoModifiedDate(monoStatusPayload && monoStatusPayload.modifiedDate);
+      const prevModified = Number(current.modifiedDate) || 0;
+      if (modifiedDate > prevModified || !prevModified) {
+        await invoiceRef.set({
+          status,
+          monoStatus: status,
+          modifiedDate,
+          rawLastWebhook: webhookPayload,
+          rawLastStatus: monoStatusPayload,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+
+      const orderId = sanitizeOrderId(current.orderId);
+      if (status === "success" && orderId) {
+        await updateStoreOrderPaymentStatus({
+          storeId,
+          orderId,
+          paymentStatus: "Оплачено",
+          monoInvoiceId: invoiceId,
+          monoStatus: status,
+          pageUrl: String(current.pageUrl || "")
+        });
+
+        await invoiceRef.set({
+          activatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+
+      if ((status === "failure" || status === "expired") && orderId) {
+        await updateStoreOrderPaymentStatus({
+          storeId,
+          orderId,
+          paymentStatus: "Не оплачено",
+          monoInvoiceId: invoiceId,
+          monoStatus: status,
+          pageUrl: String(current.pageUrl || "")
+        });
+      }
+
+      res.status(200).send("ok");
+    } catch (error) {
+      console.error("monoStoreOrderWebhook error:", error);
+      res.status(200).send("ok");
     }
   }
 );

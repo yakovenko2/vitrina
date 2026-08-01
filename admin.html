@@ -1165,19 +1165,15 @@
                       <p class="payment-provider-subtitle">Еквайринг Monobank</p>
                     </div>
                   </div>
-                  <span class="switch-wrap">
+                  <label class="switch-wrap" for="paymentMonoEnabled" aria-label="Увімкнути Plata by mono">
                     <input id="paymentMonoEnabled" type="checkbox">
                     <span class="switch-slider"></span>
-                  </span>
+                  </label>
                 </div>
                 <div class="payment-provider-fields">
                   <label>
-                    Merchant ID
-                    <input id="paymentMonoMerchantId" type="text" placeholder="Наприклад: mono_merchant_001">
-                  </label>
-                  <label>
-                    Secret key
-                    <input id="paymentMonoSecret" type="password" autocomplete="off" placeholder="Ключ інтеграції mono">
+                    API key
+                    <input id="paymentMonoSecret" type="password" autocomplete="off" placeholder="Вставте API key еквайрингу mono">
                   </label>
                 </div>
               </article>
@@ -1191,10 +1187,10 @@
                       <p class="payment-provider-subtitle">Еквайринг ПриватБанк</p>
                     </div>
                   </div>
-                  <span class="switch-wrap">
+                  <label class="switch-wrap" for="paymentLiqpayEnabled" aria-label="Увімкнути LiqPay">
                     <input id="paymentLiqpayEnabled" type="checkbox">
                     <span class="switch-slider"></span>
-                  </span>
+                  </label>
                 </div>
                 <div class="payment-provider-fields">
                   <label>
@@ -1242,6 +1238,7 @@
                     </span>
                   </span>
                   <input id="paymentPrepaymentAmount" type="number" min="1" step="1" inputmode="numeric" placeholder="Сума передоплати, грн">
+                  <small id="paymentPrepaymentHint" class="settings-note">Клієнт сплачує вказану суму онлайн через підключений еквайринг, а залишок — при отриманні. Доступно лише коли активовано Plata by mono або LiqPay.</small>
                 </label>
 
                 <label class="social-item">
@@ -1509,7 +1506,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-functions-compat.js"></script>
 <script src="firebase-sync.js?v=20260731a"></script>
-<script src="admin.js?v=20260731m"></script>
+<script src="admin.js?v=20260731p"></script>
 <script>
   // Instant section activation: runs synchronously after the DOM is parsed but
   // BEFORE admin.js init (which firebase-sync defers by 1-2s). This makes the

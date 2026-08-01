@@ -13,6 +13,7 @@
     "lavkaCheckoutSettings",
     "lavkaProducts",
     "lavkaCategories",
+    "lavkaDeletedCategories",
     "lavkaOrders",
     "lavkaPromoCodes",
     "lavkaVisitEvents",
@@ -415,6 +416,9 @@
       value,
       updatedAt: toTimestamp()
     };
+    try {
+      console.debug("[lavka-sync] writeKeyToRemote store=", storeId, "key=", key, "value=", value);
+    } catch (e) {}
 
     await firestore
       .collection("stores")
@@ -436,6 +440,9 @@
       originalSetItem(key, value);
       if (!firestore || syncingFromRemote) return;
       if (!SYNCED_KEYS.includes(String(key))) return;
+      try {
+        console.debug("[lavka-sync] localStorage.setItem -> sync key=", String(key), "store=", storeId);
+      } catch (e) {}
 
       writeKeyToRemote(storeId, String(key), value).catch((error) => {
         console.warn("[lavka-sync] Failed to write key:", key, error);
@@ -490,6 +497,31 @@
     } finally {
       syncingFromRemote = false;
     }
+    // Subscribe to remote changes so updates (e.g. webhook) propagate to localStorage.
+    try {
+      SYNCED_KEYS.forEach((key) => {
+        try {
+          const docRef = firestore.collection("stores").doc(storeId).collection("data").doc(key);
+          docRef.onSnapshot((snap) => {
+            if (!snap.exists) return;
+            const payload = snap.data() || {};
+            if (!Object.prototype.hasOwnProperty.call(payload, "value")) return;
+            try {
+              syncingFromRemote = true;
+              localStorage.setItem(key, JSON.stringify(payload.value));
+            } catch (e) {
+              // ignore
+            } finally {
+              syncingFromRemote = false;
+            }
+          });
+        } catch (e) {
+          // ignore per-key subscribe failures
+        }
+      });
+    } catch (e) {
+      // ignore subscribe failures
+    }
   };
 
   const bootstrapFirestore = async () => {
@@ -542,6 +574,11 @@
         window.dispatchEvent(new CustomEvent("lavka-store-id-ready", { detail: { storeId } }));
       } catch (error) {
         // ignore
+      }
+      try {
+        console.debug("[lavka-sync] storeId=", storeId, "firestore=", Boolean(firestore));
+      } catch (e) {
+        // ignore logging errors
       }
 
       if (firestore) {

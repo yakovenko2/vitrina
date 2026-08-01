@@ -87,9 +87,30 @@ document.addEventListener("DOMContentLoaded", () => {
   const VISITOR_EVENTS_KEY = "lavkaVisitEvents";
   const VISITOR_EVENT_RETENTION_DAYS = 180;
   const params = new URLSearchParams(window.location.search);
-  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-  const productId = hashParams.get("id") || params.get("id") || "";
-  const fromCategory = hashParams.get("cat") || params.get("cat") || "all";
+  const rawHash = String(window.location.hash || "").replace(/^#/, "");
+  // Support new fragment format: <productId>/<category>
+  let productId = "";
+  let fromCategory = "all";
+  if (rawHash) {
+    const split = rawHash.split("/").map((s) => decodeURIComponent(s || "").trim());
+    if (split.length >= 1 && split[0]) {
+      // If fragment starts with 'id=' or 'product=' fall back to legacy parsing
+      if (/^id=/.test(split[0]) || /^product=/.test(split[0])) {
+        const hashParams = new URLSearchParams(rawHash);
+        productId = hashParams.get("id") || hashParams.get("product") || "";
+        fromCategory = hashParams.get("cat") || "all";
+      } else {
+        productId = split[0] || "";
+        fromCategory = split[1] || "all";
+      }
+    }
+  }
+
+  if (!productId) {
+    const hashParams = new URLSearchParams(rawHash);
+    productId = productId || hashParams.get("id") || params.get("id") || "";
+    fromCategory = fromCategory || hashParams.get("cat") || params.get("cat") || "all";
+  }
   const readProducts = () => {
     try {
       const raw = localStorage.getItem(PRODUCTS_KEY);
@@ -199,7 +220,7 @@ document.addEventListener("DOMContentLoaded", () => {
     watermark = document.createElement("footer");
     watermark.className = "site-watermark";
     watermark.innerHTML =
-      '<a class="site-watermark-link" href="landing.html" title="Створити власний магазин на Вітрина">'
+      '<a class="site-watermark-link" href="https://www.vitryna-shop.com/landing" title="Створити власний магазин на Вітрина">'
       + '<span class="site-watermark-text">Створено на <strong>Вітрина</strong></span>'
       + '</a>';
 
@@ -208,10 +229,23 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const applyWatermarkVisibility = () => {
-    const watermark = ensureSiteWatermark();
-    if (!watermark) return;
-    watermark.hidden = false;
-    watermark.style.display = "";
+    const settings = readSettings() || {};
+    const shouldHide = Boolean(settings.hideWatermark) && canRemoveWatermark();
+    try {
+      console.debug("[product] applyWatermarkVisibility", { hideSetting: settings.hideWatermark, shouldHide, billing: readBilling && readBilling() });
+    } catch (e) {}
+    const watermark = document.querySelector('.site-watermark');
+    if (shouldHide) {
+      if (watermark && watermark.parentNode) {
+        watermark.parentNode.removeChild(watermark);
+      }
+      return;
+    }
+    const existing = ensureSiteWatermark();
+    if (existing) {
+      existing.hidden = false;
+      existing.style.display = "";
+    }
   };
   applyWatermarkVisibility();
 

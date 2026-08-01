@@ -1153,6 +1153,63 @@ exports.getTariffInvoiceStatus = onRequest(
   }
 );
 
+exports.getStoreOrderInvoiceStatus = onRequest(
+  { cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
+    if (req.method !== "GET") {
+      res.status(405).json({ ok: false, error: "method-not-allowed" });
+      return;
+    }
+
+    const invoiceId = String((req.query && req.query.invoiceId) || "").trim();
+    const orderId = String((req.query && req.query.orderId) || "").trim();
+    if (!invoiceId && !orderId) {
+      res.status(400).json({ ok: false, error: "invoice-id-or-order-id-required" });
+      return;
+    }
+
+    try {
+      let snap = null;
+      let foundInvoiceId = invoiceId;
+      if (invoiceId) {
+        snap = await db.collection(STORE_ORDER_INVOICES_COLLECTION).doc(invoiceId).get();
+      } else {
+        // search by orderId - pick the latest matching invoice
+        const q = await db.collection(STORE_ORDER_INVOICES_COLLECTION).where('orderId', '==', orderId).orderBy('createdAt', 'desc').limit(1).get();
+        if (!q.empty) {
+          snap = q.docs[0];
+          foundInvoiceId = String(snap.id || "");
+        }
+      }
+
+      if (!snap || (snap.exists === false)) {
+        res.status(404).json({ ok: false, error: "not-found" });
+        return;
+      }
+
+      const data = snap.data ? snap.data() : snap.data() || {};
+      res.status(200).json({
+        ok: true,
+        invoiceId: foundInvoiceId,
+        status: String(data.status || "created"),
+        monoStatus: String(data.monoStatus || "created"),
+        modifiedDate: Number(data.modifiedDate) || 0,
+        storeId: String(data.storeId || ""),
+        orderId: String(data.orderId || ""),
+        pageUrl: String(data.pageUrl || "")
+      });
+    } catch (error) {
+      console.error("getStoreOrderInvoiceStatus error:", error);
+      res.status(500).json({ ok: false, error: "internal" });
+    }
+  }
+);
+
 exports.reconcileStoreTariffInvoices = onRequest(
   { secrets: [MONO_X_TOKEN], cors: true },
   async (req, res) => {

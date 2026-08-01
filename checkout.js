@@ -191,7 +191,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const params = new URLSearchParams(window.location.search || "");
     const status = String(params.get("payment") || "").trim().toLowerCase();
     if (!status) return;
-
     checkoutMessage.classList.remove("error");
     if (status === "success") {
       checkoutMessage.textContent = "Оплату через mono отримано. Дякуємо за замовлення!";
@@ -200,6 +199,64 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (status === "fail") {
       checkoutMessage.classList.add("error");
       checkoutMessage.textContent = "Оплата mono не завершена. Спробуйте ще раз.";
+    }
+
+    // Try to reconcile order status immediately: find order and check invoice status.
+    try {
+      const orderParam = String(params.get("order") || "").trim();
+      if (orderParam) {
+        const orders = readOrders() || [];
+        const idx = orders.findIndex((o) => String(o && o.id || "") === orderParam);
+        if (idx >= 0) {
+          const order = orders[idx] || {};
+          const invoiceId = String(order.monoInvoiceId || "").trim();
+          const maybeRedirect = (newStatus) => {
+            if (newStatus === "success") {
+              window.location.href = `thank-you.html?order=${encodeURIComponent(orderParam)}`;
+            }
+          };
+
+          const applyInvoiceData = (data) => {
+            if (!data || !data.ok) return;
+            const newStatus = String(data.status || "").trim().toLowerCase();
+            const paymentStatus = (newStatus === "success") ? "Оплачено" : ((newStatus === "failure" || newStatus === "expired") ? "Не оплачено" : order.paymentStatus || "Не оплачено");
+            orders[idx] = {
+              ...order,
+              paymentStatus,
+              monoStatus: String(data.monoStatus || order.monoStatus || ""),
+              monoInvoiceId: String(data.invoiceId || order.monoInvoiceId || ""),
+              monoPageUrl: String(data.pageUrl || order.monoPageUrl || ""),
+              updatedAt: new Date().toISOString()
+            };
+            saveOrders(orders);
+            maybeRedirect(newStatus);
+          };
+
+          if (invoiceId) {
+            const url = `https://us-central1-lavka-shop.cloudfunctions.net/getStoreOrderInvoiceStatus?invoiceId=${encodeURIComponent(invoiceId)}`;
+            console.debug('[checkout] fetchInvoiceStatus invoiceId=', invoiceId, url);
+            fetch(url, { method: "GET" })
+              .then((r) => r.json())
+              .then((data) => {
+                console.debug('[checkout] fetchInvoiceStatus response for invoiceId=', invoiceId, data);
+                applyInvoiceData(data);
+              })
+              .catch((err) => { console.debug('[checkout] fetchInvoiceStatus error', err); });
+          } else {
+            const url = `https://us-central1-lavka-shop.cloudfunctions.net/getStoreOrderInvoiceStatus?orderId=${encodeURIComponent(orderParam)}`;
+            console.debug('[checkout] fetchInvoiceStatus by orderId=', orderParam, url);
+            fetch(url, { method: "GET" })
+              .then((r) => r.json())
+              .then((data) => {
+                console.debug('[checkout] fetchInvoiceStatus response for orderId=', orderParam, data);
+                applyInvoiceData(data);
+              })
+              .catch((err) => { console.debug('[checkout] fetchInvoiceStatus error', err); });
+          }
+        }
+      }
+    } catch (e) {
+      // ignore
     }
   };
 
@@ -1616,7 +1673,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       setTimeout(() => {
-        window.location.href = "index.html";
+        window.location.href = `thank-you.html?order=${encodeURIComponent(nextOrder.id)}`;
       }, 800);
     });
   }
@@ -1657,6 +1714,53 @@ document.addEventListener("DOMContentLoaded", () => {
     updateBankTransferInfo();
     updateAvailabilityMessage();
   });
+
+  // Debug helper: call from browser console to fetch invoice status and update local orders immediately.
+  window.fetchInvoiceAndUpdate = async function ({ invoiceId = "", orderId = "" } = {}) {
+    try {
+      const orders = readOrders() || [];
+      const queryByInvoice = String(invoiceId || "").trim();
+      const queryByOrder = String(orderId || "").trim();
+      if (!queryByInvoice && !queryByOrder) {
+        console.debug('[checkout] fetchInvoiceAndUpdate missing invoiceId/orderId');
+        return { ok: false, error: 'missing_invoice_or_order_id' };
+      }
+
+      const url = queryByInvoice
+        ? `https://us-central1-lavka-shop.cloudfunctions.net/getStoreOrderInvoiceStatus?invoiceId=${encodeURIComponent(queryByInvoice)}`
+        : `https://us-central1-lavka-shop.cloudfunctions.net/getStoreOrderInvoiceStatus?orderId=${encodeURIComponent(queryByOrder)}`;
+
+      console.debug('[checkout] fetchInvoiceAndUpdate url=', url);
+      const res = await fetch(url, { method: 'GET' });
+      const data = await res.json().catch(() => null);
+      console.debug('[checkout] fetchInvoiceAndUpdate response=', data);
+      if (!data || !data.ok) return { ok: false, error: 'not_found' };
+
+      // find matching order(s) and update
+      const targetOrderId = String(data.orderId || queryByOrder || "").trim();
+      for (let i = 0; i < orders.length; i += 1) {
+        const o = orders[i] || {};
+        if (!targetOrderId) continue;
+        if (String(o.id || "") !== targetOrderId) continue;
+        const newStatus = String(data.status || "").trim().toLowerCase();
+        const paymentStatus = (newStatus === "success") ? "Оплачено" : ((newStatus === "failure" || newStatus === "expired") ? "Не оплачено" : o.paymentStatus || "Не оплачено");
+        orders[i] = {
+          ...o,
+          paymentStatus,
+          monoStatus: String(data.monoStatus || o.monoStatus || ""),
+          monoInvoiceId: String(data.invoiceId || o.monoInvoiceId || ""),
+          monoPageUrl: String(data.pageUrl || o.monoPageUrl || ""),
+          updatedAt: new Date().toISOString()
+        };
+      }
+
+      saveOrders(orders);
+      return { ok: true, data };
+    } catch (err) {
+      console.debug('[checkout] fetchInvoiceAndUpdate error', err);
+      return { ok: false, error: 'internal' };
+    }
+  };
 
   const refreshFromSettings = () => {
     const prevDelivery = String(checkoutForm?.querySelector('input[name="deliveryMethod"]:checked')?.value || "").trim();

@@ -60,6 +60,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const MAX_BACKGROUND_FILE_SIZE = 5 * 1024 * 1024;
   const MAX_CATEGORY_NAME_LENGTH = 40;
   const PRODUCTS_PER_PAGE = 5;
+  const ORDERS_PER_PAGE = 5;
   const STOCKS_PER_PAGE = 4;
   const EMPTY_AVATAR_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
 
@@ -1182,6 +1183,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const ordersAmountFromFilter = document.getElementById("ordersAmountFromFilter");
   const ordersAmountToFilter = document.getElementById("ordersAmountToFilter");
   const ordersFiltersReset = document.getElementById("ordersFiltersReset");
+  const ordersPagination = document.getElementById("ordersPagination");
   const ordersSelectAll = document.getElementById("ordersSelectAll");
   const ordersBulkBar = document.getElementById("ordersBulkBar");
   const ordersBulkCount = document.getElementById("ordersBulkCount");
@@ -1212,6 +1214,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const orderPromoCode = document.getElementById("orderPromoCode");
   const orderPromoDiscount = document.getElementById("orderPromoDiscount");
   const orderPaymentStatus = document.getElementById("orderPaymentStatus");
+  const orderPaymentMethod = document.getElementById("orderPaymentMethod");
   const orderCreatedAt = document.getElementById("orderCreatedAt");
   const orderClientComment = document.getElementById("orderClientComment");
   const orderManagerComment = document.getElementById("orderManagerComment");
@@ -2941,9 +2944,17 @@ document.addEventListener("DOMContentLoaded", () => {
     Array.from(selectedOrderIds).forEach((id) => {
       if (!existingIds.has(id)) selectedOrderIds.delete(id);
     });
-    lastVisibleOrderIds = filteredOrders.map((order) => String(order.id || "").trim());
+    const totalPages = Math.max(1, Math.ceil(filteredOrders.length / ORDERS_PER_PAGE));
+    if (currentOrdersPage > totalPages) {
+      currentOrdersPage = totalPages;
+    }
+    const startIndex = (currentOrdersPage - 1) * ORDERS_PER_PAGE;
+    const paginatedOrders = filteredOrders.slice(startIndex, startIndex + ORDERS_PER_PAGE);
 
-    filteredOrders.forEach((order) => {
+    lastVisibleOrderIds = paginatedOrders.map((order) => String(order.id || "").trim());
+    renderOrdersPagination(filteredOrders.length);
+
+    paginatedOrders.forEach((order) => {
       const row = document.createElement("tr");
       const firstItem = order.items[0];
       const shortProductText = firstItem
@@ -2990,6 +3001,47 @@ document.addEventListener("DOMContentLoaded", () => {
 
     updateOrdersBulkUI();
     updateOrdersNewBadge();
+  };
+
+  const renderOrdersPagination = (totalItems) => {
+    if (!ordersPagination) return;
+
+    const totalPages = Math.max(1, Math.ceil(totalItems / ORDERS_PER_PAGE));
+    if (currentOrdersPage > totalPages) {
+      currentOrdersPage = totalPages;
+    }
+
+    ordersPagination.innerHTML = "";
+    ordersPagination.hidden = totalItems <= ORDERS_PER_PAGE;
+    if (ordersPagination.hidden) return;
+
+    const previousButton = document.createElement("button");
+    previousButton.type = "button";
+    previousButton.className = "products-page-btn";
+    previousButton.textContent = "‹";
+    previousButton.dataset.page = String(currentOrdersPage - 1);
+    previousButton.disabled = currentOrdersPage === 1;
+    ordersPagination.append(previousButton);
+
+    for (let page = 1; page <= totalPages; page += 1) {
+      const pageButton = document.createElement("button");
+      pageButton.type = "button";
+      pageButton.className = "products-page-btn";
+      if (page === currentOrdersPage) {
+        pageButton.classList.add("active");
+      }
+      pageButton.textContent = String(page);
+      pageButton.dataset.page = String(page);
+      ordersPagination.append(pageButton);
+    }
+
+    const nextButton = document.createElement("button");
+    nextButton.type = "button";
+    nextButton.className = "products-page-btn";
+    nextButton.textContent = "›";
+    nextButton.dataset.page = String(currentOrdersPage + 1);
+    nextButton.disabled = currentOrdersPage === totalPages;
+    ordersPagination.append(nextButton);
   };
 
   const formatPromoDiscount = (promoCode) => {
@@ -3319,6 +3371,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (orderPaymentStatus) {
       orderPaymentStatus.textContent = order.paymentStatus || "Не оплачено";
       orderPaymentStatus.className = `status ${getPaymentStatusClass(order.paymentStatus)}`;
+    }
+    if (orderPaymentMethod) {
+      orderPaymentMethod.textContent = String(order.paymentMethod || "").trim() || "Немає";
     }
     if (orderCreatedAt) {
       orderCreatedAt.textContent = formatDateTime(order.createdAt || order.updatedAt);
@@ -3767,7 +3822,10 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       deleteButton.addEventListener("click", () => {
-        const confirmed = window.confirm(`Видалити категорію «${category.name}»?`);
+        const confirmed = window.confirm(
+          `Видалити категорію «${category.name}»?
+Увага: всі товари, що мали лише цю категорію, залишаться без категорії і будуть приховані на вітрині. Продовжити?`
+        );
         if (!confirmed) return;
 
         const removedName = String(category.name || "").trim().toLowerCase();
@@ -3789,8 +3847,18 @@ document.addEventListener("DOMContentLoaded", () => {
           };
         });
 
+        // Persist products first, then update categories.
         saveProducts(products);
-        saveCategories(categories);
+        if (!categories.length) {
+          // If no categories remain, remove the key so remote doc is deleted as well.
+          try {
+            localStorage.removeItem(CATEGORIES_KEY);
+          } catch (e) {
+            saveCategories(categories);
+          }
+        } else {
+          saveCategories(categories);
+        }
         renderProductsTable(products);
         renderCategoryOptions(getCategoryNames(categories));
         renderCategoriesList(categories);
@@ -4613,6 +4681,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentOrderPaymentFilter = "all";
   let currentOrdersAmountFrom = null;
   let currentOrdersAmountTo = null;
+  let currentOrdersPage = 1;
   if (!Array.isArray(orders)) {
     orders = [];
   }
@@ -4686,6 +4755,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if (ordersSearchInput) {
     ordersSearchInput.addEventListener("input", () => {
       currentOrdersSearch = ordersSearchInput.value || "";
+      currentOrdersPage = 1;
       renderOrdersTable(orders);
     });
   }
@@ -4693,6 +4763,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const applyOrdersFilters = () => {
     currentOrderStatusFilter = ordersStatusFilter?.value || "all";
     currentOrderPaymentFilter = ordersPaymentFilter?.value || "all";
+    currentOrdersPage = 1;
 
     const rawFrom = Number.parseFloat(ordersAmountFromFilter?.value || "");
     const rawTo = Number.parseFloat(ordersAmountToFilter?.value || "");
@@ -4880,6 +4951,7 @@ document.addEventListener("DOMContentLoaded", () => {
         ordersAmountToFilter.value = "";
       }
 
+      currentOrdersPage = 1;
       renderOrdersTable(orders);
     });
   }
@@ -5502,29 +5574,29 @@ document.addEventListener("DOMContentLoaded", () => {
   if (productCreateForm) {
     applyProductUnitValue(productUnit?.value || "шт");
 
+    if (storeCurrencyTrigger && storeCurrencyOptions) {
+      storeCurrencyTrigger.addEventListener("click", () => {
+        const shouldOpen = storeCurrencyOptions.hidden;
+        setStoreCurrencyOpen(shouldOpen);
+      });
+    }
 
-  if (storeCurrencyTrigger && storeCurrencyOptions) {
-    storeCurrencyTrigger.addEventListener("click", () => {
-      const shouldOpen = storeCurrencyOptions.hidden;
-      setStoreCurrencyOpen(shouldOpen);
-    });
-  }
+    if (storeCurrencyOptions) {
+      storeCurrencyOptions.addEventListener("click", (event) => {
+        const option = event.target.closest(".custom-unit-option");
+        if (!option) return;
+        const value = String(option.dataset.value || "").trim();
+        applyStoreCurrencyValue(value);
+        setStoreCurrencyOpen(false);
+      });
+    }
 
-  if (storeCurrencyOptions) {
-    storeCurrencyOptions.addEventListener("click", (event) => {
-      const option = event.target.closest(".custom-unit-option");
-      if (!option) return;
-      const value = String(option.dataset.value || "").trim();
-      applyStoreCurrencyValue(value);
+    document.addEventListener("mousedown", (event) => {
+      if (!storeCurrencySelect) return;
+      if (storeCurrencySelect.contains(event.target)) return;
       setStoreCurrencyOpen(false);
     });
-  }
 
-  document.addEventListener("mousedown", (event) => {
-    if (!storeCurrencySelect) return;
-    if (storeCurrencySelect.contains(event.target)) return;
-    setStoreCurrencyOpen(false);
-  });
     if (productUnitTrigger && productUnitSelect && productUnitOptions) {
       productUnitTrigger.addEventListener("click", () => {
         const shouldOpen = productUnitOptions.hidden;
@@ -5992,6 +6064,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
         currentStockPage = nextPage;
         renderStockTable(products);
+      });
+    }
+
+    if (ordersPagination) {
+      ordersPagination.addEventListener("click", (event) => {
+        const button = event.target.closest(".products-page-btn");
+        if (!button || button.disabled) return;
+
+        const nextPage = Number.parseInt(button.dataset.page || "", 10);
+        if (!Number.isFinite(nextPage) || nextPage < 1) return;
+
+        currentOrdersPage = nextPage;
+        renderOrdersTable(orders);
       });
     }
 

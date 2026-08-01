@@ -203,6 +203,9 @@ document.addEventListener("DOMContentLoaded", () => {
       ? product.categories.map((value) => String(value || "").trim()).filter(Boolean)
       : [String(product?.category || "").trim()].filter(Boolean);
 
+    // If product has no categories after normalization, treat it as not present on storefront
+    if (!Array.isArray(categories) || categories.length === 0) return null;
+
     if (!id || !name || !visible) return null;
     if (DEMO_PRODUCT_SKUS.has(sku)) return null;
 
@@ -424,7 +427,7 @@ document.addEventListener("DOMContentLoaded", () => {
     watermark = document.createElement("footer");
     watermark.className = "site-watermark";
     watermark.innerHTML =
-      '<a class="site-watermark-link" href="landing.html" title="Створити власний магазин на Вітрина">'
+      '<a class="site-watermark-link" href="https://www.vitryna-shop.com/landing" title="Створити власний магазин на Вітрина">'
       + '<span class="site-watermark-text">Створено на <strong>Вітрина</strong></span>'
       + '</a>';
 
@@ -433,10 +436,24 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const applyWatermarkVisibility = () => {
-    const watermark = ensureSiteWatermark();
-    if (!watermark) return;
-    watermark.hidden = false;
-    watermark.style.display = "";
+    const settings = readSettings() || {};
+    const shouldHide = Boolean(settings.hideWatermark) && canRemoveWatermark();
+    try {
+      console.debug("[storefront] applyWatermarkVisibility", { hideSetting: settings.hideWatermark, shouldHide, billing: readBilling && readBilling() });
+    } catch (e) {}
+    const watermark = document.querySelector('.site-watermark');
+    if (shouldHide) {
+      if (watermark && watermark.parentNode) {
+        watermark.parentNode.removeChild(watermark);
+      }
+      return;
+    }
+    // Ensure watermark exists and is visible
+    const existing = ensureSiteWatermark();
+    if (existing) {
+      existing.hidden = false;
+      existing.style.display = "";
+    }
   };
 
   const getMinimumOrderRequirement = () => {
@@ -900,7 +917,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const productId = String(productNode?.dataset?.productId || "").trim();
     if (!productId) return;
     const firstCategory = String(productNode.dataset.cat || "all").split(" ")[0] || "all";
-    window.location.href = `product.html#id=${encodeURIComponent(productId)}&cat=${encodeURIComponent(firstCategory)}`;
+    // Use a prettier fragment: product#<id>/<category>
+    window.location.href = `product#${encodeURIComponent(productId)}/${encodeURIComponent(firstCategory)}`;
   };
 
   if (productsGrid) {

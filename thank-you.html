@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Дякуємо за замовлення</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --accent:#378add;
+    --accent-deep:#2f79c7;
+    --bg-soft:#e6f1fb;
+    --text-main:#1f2733;
+    --text-secondary:#5b6f87;
+    --line-soft:#d3e2f2;
+    --surface:#ffffff;
+    --coral:#f0997b;
+    --success:#639922;
+  }
+
+  *{ box-sizing:border-box; }
+
+  body{
+    margin:0;
+    font-family:"Nunito","Segoe UI",Roboto,Arial,sans-serif;
+    background:
+      radial-gradient(680px 420px at 12% -8%, var(--bg-soft), transparent 60%),
+      radial-gradient(520px 360px at 100% 0%, #fbeee7 0%, transparent 55%),
+      #f6faff;
+    color:var(--text-main);
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .thankyou-page{
+    max-width:760px;
+    margin:0 auto;
+    padding:40px 20px 64px;
+  }
+
+  /* ---------- Hero / signature element ---------- */
+  .ty-hero{
+    text-align:center;
+    padding:8px 12px 28px;
+  }
+
+  .ty-badge{
+    position:relative;
+    width:84px;
+    height:84px;
+    margin:0 auto 22px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  .ty-badge__ring{
+    position:absolute;
+    inset:0;
+    border-radius:50%;
+    background:var(--bg-soft);
+    animation:ty-pulse 2.4s ease-out infinite;
+  }
+
+  .ty-badge__ring--delay{
+    animation-delay:.9s;
+  }
+
+  .ty-badge__core{
+    position:relative;
+    width:64px;
+    height:64px;
+    border-radius:50%;
+    background:linear-gradient(155deg, var(--accent), var(--accent-deep));
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    box-shadow:0 10px 24px -8px rgba(47,121,199,.55);
+  }
+
+  .ty-badge__core svg{
+    width:30px;
+    height:30px;
+  }
+
+  .ty-badge__check{
+    stroke:#fff;
+    stroke-width:3;
+    fill:none;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+    stroke-dasharray:28;
+    stroke-dashoffset:28;
+    animation:ty-draw .5s ease .35s forwards;
+  }
+
+  @keyframes ty-draw{ to{ stroke-dashoffset:0; } }
+
+  @keyframes ty-pulse{
+    0%{ transform:scale(.7); opacity:.55; }
+    100%{ transform:scale(1.55); opacity:0; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .ty-badge__ring{ animation:none; display:none; }
+    .ty-badge__check{ stroke-dashoffset:0; animation:none; }
+  }
+
+  .ty-eyebrow{
+    font-size:13px;
+    font-weight:800;
+    letter-spacing:.09em;
+    text-transform:uppercase;
+    color:var(--success);
+    margin:0 0 10px;
+  }
+
+  .ty-title{
+    font-size:28px;
+    font-weight:900;
+    line-height:1.25;
+    margin:0 0 10px;
+    letter-spacing:-.01em;
+  }
+
+  .ty-sub{
+    font-size:15px;
+    color:var(--text-secondary);
+    margin:0 auto;
+    max-width:420px;
+    line-height:1.55;
+  }
+
+  .ty-order-no{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    margin-top:18px;
+    padding:8px 16px;
+    background:var(--surface);
+    border:1px solid var(--line-soft);
+    border-radius:999px;
+    font-size:14px;
+    font-weight:700;
+    color:var(--accent-deep);
+  }
+
+  .ty-order-no span{
+    color:var(--text-secondary);
+    font-weight:600;
+  }
+
+  /* ---------- Section labels ---------- */
+  .ty-section-label{
+    font-size:12px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--text-secondary);
+    margin:0 0 12px 4px;
+  }
+
+  /* ---------- Product card (реюз стилю .product-card) ---------- */
+  .product-card{
+    background:var(--surface);
+    border:1px solid var(--line-soft);
+    border-radius:16px;
+    padding:18px;
+  }
+
+  .ty-order-card{
+    margin-bottom:22px;
+  }
+
+  .ty-line-item{
+    display:flex;
+    gap:14px;
+    align-items:flex-start;
+  }
+
+  .ty-line-item + .ty-line-item{
+    margin-top:16px;
+    padding-top:16px;
+    border-top:1px solid var(--line-soft);
+  }
+
+  .ty-thumb-wrap{
+    flex:0 0 auto;
+    width:72px;
+    height:72px;
+    border-radius:12px;
+    background:var(--bg-soft);
+    border:1px solid var(--line-soft);
+    overflow:hidden;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  .ty-thumb-wrap img{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    display:block;
+  }
+
+  .ty-item-info{
+    flex:1 1 auto;
+    min-width:0;
+  }
+
+  .ty-item-name{
+    font-size:15px;
+    font-weight:800;
+    color:var(--text-main);
+    margin:0 0 4px;
+    line-height:1.35;
+  }
+
+  .ty-item-meta{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px 10px;
+    font-size:13px;
+    color:var(--text-secondary);
+    margin-bottom:8px;
+  }
+
+  .ty-item-meta b{
+    color:var(--text-main);
+    font-weight:700;
+  }
+
+  .ty-item-bottom{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+
+  .ty-item-price{
+    font-size:13px;
+    color:var(--text-secondary);
+  }
+
+  .ty-item-sum{
+    font-size:16px;
+    font-weight:800;
+    color:var(--accent-deep);
+    white-space:nowrap;
+  }
+
+  .ty-totals{
+    margin-top:16px;
+    padding-top:16px;
+    border-top:1px dashed var(--line-soft);
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+
+  .ty-totals-row{
+    display:flex;
+    justify-content:space-between;
+    font-size:14px;
+    color:var(--text-secondary);
+  }
+
+  .ty-totals-row--main{
+    margin-top:4px;
+    padding-top:12px;
+    border-top:1px solid var(--line-soft);
+    font-size:17px;
+    font-weight:900;
+    color:var(--text-main);
+  }
+
+  .ty-totals-row--main .ty-totals-value{
+    color:var(--success);
+  }
+
+  /* ---------- Info cards: доставка / оплата ---------- */
+  .ty-info-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px;
+    margin-bottom:22px;
+  }
+
+  .ty-orders-history{
+    display:grid;
+    gap:14px;
+    margin-top:20px;
+  }
+
+  .ty-order-summary-card{
+    background:var(--surface);
+    border:1px solid var(--line-soft);
+    border-radius:16px;
+    padding:18px;
+    display:grid;
+    gap:10px;
+  }
+
+  .ty-order-summary-header{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px 16px;
+    align-items:center;
+    justify-content:space-between;
+  }
+
+  .ty-order-summary-title{
+    font-size:14px;
+    font-weight:800;
+    color:var(--text-main);
+  }
+
+  .ty-order-summary-meta{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px 12px;
+    font-size:13px;
+    color:var(--text-secondary);
+  }
+
+  .ty-pagination{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    justify-content:center;
+    margin-top:14px;
+  }
+
+  .ty-page-button{
+    border:none;
+    border-radius:12px;
+    padding:10px 14px;
+    background:var(--bg-soft);
+    color:var(--accent-deep);
+    font-weight:700;
+    cursor:pointer;
+    transition:transform .15s ease, background .15s ease;
+  }
+
+  .ty-page-button:hover{
+    transform:translateY(-1px);
+    background:rgba(55,138,221,.15);
+  }
+
+  .ty-page-button--active{
+    background:var(--accent);
+    color:#fff;
+  }
+
+  .ty-info-card{
+    background:var(--surface);
+    border:1px solid var(--line-soft);
+    border-radius:14px;
+    padding:16px;
+    display:flex;
+    gap:12px;
+    align-items:flex-start;
+  }
+
+  .ty-info-icon{
+    flex:0 0 auto;
+    width:42px;
+    height:42px;
+    border-radius:14px;
+    background:var(--bg-soft);
+    color:var(--accent-deep);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  .ty-info-icon--delivery{ background:#dbeefe; color:#2f79c7; }
+  .ty-info-icon--payment{ background:#fde8d9; color:#c2673f; }
+
+  .ty-info-icon svg{
+    width:20px;
+    height:20px;
+    stroke:currentColor;
+    fill:none;
+    stroke-width:2.2;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+  }
+
+  .ty-info-label{
+    font-size:12px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.05em;
+    color:var(--text-secondary);
+    margin:0 0 4px;
+  }
+
+  .ty-info-value{
+    font-size:14px;
+    font-weight:800;
+    color:var(--text-main);
+    margin:0 0 2px;
+    line-height:1.35;
+  }
+
+  .ty-info-sub{
+    font-size:13px;
+    color:var(--text-secondary);
+    line-height:1.4;
+  }
+
+  .ty-status-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    margin-top:6px;
+    padding:3px 10px;
+    border-radius:999px;
+    font-size:12px;
+    font-weight:700;
+  }
+
+  .ty-status-pill--paid{
+    background:#eef6e2;
+    color:var(--success);
+  }
+
+  .ty-status-pill--pending{
+    background:#fdefe8;
+    color:#c2673f;
+  }
+
+  .ty-status-dot{
+    width:6px;
+    height:6px;
+    border-radius:50%;
+    background:currentColor;
+  }
+
+  /* ---------- CTA ---------- */
+  .ty-actions{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    align-items:center;
+    margin-top:6px;
+  }
+
+  .ty-btn-primary{
+    width:100%;
+    max-width:420px;
+    padding:15px 20px;
+    background:linear-gradient(155deg, var(--accent), var(--accent-deep));
+    color:#fff;
+    border:none;
+    border-radius:14px;
+    font-family:inherit;
+    font-size:15px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    box-shadow:0 14px 26px -12px rgba(47,121,199,.55);
+    transition:transform .15s ease, box-shadow .15s ease, filter .15s ease;
+  }
+
+  .ty-btn-primary:hover{
+    transform:translateY(-2px);
+    box-shadow:0 18px 30px -12px rgba(47,121,199,.6);
+    filter:brightness(1.03);
+  }
+
+  .ty-btn-primary:active{
+    transform:translateY(0);
+  }
+
+  .ty-btn-primary svg{
+    width:18px;
+    height:18px;
+    stroke:#fff;
+    fill:none;
+    stroke-width:2.4;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+  }
+
+  /* ---------- Mobile ---------- */
+  @media (max-width:560px){
+    .thankyou-page{ padding:28px 14px 48px; }
+    .ty-title{ font-size:23px; }
+    .ty-sub{ font-size:14px; }
+    .product-card{ padding:14px; }
+    .ty-info-grid{ grid-template-columns:1fr; }
+    .ty-thumb-wrap{ width:60px; height:60px; }
+    .ty-item-name{ font-size:14px; }
+    .ty-item-sum{ font-size:15px; }
+  }
+
+  @media (max-width:360px){
+    .ty-item-meta{ font-size:12px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="thankyou-page">
+
+  <!-- Hero -->
+  <div class="ty-hero">
+    <div class="ty-badge">
+      <span class="ty-badge__ring"></span>
+      <span class="ty-badge__ring ty-badge__ring--delay"></span>
+      <span class="ty-badge__core">
+        <svg viewBox="0 0 24 24">
+          <path class="ty-badge__check" d="M5 13l4 4L19 7"></path>
+        </svg>
+      </span>
+    </div>
+    <p class="ty-eyebrow">Замовлення прийнято</p>
+    <h1 class="ty-title">Дякуємо, Олено!<br>Ваше замовлення в роботі</h1>
+    <p class="ty-sub">Ми надішлемо повідомлення, щойно продавець підтвердить відправку. Деталі замовлення — нижче.</p>
+    <div class="ty-order-no" id="tyOrderNo"><span>Номер замовлення</span> №1042</div>
+  </div>
+
+  <!-- Товари -->
+  <p class="ty-section-label">Ваше замовлення</p>
+  <div class="product-card ty-order-card" id="tyOrderCard">
+    <p style="margin:0;color:var(--text-secondary);font-size:14px;line-height:1.6">Завантаження деталей замовлення...</p>
+  </div>
+
+  <!-- Доставка та оплата -->
+  <p class="ty-section-label">Доставка та оплата</p>
+  <div class="ty-info-grid" id="tyInfoGrid">
+    <div class="ty-info-card ty-info-card--delivery">
+      <span class="ty-info-icon ty-info-icon--delivery">
+        <svg viewBox="0 0 24 24"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"></path><circle cx="7.5" cy="18.5" r="1.6"></circle><circle cx="17.5" cy="18.5" r="1.6"></circle></svg>
+      </span>
+      <div>
+        <p class="ty-info-label">Доставка</p>
+        <p class="ty-info-value">Укрпошта</p>
+        <p class="ty-info-sub">1, 1 обл., 1 р-н, м. 1</p>
+      </div>
+    </div>
+
+    <div class="ty-info-card ty-info-card--payment">
+      <span class="ty-info-icon ty-info-icon--payment">
+        <svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="2"></rect><path d="M3 11h18"></path><path d="M7 14h.01"></path><path d="M11 14h.01"></path></svg>
+      </span>
+      <div>
+        <p class="ty-info-label">Оплата</p>
+        <p class="ty-info-value">Не вказано</p>
+        <span class="ty-status-pill ty-status-pill--pending">
+          <span class="ty-status-dot"></span> Не оплачено
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <p class="ty-section-label">Історія замовлень</p>
+  <div class="ty-orders-history" id="tyOrdersHistory">
+    <p style="margin:0;color:var(--text-secondary);font-size:14px;line-height:1.6">Завантаження історії замовлень...</p>
+  </div>
+  <div class="ty-pagination" id="tyOrdersPagination"></div>
+
+  <!-- Дії -->
+  <div class="ty-actions">
+    <button class="ty-btn-primary" type="button" onclick="window.location.href='/'">
+      Повернутися до вітрини
+      <svg viewBox="0 0 24 24"><path d="M13 5l7 7-7 7M4 12h16"></path></svg>
+    </button>
+  </div>
+
+</div>
+
+<script>
+(function() {
+  const STORAGE_KEY = 'lavkaOrders';
+  const params = new URLSearchParams(window.location.search || '');
+  const orderId = String(params.get('order') || '').trim();
+  const orderNoEl = document.getElementById('tyOrderNo');
+  const orderCard = document.getElementById('tyOrderCard');
+  const infoGrid = document.getElementById('tyInfoGrid');
+  const heroTitle = document.querySelector('.ty-title');
+  const heroSub = document.querySelector('.ty-sub');
+
+  const formatPrice = (value) => {
+    const price = Number(value) || 0;
+    return price.toLocaleString('uk-UA', { style: 'currency', currency: 'UAH', maximumFractionDigits: 0 });
+  };
+
+  const createStatusPill = (status) => {
+    const normalized = String(status || '').trim().toLowerCase();
+    const label = status || 'Не оплачено';
+    const badge = document.createElement('span');
+    badge.className = 'ty-status-pill';
+    badge.textContent = label;
+    if (normalized === 'оплачено' || normalized === 'paid' || normalized === 'success') {
+      badge.classList.add('ty-status-pill--paid');
+    } else {
+      badge.classList.add('ty-status-pill--pending');
+    }
+    return badge.outerHTML;
+  };
+
+  const renderOrderItem = (item) => {
+    const name = String(item?.name || item?.title || 'Товар').trim();
+    const sku = String(item?.sku || item?.id || '').trim();
+    const qty = Math.max(1, Math.round(Number(item?.qty) || 1));
+    const price = Math.max(0, Number(item?.price) || 0);
+    const sum = price * qty;
+    const image = String(item?.image || item?.thumb || 'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=200&h=200&fit=crop').replace(/"/g, '%22');
+    return `
+      <div class="ty-line-item">
+        <div class="ty-thumb-wrap">
+          <img src="${image}" alt="${name}">
+        </div>
+        <div class="ty-item-info">
+          <p class="ty-item-name">${name}</p>
+          <div class="ty-item-meta">
+            ${sku ? `<span>Артикул: <b>${sku}</b></span>` : ''}
+            <span>Кількість: <b>${qty} шт.</b></span>
+          </div>
+          <div class="ty-item-bottom">
+            <span class="ty-item-price">${formatPrice(price)} × ${qty}</span>
+            <span class="ty-item-sum">${formatPrice(sum)}</span>
+          </div>
+        </div>
+      </div>`;
+  };
+
+  const renderOrderSummary = (order) => {
+    const itemsCount = Array.isArray(order.items) ? order.items.reduce((sum, item) => sum + Math.max(1, Math.round(Number(item?.qty) || 1)), 0) : 0;
+    const subtotal = formatPrice(order.total || order.payableNow || 0);
+    return `
+      <div class="ty-totals">
+        <div class="ty-totals-row">
+          <span>Товари (${itemsCount} шт.)</span>
+          <span>${subtotal}</span>
+        </div>
+        <div class="ty-totals-row ty-totals-row--main">
+          <span>Разом до сплати</span>
+          <span class="ty-totals-value">${subtotal}</span>
+        </div>
+      </div>`;
+  };
+
+  const renderInfoIcon = (type) => {
+    if (type === 'delivery') {
+      return `
+        <span class="ty-info-icon ty-info-icon--delivery">
+          <svg viewBox="0 0 24 24"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"></path><circle cx="7.5" cy="18.5" r="1.6"></circle><circle cx="17.5" cy="18.5" r="1.6"></circle></svg>
+        </span>`;
+    }
+    return `
+      <span class="ty-info-icon ty-info-icon--payment">
+        <svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="2"></rect><path d="M3 11h18"></path><path d="M7 14h.01"></path><path d="M11 14h.01"></path></svg>
+      </span>`;
+  };
+
+  const renderInfoCard = (type, label, value, extra = '') => `
+    <div class="ty-info-card">
+      ${renderInfoIcon(type)}
+      <div>
+        <p class="ty-info-label">${label}</p>
+        <p class="ty-info-value">${value}</p>
+        ${extra ? `<p class="ty-info-sub">${extra}</p>` : ''}
+      </div>
+    </div>`;
+
+  const showFallback = (message) => {
+    if (heroTitle) heroTitle.textContent = 'Замовлення не знайдено';
+    if (heroSub) heroSub.textContent = message || 'Перевірте посилання або спробуйте ще раз.';
+    if (orderNoEl) orderNoEl.hidden = true;
+    if (orderCard) orderCard.innerHTML = `<p style="margin:0;color:var(--text-secondary);font-size:14px;line-height:1.6">${message || 'Неможливо завантажити замовлення.'}</p>`;
+    if (infoGrid) infoGrid.innerHTML = '';
+  };
+
+  if (!orderId) {
+    showFallback('У запиті відсутній ідентифікатор замовлення.');
+    return;
+  }
+
+  let orders = [];
+  try {
+    orders = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+  } catch (err) {
+    orders = [];
+  }
+
+  const order = Array.isArray(orders) ? orders.find((item) => String(item?.id || '') === orderId) : null;
+  if (!order) {
+    showFallback('Замовлення не знайдено в локальному збереженні.');
+    return;
+  }
+
+  if (heroTitle) heroTitle.textContent = `Дякуємо, ${String(order.customerName || 'наш клієнт').trim()}!`;
+  if (heroSub) heroSub.textContent = `Номер вашого замовлення: ${String(order.id || '')}. Стан: ${String(order.status || 'Нове')}.`;
+  if (orderNoEl) orderNoEl.innerHTML = `<span>Номер замовлення</span> №${String(order.id || '')}`;
+
+  if (orderCard) {
+    const items = Array.isArray(order.items) && order.items.length ? order.items.map(renderOrderItem).join('') : '<p style="margin:0;color:var(--text-secondary);font-size:14px;line-height:1.6">Товари не знайдені.</p>';
+    orderCard.innerHTML = `${items}${renderOrderSummary(order)}`;
+  }
+
+  if (infoGrid) {
+    const deliveryValue = order.deliveryMethod ? `${order.deliveryMethod}` : 'Самовивіз';
+    const deliveryExtra = order.deliveryAddress ? `${order.deliveryAddress}` : '';
+    const paymentLabels = {
+      'payment-mono': 'Plata by mono',
+      'payment-liqpay': 'LiqPay',
+      'payment-cod': 'Оплата при отриманні',
+      'payment-prepayment': 'Передоплата',
+      'payment-bank-transfer': 'Оплата на реквізити'
+    };
+    const paymentValue = order.paymentMethod
+      || paymentLabels[String(order.paymentMethodId || '')] || 'Не вказано';
+    const paymentStatus = order.paymentStatus || (String(order.monoStatus || '').toLowerCase() === 'success' ? 'Оплачено' : 'Не оплачено');
+    const statusPill = createStatusPill(paymentStatus);
+    infoGrid.innerHTML = `${renderInfoCard('delivery', 'Доставка', deliveryValue, deliveryExtra)}${renderInfoCard('payment', 'Оплата', paymentValue, statusPill)}`;
+  }
+
+  const ordersHistory = Array.isArray(orders) ? orders.slice().sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))) : [];
+  const ORDERS_PER_PAGE = 5;
+  const ordersHistoryEl = document.getElementById('tyOrdersHistory');
+  const paginationEl = document.getElementById('tyOrdersPagination');
+
+  const renderOrdersPage = (page = 1) => {
+    if (!ordersHistoryEl || !paginationEl) return;
+    const totalPages = Math.max(1, Math.ceil(ordersHistory.length / ORDERS_PER_PAGE));
+    const normalizedPage = Math.min(Math.max(1, page), totalPages);
+    const startIndex = (normalizedPage - 1) * ORDERS_PER_PAGE;
+    const pageOrders = ordersHistory.slice(startIndex, startIndex + ORDERS_PER_PAGE);
+
+    if (!pageOrders.length) {
+      ordersHistoryEl.innerHTML = '<p style="margin:0;color:var(--text-secondary);font-size:14px;line-height:1.6">Замовлень ще немає.</p>';
+      paginationEl.innerHTML = '';
+      return;
+    }
+
+    ordersHistoryEl.innerHTML = pageOrders.map((item) => {
+      const orderPayment = item.paymentMethod || paymentLabels[String(item.paymentMethodId || '')] || 'Не вказано';
+      const orderStatus = item.paymentStatus || (String(item.monoStatus || '').toLowerCase() === 'success' ? 'Оплачено' : 'Не оплачено');
+      const orderDate = item.createdAt ? new Date(item.createdAt).toLocaleDateString('uk-UA', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+      return `
+        <article class="ty-order-summary-card">
+          <div class="ty-order-summary-header">
+            <div>
+              <p class="ty-order-summary-title">Замовлення №${String(item.id || '')}</p>
+              <div class="ty-order-summary-meta">
+                <span>${orderDate}</span>
+                <span>${orderPayment}</span>
+                <span>${orderStatus}</span>
+              </div>
+            </div>
+            <div class="ty-order-summary-meta">
+              <span>Сума: ${formatPrice(item.total || item.payableNow || 0)}</span>
+            </div>
+          </div>
+          <div class="ty-order-summary-meta">
+            <span>Доставка: ${item.deliveryMethod || 'Не вказано'}</span>
+            <span>${item.deliveryAddress || ''}</span>
+          </div>
+        </article>`;
+    }).join('');
+
+    paginationEl.innerHTML = Array.from({ length: totalPages }, (_, index) => {
+      const pageNumber = index + 1;
+      return `<button type="button" class="ty-page-button${pageNumber === normalizedPage ? ' ty-page-button--active' : ''}" data-page="${pageNumber}">${pageNumber}</button>`;
+    }).join('');
+
+    paginationEl.querySelectorAll('.ty-page-button').forEach((button) => {
+      button.addEventListener('click', () => renderOrdersPage(Number(button.dataset.page)));
+    });
+  };
+
+  renderOrdersPage(1);
+})();
+</script>
+
+</body>
+</html>

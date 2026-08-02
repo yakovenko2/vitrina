@@ -2819,6 +2819,14 @@ th {
   font-size: 13px;
 }
 
+#payments .settings-form > .payment-provider-grid,
+#payments .settings-form > .social-fieldset,
+#payments .settings-form > .action-btn,
+#payments .settings-form > .saved-message {
+  width: 100%;
+  max-width: 1200px;
+}
+
 .payment-provider-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2877,9 +2885,14 @@ th {
 }
 
 .payment-methods-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
   gap: 10px;
+}
+
+.payment-methods-grid > .social-item {
+  flex: 1 1 320px;
 }
 
 .payment-method-title {
@@ -2932,6 +2945,25 @@ th {
   font-size: 12px;
   font-weight: 600;
   line-height: 1.45;
+}
+
+.prepayment-acquirer-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.prepayment-acquirer-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #3c4c65;
+}
+
+.prepayment-acquirer-toggle:has(input:disabled) {
+  opacity: 0.5;
 }
 
 .delivery-payment-matrix-fieldset {
@@ -4819,8 +4851,8 @@ th {
     grid-template-columns: 1fr;
   }
 
-  .payment-methods-grid {
-    grid-template-columns: 1fr;
+  .payment-methods-grid > .social-item {
+    flex-basis: 100%;
   }
 
   .delivery-payment-matrix-grid {

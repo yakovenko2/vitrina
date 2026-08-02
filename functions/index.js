@@ -27,6 +27,7 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { defineSecret } = require("firebase-functions/params");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const admin = require("firebase-admin");
+const crypto = require("crypto");
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -622,6 +623,8 @@ exports.notifyOrder = onRequest(
 
 const MONO_API_BASE = "https://api.monobank.ua";
 const MONO_CCY_UAH = 980;
+const MONO_CCY_USD = 840;
+const MONO_CCY_EUR = 978;
 const BILLING_INVOICES_COLLECTION = "billing_invoices";
 const BILLING_KEY = "lavkaBilling";
 const TARIFF_PLANS = {
@@ -1360,10 +1363,56 @@ exports.reconcileMonoTariffInvoices = onSchedule(
  * Monobank acquiring: оплата замовлень магазину (store checkout)
  * ──────────────────────────────────────────────────────────────────────── */
 
+// TEMPORARY one-off endpoint to reconcile orders stuck at "Очікує оплати"
+// because monoStoreOrderWebhook was crashing (toMonoModifiedDate ReferenceError).
+// Remove after running once.
+exports.reconcileStuckMonoOrdersOnce = onRequest({ cors: true }, async (req, res) => {
+  if (String(req.query.key || "") !== "reconcile-2026-08-01") {
+    res.status(403).json({ ok: false, error: "forbidden" });
+    return;
+  }
+
+  const results = [];
+  const snap = await db.collection("store_order_invoices").get();
+
+  for (const doc of snap.docs) {
+    const data = doc.data() || {};
+    const status = String(data.status || data.monoStatus || "").trim().toLowerCase();
+    const storeId = sanitizeStoreIdStrict(data.storeId);
+    const orderId = sanitizeOrderId(data.orderId);
+    if (!storeId || !orderId) continue;
+
+    if (status === "success") {
+      const applied = await updateStoreOrderPaymentStatus({
+        storeId,
+        orderId,
+        paymentStatus: "Оплачено",
+        monoInvoiceId: doc.id,
+        monoStatus: status,
+        pageUrl: data.pageUrl || ""
+      });
+      results.push({ invoiceId: doc.id, storeId, orderId, status, applied });
+    } else if (status === "failure" || status === "expired") {
+      const applied = await updateStoreOrderPaymentStatus({
+        storeId,
+        orderId,
+        paymentStatus: "Не оплачено",
+        monoInvoiceId: doc.id,
+        monoStatus: status,
+        pageUrl: data.pageUrl || ""
+      });
+      results.push({ invoiceId: doc.id, storeId, orderId, status, applied });
+    }
+  }
+
+  res.status(200).json({ ok: true, checked: snap.size, results });
+});
+
 const STORE_CHECKOUT_KEY = "lavkaCheckoutSettings";
 const STORE_SETTINGS_KEY = "lavkaStoreSettings";
 const STORE_ORDERS_KEY = "lavkaOrders";
 const STORE_ORDER_INVOICES_COLLECTION = "store_order_invoices";
+const STORE_ORDER_LIQPAY_INVOICES_COLLECTION = "store_order_liqpay_invoices";
 
 const sanitizeOrderId = (value) => String(value || "").trim().slice(0, 64);
 
@@ -1371,10 +1420,20 @@ const resolveStoreOrderWebhookUrl = () => "https://us-central1-lavka-shop.cloudf
 
 const normalizeStoreCurrency = (value) => {
   const code = String(value || "").trim().toLowerCase();
-  if (code === "uah" || code === "980") {
-    return MONO_CCY_UAH;
+  if (code === "usd" || code === "840") {
+    return MONO_CCY_USD;
+  }
+  if (code === "eur" || code === "978") {
+    return MONO_CCY_EUR;
   }
   return MONO_CCY_UAH;
+};
+
+const normalizeLiqpayCurrency = (value) => {
+  const code = String(value || "").trim().toLowerCase();
+  if (code === "usd") return "USD";
+  if (code === "eur") return "EUR";
+  return "UAH";
 };
 
 const readStoreCheckoutConfig = async (storeId) => {
@@ -1421,13 +1480,372 @@ const createStoreOrderReference = (storeId, orderId) => {
   return `store_${storeId}_${compactOrder}_${Date.now()}_${randomPart}`;
 };
 
+/* ────────────────────────────────────────────────────────────────────────
+ * LiqPay acquiring: оплата замовлень магазину (store checkout)
+ * ──────────────────────────────────────────────────────────────────────── */
+
+const LIQPAY_CHECKOUT_URL = "https://www.liqpay.ua/api/3/checkout/";
+const LIQPAY_API_REQUEST_URL = "https://www.liqpay.ua/api/request";
+
+const resolveStoreOrderLiqpayWebhookUrl = () => "https://us-central1-lavka-shop.cloudfunctions.net/liqpayStoreOrderWebhook";
+
+const readStoreLiqpayConfig = async (storeId) => {
+  const baseRef = db.collection("stores").doc(storeId).collection("data");
+  const [checkoutSnap, settingsSnap] = await Promise.all([
+    baseRef.doc(STORE_CHECKOUT_KEY).get(),
+    baseRef.doc(STORE_SETTINGS_KEY).get()
+  ]);
+
+  const checkoutValue = checkoutSnap.exists ? ((checkoutSnap.data() || {}).value || {}) : {};
+  const settingsValue = settingsSnap.exists ? ((settingsSnap.data() || {}).value || {}) : {};
+
+  const enabled = Boolean(
+    checkoutValue.paymentLiqpayEnabled !== undefined
+      ? checkoutValue.paymentLiqpayEnabled
+      : settingsValue.paymentLiqpayEnabled
+  );
+  const publicKey = String(checkoutValue.paymentLiqpayPublicKey || settingsValue.paymentLiqpayPublicKey || "").trim();
+  const privateKey = String(checkoutValue.paymentLiqpayPrivateKey || settingsValue.paymentLiqpayPrivateKey || "").trim();
+
+  return {
+    enabled,
+    publicKey,
+    privateKey
+  };
+};
+
+const createLiqpayOrderReference = (storeId, orderId) => {
+  const randomPart = Math.random().toString(36).slice(2, 9);
+  const compactOrder = String(orderId || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 24) || "order";
+  return `liqpay_${storeId}_${compactOrder}_${Date.now()}_${randomPart}`;
+};
+
+// LiqPay signs every request as base64(sha1(private_key + data + private_key)).
+const buildLiqpaySignature = (privateKey, dataBase64) =>
+  crypto.createHash("sha1").update(`${privateKey}${dataBase64}${privateKey}`).digest("base64");
+
+const buildLiqpayPayload = (params, publicKey, privateKey) => {
+  const json = JSON.stringify({ ...params, public_key: publicKey, version: 3 });
+  const data = Buffer.from(json, "utf8").toString("base64");
+  const signature = buildLiqpaySignature(privateKey, data);
+  return { data, signature };
+};
+
+const liqpayStatusRequest = async (orderId, publicKey, privateKey) => {
+  const { data, signature } = buildLiqpayPayload({ action: "status", order_id: orderId }, publicKey, privateKey);
+  const response = await fetch(LIQPAY_API_REQUEST_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `data=${encodeURIComponent(data)}&signature=${encodeURIComponent(signature)}`
+  });
+
+  try {
+    return await response.json();
+  } catch (error) {
+    return {};
+  }
+};
+
+// Applies a LiqPay status payload (from webhook or a live status check) to the
+// cached invoice doc and, for final states, to the order's paymentStatus.
+const applyLiqpayStatusUpdate = async (invoiceRef, current, storeId, statusPayload) => {
+  const status = String((statusPayload && statusPayload.status) || "").trim().toLowerCase();
+  if (!status) return;
+
+  await invoiceRef.set({
+    status,
+    liqpayStatus: status,
+    rawLastStatus: statusPayload,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+
+  const orderId = sanitizeOrderId(current.orderId);
+  if (!orderId) return;
+
+  const liqpayInvoiceId = String(current.liqpayOrderId || "");
+  const liqpayPageUrl = String(current.pageUrl || "");
+
+  if (status === "success" || status === "sandbox") {
+    await updateStoreOrderPaymentStatus({
+      storeId,
+      orderId,
+      paymentStatus: "Оплачено",
+      liqpayInvoiceId,
+      liqpayStatus: status,
+      liqpayPageUrl
+    });
+    await invoiceRef.set({
+      activatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    return;
+  }
+
+  if (status === "failure" || status === "error") {
+    await updateStoreOrderPaymentStatus({
+      storeId,
+      orderId,
+      paymentStatus: "Не оплачено",
+      liqpayInvoiceId,
+      liqpayStatus: status,
+      liqpayPageUrl
+    });
+  }
+  // wait_secure/processing/subscribed тощо — проміжні статуси, paymentStatus не чіпаємо.
+};
+
+exports.createStoreOrderLiqpayInvoice = onRequest(
+  { cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
+    if (req.method !== "POST") {
+      res.status(405).json({ ok: false, error: "method-not-allowed" });
+      return;
+    }
+
+    const storeId = sanitizeStoreIdStrict(req.body && req.body.storeId);
+    const orderId = sanitizeOrderId(req.body && req.body.orderId);
+    const amount = Math.max(0, Math.round(Number(req.body && req.body.amount) || 0));
+    const returnBaseUrl = String(req.body && req.body.returnBaseUrl || "");
+    const paymentMethod = sanitizeUserIdentity(req.body && req.body.paymentMethod);
+    const currency = normalizeLiqpayCurrency(req.body && req.body.currency);
+
+    if (!storeId) {
+      res.status(400).json({ ok: false, error: "invalid-store-id" });
+      return;
+    }
+    if (!orderId || amount <= 0) {
+      res.status(400).json({ ok: false, error: "invalid-order" });
+      return;
+    }
+
+    try {
+      const liqpayConfig = await readStoreLiqpayConfig(storeId);
+      if (!liqpayConfig.enabled) {
+        res.status(400).json({ ok: false, error: "liqpay-disabled" });
+        return;
+      }
+      if (!liqpayConfig.publicKey || !liqpayConfig.privateKey) {
+        res.status(400).json({ ok: false, error: "liqpay-config-missing" });
+        return;
+      }
+
+      const reference = createLiqpayOrderReference(storeId, orderId);
+      const urls = buildStoreOrderPaymentUrls(returnBaseUrl, orderId);
+
+      const params = {
+        action: "pay",
+        amount,
+        currency,
+        description: `Оплата замовлення ${orderId}`,
+        order_id: reference,
+        language: "uk",
+        result_url: urls.redirectUrl,
+        server_url: resolveStoreOrderLiqpayWebhookUrl()
+      };
+
+      const { data, signature } = buildLiqpayPayload(params, liqpayConfig.publicKey, liqpayConfig.privateKey);
+      const pageUrl = `${LIQPAY_CHECKOUT_URL}?data=${encodeURIComponent(data)}&signature=${encodeURIComponent(signature)}`;
+
+      await db.collection(STORE_ORDER_LIQPAY_INVOICES_COLLECTION).doc(reference).set({
+        liqpayOrderId: reference,
+        storeId,
+        orderId,
+        amount,
+        currency: params.currency,
+        paymentMethod: paymentMethod || "LiqPay",
+        status: "created",
+        liqpayStatus: "created",
+        pageUrl,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      await updateStoreOrderPaymentStatus({
+        storeId,
+        orderId,
+        paymentStatus: "Очікує оплати",
+        liqpayInvoiceId: reference,
+        liqpayStatus: "created",
+        liqpayPageUrl: pageUrl
+      });
+
+      res.status(200).json({ ok: true, invoiceId: reference, pageUrl });
+    } catch (error) {
+      console.error("createStoreOrderLiqpayInvoice error:", error);
+      res.status(500).json({ ok: false, error: "internal" });
+    }
+  }
+);
+
+exports.liqpayStoreOrderWebhook = onRequest(
+  { cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
+    if (req.method !== "POST") {
+      res.status(405).json({ ok: false, error: "method-not-allowed" });
+      return;
+    }
+
+    const dataB64 = String((req.body && req.body.data) || "").trim();
+    const signature = String((req.body && req.body.signature) || "").trim();
+    if (!dataB64 || !signature) {
+      res.status(200).send("ok");
+      return;
+    }
+
+    let decoded = null;
+    try {
+      decoded = JSON.parse(Buffer.from(dataB64, "base64").toString("utf8"));
+    } catch (error) {
+      decoded = null;
+    }
+
+    const liqpayOrderId = String((decoded && decoded.order_id) || "").trim();
+    if (!decoded || !liqpayOrderId) {
+      res.status(200).send("ok");
+      return;
+    }
+
+    try {
+      const invoiceRef = db.collection(STORE_ORDER_LIQPAY_INVOICES_COLLECTION).doc(liqpayOrderId);
+      const snap = await invoiceRef.get();
+      if (!snap.exists) {
+        res.status(200).send("ok");
+        return;
+      }
+
+      const current = snap.data() || {};
+      const storeId = sanitizeStoreIdStrict(current.storeId);
+      if (!storeId) {
+        res.status(200).send("ok");
+        return;
+      }
+
+      const liqpayConfig = await readStoreLiqpayConfig(storeId);
+      if (!liqpayConfig.privateKey) {
+        await invoiceRef.set({
+          status: "config-missing",
+          liqpayStatus: "config-missing",
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        res.status(200).send("ok");
+        return;
+      }
+
+      // Не довіряємо вебхуку, доки підпис не перевірено ключем саме цього магазину.
+      const expectedSignature = buildLiqpaySignature(liqpayConfig.privateKey, dataB64);
+      if (expectedSignature !== signature) {
+        console.warn("liqpayStoreOrderWebhook: signature mismatch", { liqpayOrderId, storeId });
+        res.status(403).send("invalid-signature");
+        return;
+      }
+
+      await applyLiqpayStatusUpdate(invoiceRef, current, storeId, decoded);
+
+      res.status(200).send("ok");
+    } catch (error) {
+      console.error("liqpayStoreOrderWebhook error:", error);
+      res.status(200).send("ok");
+    }
+  }
+);
+
+exports.getStoreOrderLiqpayInvoiceStatus = onRequest(
+  { cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
+    if (req.method !== "GET") {
+      res.status(405).json({ ok: false, error: "method-not-allowed" });
+      return;
+    }
+
+    const invoiceId = String((req.query && req.query.invoiceId) || "").trim();
+    const orderId = String((req.query && req.query.orderId) || "").trim();
+    if (!invoiceId && !orderId) {
+      res.status(400).json({ ok: false, error: "invoice-id-or-order-id-required" });
+      return;
+    }
+
+    try {
+      let snap = null;
+      let foundInvoiceId = invoiceId;
+      if (invoiceId) {
+        snap = await db.collection(STORE_ORDER_LIQPAY_INVOICES_COLLECTION).doc(invoiceId).get();
+      } else {
+        const q = await db.collection(STORE_ORDER_LIQPAY_INVOICES_COLLECTION).where("orderId", "==", orderId).orderBy("createdAt", "desc").limit(1).get();
+        if (!q.empty) {
+          snap = q.docs[0];
+          foundInvoiceId = String(snap.id || "");
+        }
+      }
+
+      if (!snap || snap.exists === false) {
+        res.status(404).json({ ok: false, error: "not-found" });
+        return;
+      }
+
+      let current = snap.data() || {};
+      const storeId = sanitizeStoreIdStrict(current.storeId);
+      const pendingStatuses = ["created", "wait_secure", "processing", "subscribed"];
+
+      // Вебхук міг ще не прийти (покупець повертається одразу після оплати),
+      // тож для проміжних статусів звіряємось з LiqPay наживо.
+      if (storeId && pendingStatuses.includes(String(current.liqpayStatus || current.status || "").toLowerCase())) {
+        try {
+          const liqpayConfig = await readStoreLiqpayConfig(storeId);
+          if (liqpayConfig.publicKey && liqpayConfig.privateKey) {
+            const statusPayload = await liqpayStatusRequest(foundInvoiceId, liqpayConfig.publicKey, liqpayConfig.privateKey);
+            if (statusPayload && statusPayload.status) {
+              const invoiceRef = db.collection(STORE_ORDER_LIQPAY_INVOICES_COLLECTION).doc(foundInvoiceId);
+              await applyLiqpayStatusUpdate(invoiceRef, current, storeId, statusPayload);
+              const refreshedSnap = await invoiceRef.get();
+              current = refreshedSnap.data() || current;
+            }
+          }
+        } catch (error) {
+          console.warn("getStoreOrderLiqpayInvoiceStatus live-check failed:", error);
+        }
+      }
+
+      res.status(200).json({
+        ok: true,
+        invoiceId: foundInvoiceId,
+        status: String(current.status || "created"),
+        liqpayStatus: String(current.liqpayStatus || "created"),
+        storeId: String(current.storeId || ""),
+        orderId: String(current.orderId || ""),
+        pageUrl: String(current.pageUrl || "")
+      });
+    } catch (error) {
+      console.error("getStoreOrderLiqpayInvoiceStatus error:", error);
+      res.status(500).json({ ok: false, error: "internal" });
+    }
+  }
+);
+
 const updateStoreOrderPaymentStatus = async ({
   storeId,
   orderId,
   paymentStatus,
   monoInvoiceId,
   monoStatus,
-  pageUrl
+  pageUrl,
+  liqpayInvoiceId,
+  liqpayStatus,
+  liqpayPageUrl
 }) => {
   const safeStoreId = sanitizeStoreIdStrict(storeId);
   const safeOrderId = sanitizeOrderId(orderId);
@@ -1455,6 +1873,9 @@ const updateStoreOrderPaymentStatus = async ({
     monoInvoiceId: String(monoInvoiceId || current.monoInvoiceId || ""),
     monoStatus: String(monoStatus || current.monoStatus || ""),
     monoPageUrl: String(pageUrl || current.monoPageUrl || ""),
+    liqpayInvoiceId: String(liqpayInvoiceId || current.liqpayInvoiceId || ""),
+    liqpayStatus: String(liqpayStatus || current.liqpayStatus || ""),
+    liqpayPageUrl: String(liqpayPageUrl || current.liqpayPageUrl || ""),
     updatedAt: new Date().toISOString()
   };
 
@@ -1686,7 +2107,7 @@ exports.monoStoreOrderWebhook = onRequest(
       );
 
       const status = String(monoStatusPayload && monoStatusPayload.status || "").trim().toLowerCase() || "created";
-      const modifiedDate = toMonoModifiedDate(monoStatusPayload && monoStatusPayload.modifiedDate);
+      const modifiedDate = parseMonoModifiedDate(monoStatusPayload && monoStatusPayload.modifiedDate);
       const prevModified = Number(current.modifiedDate) || 0;
       if (modifiedDate > prevModified || !prevModified) {
         await invoiceRef.set({

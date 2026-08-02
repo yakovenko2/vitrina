@@ -268,7 +268,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <h3 class="p-name">${product.name}</h3>
             <p class="p-stock${inStock ? "" : " out"}">${stockLabel}</p>
             <div class="p-footer">
-              <p class="p-price">${Math.round(product.price)} грн</p>
+              <p class="p-price">${toCurrency(product.price)}</p>
               <button class="cart-btn" aria-label="Додати в кошик"${disableCartButton ? cartButtonAttrs : ""}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M2 3h2l2.2 11.4a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L20 7H5.2"/></svg>
               </button>

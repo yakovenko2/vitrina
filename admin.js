@@ -53,6 +53,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const MAX_NAME_LENGTH = 60;
   const MAX_DESCRIPTION_LENGTH = 140;
   const MAX_AVATAR_FILE_SIZE = 3 * 1024 * 1024;
+  const MAX_AVATAR_DIMENSION = 512;
   const MAX_PRODUCT_NAME_LENGTH = 60;
   const MAX_PRODUCT_DESCRIPTION_LENGTH = 240;
   const MAX_PRODUCT_PHOTOS = 10;
@@ -1104,6 +1105,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const paymentCodFee = document.getElementById("paymentCodFee");
   const paymentPrepaymentEnabled = document.getElementById("paymentPrepaymentEnabled");
   const paymentPrepaymentAmount = document.getElementById("paymentPrepaymentAmount");
+  const paymentPrepaymentViaMono = document.getElementById("paymentPrepaymentViaMono");
+  const paymentPrepaymentViaLiqpay = document.getElementById("paymentPrepaymentViaLiqpay");
   const paymentPrepaymentHint = document.getElementById("paymentPrepaymentHint");
   const paymentBankTransferEnabled = document.getElementById("paymentBankTransferEnabled");
   const paymentBankRequisites = document.getElementById("paymentBankRequisites");
@@ -1438,6 +1441,7 @@ document.addEventListener("DOMContentLoaded", () => {
     "paymentCodFee",
     "paymentPrepaymentEnabled",
     "paymentPrepaymentAmount",
+    "paymentPrepaymentAcquirer",
     "paymentBankTransferEnabled",
     "paymentBankRequisites",
     "shippingNovaPostEnabled",
@@ -2436,7 +2440,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <h3 class="billing-plan-name">${plan.name}</h3>
             ${currentPlan?.id === plan.id ? '<span class="billing-badge">Поточний</span>' : ""}
           </div>
-          <p class="billing-plan-price">${formatNumber(plan.price)} ${getCurrencyLabel(getCurrentCurrency())} / ${plan.periodMonths} міс.</p>
+          <p class="billing-plan-price">${formatNumber(plan.price)} грн / ${plan.periodMonths} міс.</p>
           <p class="billing-plan-desc">${plan.description}</p>
           <div class="billing-plan-accordions">
             <details class="billing-plan-accordion">
@@ -2469,7 +2473,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <td>${formatDateLong(payment.paidAt)}</td>
             <td>${String(payment.planName || "-")}</td>
             <td>${Number(payment.periodMonths) || 1} міс.</td>
-            <td>${formatNumber(Number(payment.amount) || 0)} ${getCurrencyLabel(getCurrentCurrency())}</td>
+            <td>${formatNumber(Number(payment.amount) || 0)} грн</td>
             <td><span class="status paid">Оплачено</span></td>
           `;
           billingHistoryBody.append(row);
@@ -2483,7 +2487,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!selectedPlan) return;
 
     const confirmed = window.confirm(
-      `Переходимо до оплати Monobank: тариф ${selectedPlan.name}, ${selectedPlan.periodMonths} міс., ${formatNumber(selectedPlan.price)} ${getCurrencyLabel(getCurrentCurrency())}. Продовжити?`
+      `Переходимо до оплати Monobank: тариф ${selectedPlan.name}, ${selectedPlan.periodMonths} міс., ${formatNumber(selectedPlan.price)} грн. Продовжити?`
     );
     if (!confirmed) return;
 
@@ -2777,6 +2781,14 @@ document.addEventListener("DOMContentLoaded", () => {
       managerComment: String(order?.managerComment || ""),
       status: String(order?.status || "Очікує"),
       paymentStatus: String(order?.paymentStatus || "Не оплачено"),
+      paymentMethodId: String(order?.paymentMethodId || "").trim(),
+      paymentMethod: String(order?.paymentMethod || "").trim(),
+      monoInvoiceId: String(order?.monoInvoiceId || "").trim(),
+      monoStatus: String(order?.monoStatus || "").trim(),
+      monoPageUrl: String(order?.monoPageUrl || "").trim(),
+      liqpayInvoiceId: String(order?.liqpayInvoiceId || "").trim(),
+      liqpayStatus: String(order?.liqpayStatus || "").trim(),
+      liqpayPageUrl: String(order?.liqpayPageUrl || "").trim(),
       trackingNumber: String(order?.trackingNumber || ""),
       total,
       discount,
@@ -4339,6 +4351,59 @@ document.addEventListener("DOMContentLoaded", () => {
     return buildEmbeddedProductPhoto(file, policy, index, lastError?.code || lastError?.message || "storage-upload-failed");
   };
 
+  // Uploads the store avatar to Firebase Storage so it stays small enough to sync
+  // through Firestore and shows up on the storefront on any device.
+  const uploadStoreAvatarToStorage = async (file, storeId) => {
+    const extension = getExtensionFromFile(file);
+    const nameRoot = sanitizeStorageFileName(String(file?.name || "avatar")).replace(/\.[^.]+$/, "");
+    const objectPath = `stores/${storeId}/avatar/${Date.now()}-${nameRoot}.${extension}`;
+    const metadata = { contentType: String(file?.type || "image/jpeg") };
+    const bucketCandidates = [
+      FIREBASE_CONFIG.storageBucket,
+      ...STORAGE_BUCKET_CANDIDATES
+    ].map((value) => String(value || "").trim()).filter(Boolean).filter((value, i, arr) => arr.indexOf(value) === i);
+
+    let lastError = null;
+    for (let i = 0; i < bucketCandidates.length; i += 1) {
+      try {
+        const bucket = bucketCandidates[i];
+        const storage = getStorageClientForBucket(bucket);
+        const ref = storage.ref().child(objectPath);
+        const snapshot = await withTimeout(ref.put(file, metadata), 15000, "storage-upload-timeout");
+        return await withTimeout(snapshot.ref.getDownloadURL(), 10000, "storage-url-timeout");
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    console.warn("[admin] avatar storage upload failed, using embedded fallback", { storeId, error: lastError });
+
+    // Firestore documents are capped at ~1 MiB, so resize/compress before embedding.
+    const sourceDataUrl = await readFileAsDataUrl(file);
+    const sourceImage = await loadImageFromDataUrl(sourceDataUrl);
+    const size = clampDimension(sourceImage.width, sourceImage.height, MAX_AVATAR_DIMENSION);
+    const canvas = document.createElement("canvas");
+    canvas.width = size.width;
+    canvas.height = size.height;
+    const context = canvas.getContext("2d", { alpha: false });
+    if (!context) {
+      throw lastError || new Error("canvas-context-unavailable");
+    }
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, size.width, size.height);
+    context.drawImage(sourceImage, 0, 0, size.width, size.height);
+
+    let quality = 0.85;
+    let dataUrl = canvasToDataUrl(canvas, quality);
+    while (estimateDataUrlBytes(dataUrl) > 180 * 1024 && quality > 0.5) {
+      quality -= 0.08;
+      dataUrl = canvasToDataUrl(canvas, quality);
+    }
+
+    return dataUrl;
+  };
+
   const convertProductFilesToStoredPhotos = async (files, productId) => {
     const list = Array.isArray(files) ? files : [];
     if (!list.length) {
@@ -4604,6 +4669,23 @@ document.addEventListener("DOMContentLoaded", () => {
         ? String(Math.round(normalizedPrepayment))
         : "";
     }
+    if (paymentPrepaymentViaMono || paymentPrepaymentViaLiqpay) {
+      // Мігруємо старі окремі чекбокси (paymentPrepaymentViaMono/ViaLiqpay) в один вибір.
+      let acquirer = String(settings.paymentPrepaymentAcquirer || "").trim().toLowerCase();
+      if (acquirer !== "mono" && acquirer !== "liqpay") {
+        if (settings.paymentPrepaymentViaMono) {
+          acquirer = "mono";
+        } else if (settings.paymentPrepaymentViaLiqpay) {
+          acquirer = "liqpay";
+        }
+      }
+      if (paymentPrepaymentViaMono) {
+        paymentPrepaymentViaMono.checked = acquirer === "mono";
+      }
+      if (paymentPrepaymentViaLiqpay) {
+        paymentPrepaymentViaLiqpay.checked = acquirer === "liqpay";
+      }
+    }
     if (paymentBankTransferEnabled) {
       paymentBankTransferEnabled.checked = Boolean(settings.paymentBankTransferEnabled);
     }
@@ -4649,6 +4731,23 @@ document.addEventListener("DOMContentLoaded", () => {
       paymentPrepaymentAmount.disabled = !acquiringEnabled || !prepaymentChecked;
       if (!prepaymentChecked) {
         paymentPrepaymentAmount.value = "";
+      }
+    }
+
+    const monoEnabledNow = Boolean(paymentMonoEnabled?.checked);
+    const liqpayEnabledNow = Boolean(paymentLiqpayEnabled?.checked);
+
+    if (paymentPrepaymentViaMono) {
+      paymentPrepaymentViaMono.disabled = !acquiringEnabled || !prepaymentChecked || !monoEnabledNow;
+      if (!monoEnabledNow) {
+        paymentPrepaymentViaMono.checked = false;
+      }
+    }
+
+    if (paymentPrepaymentViaLiqpay) {
+      paymentPrepaymentViaLiqpay.disabled = !acquiringEnabled || !prepaymentChecked || !liqpayEnabledNow;
+      if (!liqpayEnabledNow) {
+        paymentPrepaymentViaLiqpay.checked = false;
       }
     }
 
@@ -4714,7 +4813,25 @@ document.addEventListener("DOMContentLoaded", () => {
         return orderId && !knownOrderIds.has(orderId);
       });
 
-      if (!newOrders.length) {
+      // Замовлення, оплачені через Plata by mono, оновлюють paymentStatus у Firestore
+      // асинхронно (вебхук), тому треба також оновлювати вже відомі замовлення,
+      // а не лише додавати нові.
+      const previousOrdersById = new Map(orders.map((order) => [String(order.id || "").trim(), order]));
+      const hasUpdatedOrder = latestOrders.some((order) => {
+        const orderId = String(order.id || "").trim();
+        if (!orderId || !knownOrderIds.has(orderId)) return false;
+        const previous = previousOrdersById.get(orderId);
+        if (!previous) return false;
+        return (
+          previous.paymentStatus !== order.paymentStatus
+          || previous.status !== order.status
+          || previous.monoStatus !== order.monoStatus
+          || previous.liqpayStatus !== order.liqpayStatus
+          || previous.updatedAt !== order.updatedAt
+        );
+      });
+
+      if (!newOrders.length && !hasUpdatedOrder) {
         knownOrderIds = latestOrderIds;
         return;
       }
@@ -4724,6 +4841,15 @@ document.addEventListener("DOMContentLoaded", () => {
       renderOrdersTable(orders);
       if (currentSection === "sales") {
         renderSalesFromForm();
+      }
+
+      // Якщо зараз відкрита картка деталей саме цього замовлення, оновлюємо і її.
+      const openOrderId = String(orderEditingId?.value || "").trim();
+      if (openOrderId && orderDetailsModal?.classList.contains("open")) {
+        const updatedOpenOrder = orders.find((order) => String(order.id || "").trim() === openOrderId);
+        if (updatedOpenOrder) {
+          fillOrderDetails(updatedOpenOrder);
+        }
       }
 
       // Сповіщення надсилає бекенд (Cloud Function) під час оформлення
@@ -6194,16 +6320,26 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       savedMessage.classList.remove("error");
-      savedMessage.textContent = "";
+      savedMessage.textContent = "Завантажуємо фото...";
+      storeAvatarFile.disabled = true;
 
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === "string") {
-          storeAvatar.value = reader.result;
-          avatarPreview.src = reader.result;
-        }
-      };
-      reader.readAsDataURL(file);
+      const storeId = resolveStoreIdForUploads();
+      uploadStoreAvatarToStorage(file, storeId)
+        .then((url) => {
+          storeAvatar.value = url;
+          avatarPreview.src = url;
+          savedMessage.classList.remove("error");
+          savedMessage.textContent = "Фото завантажено. Натисніть «Зберегти», щоб застосувати.";
+        })
+        .catch((error) => {
+          console.error("[admin] avatar upload failed", error);
+          savedMessage.classList.add("error");
+          savedMessage.textContent = "Не вдалося завантажити фото. Спробуйте ще раз.";
+        })
+        .finally(() => {
+          storeAvatarFile.disabled = false;
+          storeAvatarFile.value = "";
+        });
     });
 
     settingsForm.addEventListener("submit", (event) => {
@@ -6441,6 +6577,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const liqpayPrivateKey = String(paymentLiqpayPrivateKey?.value || "").trim();
       const codFee = String(paymentCodFee?.value || "").trim();
       const prepaymentAmount = Math.max(0, Math.round(Number(paymentPrepaymentAmount?.value) || 0));
+      const prepaymentAcquirer = (monoEnabled && paymentPrepaymentViaMono?.checked)
+        ? "mono"
+        : ((liqpayEnabled && paymentPrepaymentViaLiqpay?.checked) ? "liqpay" : "");
       const bankRequisites = String(paymentBankRequisites?.value || "").trim();
 
       if (paymentsSavedMessage) {
@@ -6479,6 +6618,14 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      if (prepaymentEnabled && !prepaymentAcquirer) {
+        if (paymentsSavedMessage) {
+          paymentsSavedMessage.textContent = "Оберіть еквайринг (Plata by mono або LiqPay) для прийому Передоплати.";
+          paymentsSavedMessage.classList.add("error");
+        }
+        return;
+      }
+
       if (!acquiringEnabled && Boolean(paymentPrepaymentEnabled?.checked)) {
         if (paymentsSavedMessage) {
           paymentsSavedMessage.textContent = "Передоплата доступна лише з активним еквайрингом (Plata by mono або LiqPay).";
@@ -6498,6 +6645,7 @@ document.addEventListener("DOMContentLoaded", () => {
         paymentCodFee: codFee,
         paymentPrepaymentEnabled: prepaymentEnabled,
         paymentPrepaymentAmount: prepaymentAmount,
+        paymentPrepaymentAcquirer: prepaymentAcquirer,
         paymentBankTransferEnabled: bankTransferEnabled,
         paymentBankRequisites: bankRequisites,
         paymentDeliveryMatrix: collectPaymentDeliveryMatrixFromUi()

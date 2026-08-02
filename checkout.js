@@ -9,6 +9,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const NOVA_POSHTA_API_KEY = "8e24dc6bb36a0ee95f254d203bb3cc92";
   const NOTIFY_ORDER_URL = "https://us-central1-lavka-shop.cloudfunctions.net/notifyOrder";
   const CREATE_ORDER_MONO_INVOICE_URL = "https://us-central1-lavka-shop.cloudfunctions.net/createStoreOrderMonoInvoice";
+  const CREATE_ORDER_LIQPAY_INVOICE_URL = "https://us-central1-lavka-shop.cloudfunctions.net/createStoreOrderLiqpayInvoice";
+  const GET_STORE_ORDER_LIQPAY_STATUS_URL = "https://us-central1-lavka-shop.cloudfunctions.net/getStoreOrderLiqpayInvoiceStatus";
 
   const resolveStoreIdForNotify = async () => {
     if (window.__lavkaStoreId) return String(window.__lavkaStoreId);
@@ -61,6 +63,30 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const isMonoPaymentMethodById = (value) => String(value || "").trim().toLowerCase() === "payment-mono";
+
+  const isLiqpayPaymentMethod = (value) => {
+    const normalized = String(value || "").trim().toLowerCase();
+    return normalized.includes("liqpay");
+  };
+
+  const isLiqpayPaymentMethodById = (value) => String(value || "").trim().toLowerCase() === "payment-liqpay";
+
+  const mapLiqpayCreateErrorMessage = (errorCode) => {
+    const code = String(errorCode || "").trim().toLowerCase();
+    if (code === "liqpay-config-missing") {
+      return "Оплата LiqPay тимчасово недоступна: власник магазину ще не додав API ключі.";
+    }
+    if (code === "liqpay-disabled") {
+      return "Оплата LiqPay вимкнена в налаштуваннях магазину.";
+    }
+    if (code === "invalid-store-id") {
+      return "Не вдалося визначити магазин для оплати.";
+    }
+    if (code === "invalid-order") {
+      return "Невірні дані замовлення. Перевірте кошик та спробуйте знову.";
+    }
+    return "Не вдалося створити платіж LiqPay. Спробуйте ще раз.";
+  };
 
   const mapMonoCreateErrorMessage = (errorCode) => {
     const code = String(errorCode || "").trim().toLowerCase();
@@ -139,6 +165,51 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   };
 
+  const createLiqpayInvoiceForOrder = async (order) => {
+    const storeId = await resolveStoreIdForNotify();
+    if (!storeId || storeId === "default-store") {
+      throw new Error("invalid-store-id");
+    }
+
+    const amount = Math.max(0, Math.round(Number(order?.payableNow) || 0));
+    if (amount <= 0) {
+      throw new Error("invalid-order");
+    }
+
+    const payload = {
+      storeId,
+      orderId: String(order?.id || "").trim(),
+      amount,
+      currency: normalizeCurrencyCode(settings?.currency || "uah"),
+      customerName: String(order?.customerName || "").trim(),
+      customerPhone: String(order?.customerPhone || "").trim(),
+      paymentMethod: String(order?.paymentMethod || "").trim(),
+      returnBaseUrl: window.location.origin
+    };
+
+    const response = await fetch(CREATE_ORDER_LIQPAY_INVOICE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    let data = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+
+    if (!response.ok || !data || !data.ok) {
+      throw new Error(String(data && data.error || "create-invoice-failed"));
+    }
+
+    return {
+      invoiceId: String(data.invoiceId || "").trim(),
+      pageUrl: String(data.pageUrl || "").trim()
+    };
+  };
+
   const checkoutForm = document.getElementById("checkoutForm");
   const customerName = document.getElementById("customerName");
   const customerPhone = document.getElementById("customerPhone");
@@ -149,6 +220,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const paymentEmpty = document.getElementById("paymentEmpty");
   const bankTransferInfo = document.getElementById("bankTransferInfo");
   const bankTransferText = document.getElementById("bankTransferText");
+  const prepaymentAcquirerInfo = document.getElementById("prepaymentAcquirerInfo");
+  const prepaymentAcquirerOptions = document.getElementById("prepaymentAcquirerOptions");
   const deliveryAddressGroup = document.getElementById("deliveryAddressGroup");
   const addressNovaPost = document.getElementById("addressNovaPost");
   const addressUkrPost = document.getElementById("addressUkrPost");
@@ -191,69 +264,103 @@ document.addEventListener("DOMContentLoaded", () => {
     const params = new URLSearchParams(window.location.search || "");
     const status = String(params.get("payment") || "").trim().toLowerCase();
     if (!status) return;
+
+    const orderParam = String(params.get("order") || "").trim();
+    const orders = orderParam ? (readOrders() || []) : [];
+    const idx = orderParam ? orders.findIndex((o) => String(o && o.id || "") === orderParam) : -1;
+    const order = idx >= 0 ? orders[idx] : null;
+    const isLiqpayOrder = Boolean(
+      order && (order.liqpayInvoiceId || isLiqpayPaymentMethodById(order.paymentMethodId) || isLiqpayPaymentMethod(order.paymentMethod))
+    );
+    const providerLabel = isLiqpayOrder ? "LiqPay" : "mono";
+
     checkoutMessage.classList.remove("error");
     if (status === "success") {
-      checkoutMessage.textContent = "Оплату через mono отримано. Дякуємо за замовлення!";
+      checkoutMessage.textContent = `Оплату через ${providerLabel} отримано. Дякуємо за замовлення!`;
     } else if (status === "processing") {
-      checkoutMessage.textContent = "Платіж mono обробляється. Зачекайте кілька секунд.";
+      checkoutMessage.textContent = `Платіж ${providerLabel} обробляється. Зачекайте кілька секунд.`;
     } else if (status === "fail") {
       checkoutMessage.classList.add("error");
-      checkoutMessage.textContent = "Оплата mono не завершена. Спробуйте ще раз.";
+      checkoutMessage.textContent = `Оплата ${providerLabel} не завершена. Спробуйте ще раз.`;
     }
+
+    if (!order) return;
 
     // Try to reconcile order status immediately: find order and check invoice status.
     try {
-      const orderParam = String(params.get("order") || "").trim();
-      if (orderParam) {
-        const orders = readOrders() || [];
-        const idx = orders.findIndex((o) => String(o && o.id || "") === orderParam);
-        if (idx >= 0) {
-          const order = orders[idx] || {};
-          const invoiceId = String(order.monoInvoiceId || "").trim();
-          const maybeRedirect = (newStatus) => {
-            if (newStatus === "success") {
-              window.location.href = `thank-you.html?order=${encodeURIComponent(orderParam)}`;
-            }
-          };
-
-          const applyInvoiceData = (data) => {
-            if (!data || !data.ok) return;
-            const newStatus = String(data.status || "").trim().toLowerCase();
-            const paymentStatus = (newStatus === "success") ? "Оплачено" : ((newStatus === "failure" || newStatus === "expired") ? "Не оплачено" : order.paymentStatus || "Не оплачено");
-            orders[idx] = {
-              ...order,
-              paymentStatus,
-              monoStatus: String(data.monoStatus || order.monoStatus || ""),
-              monoInvoiceId: String(data.invoiceId || order.monoInvoiceId || ""),
-              monoPageUrl: String(data.pageUrl || order.monoPageUrl || ""),
-              updatedAt: new Date().toISOString()
-            };
-            saveOrders(orders);
-            maybeRedirect(newStatus);
-          };
-
-          if (invoiceId) {
-            const url = `https://us-central1-lavka-shop.cloudfunctions.net/getStoreOrderInvoiceStatus?invoiceId=${encodeURIComponent(invoiceId)}`;
-            console.debug('[checkout] fetchInvoiceStatus invoiceId=', invoiceId, url);
-            fetch(url, { method: "GET" })
-              .then((r) => r.json())
-              .then((data) => {
-                console.debug('[checkout] fetchInvoiceStatus response for invoiceId=', invoiceId, data);
-                applyInvoiceData(data);
-              })
-              .catch((err) => { console.debug('[checkout] fetchInvoiceStatus error', err); });
-          } else {
-            const url = `https://us-central1-lavka-shop.cloudfunctions.net/getStoreOrderInvoiceStatus?orderId=${encodeURIComponent(orderParam)}`;
-            console.debug('[checkout] fetchInvoiceStatus by orderId=', orderParam, url);
-            fetch(url, { method: "GET" })
-              .then((r) => r.json())
-              .then((data) => {
-                console.debug('[checkout] fetchInvoiceStatus response for orderId=', orderParam, data);
-                applyInvoiceData(data);
-              })
-              .catch((err) => { console.debug('[checkout] fetchInvoiceStatus error', err); });
-          }
+      const maybeRedirect = (newStatus) => {
+        if (newStatus === "success") {
+          window.location.href = `thank-you.html?order=${encodeURIComponent(orderParam)}`;
         }
+      };
+
+      if (isLiqpayOrder) {
+        const applyLiqpayInvoiceData = (data) => {
+          if (!data || !data.ok) return;
+          const newStatus = String(data.liqpayStatus || data.status || "").trim().toLowerCase();
+          const isPaid = newStatus === "success" || newStatus === "sandbox";
+          const isFailed = newStatus === "failure" || newStatus === "error";
+          const paymentStatus = isPaid ? "Оплачено" : (isFailed ? "Не оплачено" : (order.paymentStatus || "Не оплачено"));
+          orders[idx] = {
+            ...order,
+            paymentStatus,
+            liqpayStatus: String(data.liqpayStatus || order.liqpayStatus || ""),
+            liqpayInvoiceId: String(data.invoiceId || order.liqpayInvoiceId || ""),
+            liqpayPageUrl: String(data.pageUrl || order.liqpayPageUrl || ""),
+            updatedAt: new Date().toISOString()
+          };
+          saveOrders(orders);
+          maybeRedirect(isPaid ? "success" : newStatus);
+        };
+
+        const liqpayInvoiceId = String(order.liqpayInvoiceId || "").trim();
+        const liqpayUrl = liqpayInvoiceId
+          ? `${GET_STORE_ORDER_LIQPAY_STATUS_URL}?invoiceId=${encodeURIComponent(liqpayInvoiceId)}`
+          : `${GET_STORE_ORDER_LIQPAY_STATUS_URL}?orderId=${encodeURIComponent(orderParam)}`;
+        fetch(liqpayUrl, { method: "GET" })
+          .then((r) => r.json())
+          .then(applyLiqpayInvoiceData)
+          .catch((err) => { console.debug('[checkout] fetchLiqpayInvoiceStatus error', err); });
+        return;
+      }
+
+      const invoiceId = String(order.monoInvoiceId || "").trim();
+      const applyInvoiceData = (data) => {
+        if (!data || !data.ok) return;
+        const newStatus = String(data.status || "").trim().toLowerCase();
+        const paymentStatus = (newStatus === "success") ? "Оплачено" : ((newStatus === "failure" || newStatus === "expired") ? "Не оплачено" : order.paymentStatus || "Не оплачено");
+        orders[idx] = {
+          ...order,
+          paymentStatus,
+          monoStatus: String(data.monoStatus || order.monoStatus || ""),
+          monoInvoiceId: String(data.invoiceId || order.monoInvoiceId || ""),
+          monoPageUrl: String(data.pageUrl || order.monoPageUrl || ""),
+          updatedAt: new Date().toISOString()
+        };
+        saveOrders(orders);
+        maybeRedirect(newStatus);
+      };
+
+      if (invoiceId) {
+        const url = `https://us-central1-lavka-shop.cloudfunctions.net/getStoreOrderInvoiceStatus?invoiceId=${encodeURIComponent(invoiceId)}`;
+        console.debug('[checkout] fetchInvoiceStatus invoiceId=', invoiceId, url);
+        fetch(url, { method: "GET" })
+          .then((r) => r.json())
+          .then((data) => {
+            console.debug('[checkout] fetchInvoiceStatus response for invoiceId=', invoiceId, data);
+            applyInvoiceData(data);
+          })
+          .catch((err) => { console.debug('[checkout] fetchInvoiceStatus error', err); });
+      } else {
+        const url = `https://us-central1-lavka-shop.cloudfunctions.net/getStoreOrderInvoiceStatus?orderId=${encodeURIComponent(orderParam)}`;
+        console.debug('[checkout] fetchInvoiceStatus by orderId=', orderParam, url);
+        fetch(url, { method: "GET" })
+          .then((r) => r.json())
+          .then((data) => {
+            console.debug('[checkout] fetchInvoiceStatus response for orderId=', orderParam, data);
+            applyInvoiceData(data);
+          })
+          .catch((err) => { console.debug('[checkout] fetchInvoiceStatus error', err); });
       }
     } catch (e) {
       // ignore
@@ -295,6 +402,62 @@ document.addEventListener("DOMContentLoaded", () => {
     const until = new Date(readBilling()?.validUntil || "");
     if (!Number.isFinite(until.getTime())) return true;
     return until.getTime() <= Date.now();
+  };
+
+  const canRemoveWatermark = () => {
+    const billing = readBilling();
+    const planId = String(billing?.currentPlanId || "").trim().toLowerCase();
+    if (planId !== "business" && planId !== "pro") return false;
+    const until = new Date(billing?.validUntil || "");
+    return Number.isFinite(until.getTime()) && until.getTime() > Date.now();
+  };
+
+  const ensureSiteWatermark = () => {
+    let watermark = document.querySelector(".site-watermark");
+    if (watermark) return watermark;
+
+    const mount = document.querySelector("main.card") || document.querySelector("main") || document.body;
+    if (!mount) return null;
+
+    watermark = document.createElement("footer");
+    watermark.className = "site-watermark";
+    watermark.innerHTML =
+      '<a class="site-watermark-link" href="https://www.vitryna-shop.com/landing" title="Створити власний магазин на Вітрина">'
+      + '<svg class="site-watermark-logo" viewBox="150 240 290 290" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Вітрина">'
+      + '<rect x="150" y="240" width="290" height="290" rx="55" fill="#3B82E0"/>'
+      + '<g fill="none" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">'
+      + '<path d="M215 350 L235 300 L355 300 L375 350"/>'
+      + '<path d="M215 350 Q225 372 245 372 Q265 372 275 350"/>'
+      + '<path d="M275 350 Q285 372 305 372 Q325 372 335 350"/>'
+      + '<path d="M335 350 Q345 372 355 372 Q365 372 375 350"/>'
+      + '<line x1="235" y1="372" x2="235" y2="450"/>'
+      + '<line x1="355" y1="372" x2="355" y2="450"/>'
+      + '<path d="M225 400 L365 400 L365 450 L225 450 Z"/>'
+      + '<line x1="205" y1="470" x2="385" y2="470"/>'
+      + '</g>'
+      + '</svg>'
+      + '<span class="site-watermark-text">Створено на <strong>Вітрина</strong></span>'
+      + '</a>';
+
+    mount.appendChild(watermark);
+    return watermark;
+  };
+
+  const applyWatermarkVisibility = () => {
+    const activeSettings = readSettings() || {};
+    const shouldHide = Boolean(activeSettings.hideWatermark) && canRemoveWatermark();
+    const watermark = document.querySelector(".site-watermark");
+    if (shouldHide) {
+      if (watermark && watermark.parentNode) {
+        watermark.parentNode.removeChild(watermark);
+      }
+      return;
+    }
+    const existing = ensureSiteWatermark();
+    if (existing) {
+      existing.hidden = false;
+      existing.style.display = "";
+    }
   };
 
   const normalizeCurrencyCode = (value) => {
@@ -500,6 +663,32 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   ].filter((item) => item.enabled);
 
+  // Which single enabled acquiring the store owner has chosen to process the "Передоплата" prepayment.
+  const getPrepaymentAcquirers = (activeSettings) => {
+    const monoAvailable = Boolean(activeSettings.paymentMonoEnabled);
+    const liqpayAvailable = Boolean(activeSettings.paymentLiqpayEnabled);
+    const chosen = String(activeSettings.paymentPrepaymentAcquirer || "").trim().toLowerCase();
+
+    if (chosen === "mono" && monoAvailable) {
+      return [{ id: "mono", label: "Plata by mono" }];
+    }
+    if (chosen === "liqpay" && liqpayAvailable) {
+      return [{ id: "liqpay", label: "LiqPay" }];
+    }
+
+    // Legacy fallback for stores saved before the single-choice acquirer selector existed.
+    if (!chosen) {
+      if (Boolean(activeSettings.paymentPrepaymentViaMono ?? true) && monoAvailable) {
+        return [{ id: "mono", label: "Plata by mono" }];
+      }
+      if (Boolean(activeSettings.paymentPrepaymentViaLiqpay ?? true) && liqpayAvailable) {
+        return [{ id: "liqpay", label: "LiqPay" }];
+      }
+    }
+
+    return [];
+  };
+
   const buildPaymentMethods = (activeSettings) => [
     {
       id: "payment-mono",
@@ -528,7 +717,8 @@ document.addEventListener("DOMContentLoaded", () => {
     {
       id: "payment-prepayment",
       enabled: Boolean(activeSettings.paymentPrepaymentEnabled)
-        && Math.max(0, Math.round(Number(activeSettings.paymentPrepaymentAmount) || 0)) > 0,
+        && Math.max(0, Math.round(Number(activeSettings.paymentPrepaymentAmount) || 0)) > 0
+        && getPrepaymentAcquirers(activeSettings).length > 0,
       value: "Передоплата",
       title: "Передоплата",
       subtitle: `До сплати зараз: ${formatPrice(Math.max(0, Math.round(Number(activeSettings.paymentPrepaymentAmount) || 0)))}`,
@@ -1096,6 +1286,7 @@ document.addEventListener("DOMContentLoaded", () => {
     settings = readSettings();
     applyAccentColor();
     applySiteBackground();
+    applyWatermarkVisibility();
     const matrix = normalizePaymentDeliveryMatrix(settings.paymentDeliveryMatrix);
     const previousDeliveryValue = String(checkoutForm?.querySelector('input[name="deliveryMethod"]:checked')?.value || "").trim();
     const previousPaymentValue = String(checkoutForm?.querySelector('input[name="paymentMethod"]:checked')?.value || "").trim();
@@ -1140,6 +1331,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     updateBankTransferInfo();
+    updatePrepaymentAcquirerInfo();
   };
 
   const isBankTransferMethod = (value) => {
@@ -1157,6 +1349,47 @@ document.addEventListener("DOMContentLoaded", () => {
     bankTransferInfo.hidden = !shouldShow;
     bankTransferText.textContent = shouldShow ? requisites : "";
   };
+
+  const updatePrepaymentAcquirerInfo = () => {
+    if (!prepaymentAcquirerInfo || !prepaymentAcquirerOptions) return;
+
+    const selectedPaymentInput = checkoutForm?.querySelector('input[name="paymentMethod"]:checked');
+    const isPrepayment = isPrepaymentMethod(selectedPaymentInput?.dataset?.optionId)
+      || isPrepaymentMethod(selectedPaymentInput?.value);
+    const acquirers = isPrepayment ? getPrepaymentAcquirers(settings) : [];
+
+    if (acquirers.length < 2) {
+      prepaymentAcquirerInfo.hidden = true;
+      prepaymentAcquirerOptions.innerHTML = "";
+      return;
+    }
+
+    const previouslyChecked = String(
+      prepaymentAcquirerOptions.querySelector('input[name="prepaymentAcquirer"]:checked')?.value || ""
+    );
+
+    prepaymentAcquirerOptions.innerHTML = acquirers
+      .map((acquirer, index) => `
+        <label class="prepayment-acquirer-option">
+          <input type="radio" name="prepaymentAcquirer" value="${acquirer.id}" ${
+            (previouslyChecked ? previouslyChecked === acquirer.id : index === 0) ? "checked" : ""
+          }>
+          <span>${escapeHtml(acquirer.label)}</span>
+        </label>
+      `)
+      .join("");
+
+    prepaymentAcquirerInfo.hidden = false;
+  };
+
+  const resolvePrepaymentAcquirer = () => {
+    const checked = String(
+      prepaymentAcquirerOptions?.querySelector('input[name="prepaymentAcquirer"]:checked')?.value || ""
+    );
+    if (checked) return checked;
+    return String(getPrepaymentAcquirers(settings)[0]?.id || "");
+  };
+
 
   renderDeliveryAndPaymentOptions();
 
@@ -1177,6 +1410,7 @@ document.addEventListener("DOMContentLoaded", () => {
     paymentOptions.addEventListener("change", () => {
       updateSubmitState();
       updateBankTransferInfo();
+      updatePrepaymentAcquirerInfo();
       updateCheckoutSummary();
     });
   }
@@ -1405,6 +1639,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (checkoutOrderStatusBadge) {
       checkoutOrderStatusBadge.hidden = !isOrderingBlockedByPlanExpiry;
     }
+    applyWatermarkVisibility();
   };
 
   syncOrderLockUi();
@@ -1414,6 +1649,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   updateSubmitState();
   updateBankTransferInfo();
+  updatePrepaymentAcquirerInfo();
   updateAvailabilityMessage();
   connectNovaPoshtaAutocomplete();
 
@@ -1613,7 +1849,13 @@ document.addEventListener("DOMContentLoaded", () => {
         items: orderItems
       };
 
-      const selectedMonoPayment = isMonoPaymentMethodById(paymentMethodId) || isMonoPaymentMethod(paymentMethod);
+      // "Передоплата" has no acquirer of its own — it routes to whichever acquirer the owner selected in admin.
+      const isPrepaymentSelected = isPrepaymentMethod(paymentMethodId) || isPrepaymentMethod(paymentMethod);
+      const prepaymentAcquirerId = isPrepaymentSelected ? resolvePrepaymentAcquirer() : "";
+
+      const selectedMonoPayment = isMonoPaymentMethodById(paymentMethodId)
+        || isMonoPaymentMethod(paymentMethod)
+        || (isPrepaymentSelected && prepaymentAcquirerId === "mono");
       if (selectedMonoPayment) {
         if (submitOrderBtn) {
           submitOrderBtn.disabled = true;
@@ -1654,6 +1896,55 @@ document.addEventListener("DOMContentLoaded", () => {
           if (checkoutMessage) {
             checkoutMessage.classList.add("error");
             checkoutMessage.textContent = mapMonoCreateErrorMessage(error && error.message);
+          }
+          updateSubmitState();
+          return;
+        }
+      }
+
+      const selectedLiqpayPayment = isLiqpayPaymentMethodById(paymentMethodId)
+        || isLiqpayPaymentMethod(paymentMethod)
+        || (isPrepaymentSelected && prepaymentAcquirerId === "liqpay");
+      if (selectedLiqpayPayment) {
+        if (submitOrderBtn) {
+          submitOrderBtn.disabled = true;
+        }
+
+        if (checkoutMessage) {
+          checkoutMessage.classList.remove("error");
+          checkoutMessage.textContent = "Створюємо платіж LiqPay...";
+        }
+
+        try {
+          const invoice = await createLiqpayInvoiceForOrder(nextOrder);
+          if (!invoice.pageUrl) {
+            throw new Error("liqpay-invalid-response");
+          }
+
+          nextOrder.paymentStatus = "Очікує оплати";
+          nextOrder.liqpayInvoiceId = invoice.invoiceId;
+          nextOrder.liqpayStatus = "created";
+          nextOrder.liqpayPageUrl = invoice.pageUrl;
+          nextOrder.updatedAt = new Date().toISOString();
+
+          const orders = readOrders();
+          saveOrders([nextOrder, ...orders]);
+          cartState = [];
+          saveCart(cartState);
+
+          void sendOrderTelegramNotification(nextOrder);
+
+          if (checkoutMessage) {
+            checkoutMessage.classList.remove("error");
+            checkoutMessage.textContent = "Перенаправляємо на оплату LiqPay...";
+          }
+
+          window.location.href = invoice.pageUrl;
+          return;
+        } catch (error) {
+          if (checkoutMessage) {
+            checkoutMessage.classList.add("error");
+            checkoutMessage.textContent = mapLiqpayCreateErrorMessage(error && error.message);
           }
           updateSubmitState();
           return;
@@ -1712,6 +2003,7 @@ document.addEventListener("DOMContentLoaded", () => {
     syncOrderLockUi();
     updateSubmitState();
     updateBankTransferInfo();
+    updatePrepaymentAcquirerInfo();
     updateAvailabilityMessage();
   });
 
@@ -1782,6 +2074,7 @@ document.addEventListener("DOMContentLoaded", () => {
     syncOrderLockUi();
     updateSubmitState();
     updateBankTransferInfo();
+    updatePrepaymentAcquirerInfo();
     updateAvailabilityMessage();
   };
 

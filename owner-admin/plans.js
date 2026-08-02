@@ -38,6 +38,7 @@
   var detailRegisteredAtEl = document.getElementById("detailStoreRegisteredAt");
   var detailCurrentPlanEl = document.getElementById("detailCurrentPlan");
   var detailValidUntilEl = document.getElementById("detailPlanValidUntil");
+  var detailTrialNoticeEl = document.getElementById("detailTrialNotice");
   var detailPaymentsBodyEl = document.getElementById("detailPaymentsBody");
   var detailPlanSelectEl = document.getElementById("detailPlanSelect");
   var detailApplyPlanEl = document.getElementById("detailApplyPlan");
@@ -291,7 +292,8 @@
         billing: {
           currentPlanId: cleanText(billingValue.currentPlanId).toLowerCase(),
           validUntil: billingValue.validUntil || "",
-          payments: Array.isArray(billingValue.payments) ? billingValue.payments : []
+          payments: Array.isArray(billingValue.payments) ? billingValue.payments : [],
+          trial: Boolean(billingValue.trial)
         }
       });
     }
@@ -426,6 +428,14 @@
     detailRegisteredAtEl.textContent = formatDateTime(store.registeredAt);
     detailCurrentPlanEl.textContent = getPlanName(store.billing.currentPlanId);
     detailValidUntilEl.textContent = formatDate(store.billing.validUntil);
+
+    if (detailTrialNoticeEl) {
+      var isOnTrial = Boolean(store.billing.trial) && !(store.billing.payments || []).length;
+      detailTrialNoticeEl.hidden = !isOnTrial;
+      if (isOnTrial) {
+        detailTrialNoticeEl.textContent = "Це тестовий період тарифу «" + getPlanName(store.billing.currentPlanId) + "», наданий автоматично при реєстрації. Оплата ще не проводилась.";
+      }
+    }
 
     if (detailPlanSelectEl) {
       var selected = normalizePlanId(cleanText(store.billing.currentPlanId).toLowerCase());

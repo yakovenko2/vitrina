@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="admin.css?v=20260731h">
+<link rel="stylesheet" href="admin.css?v=20260802b">
 <script>
   // Early title boot: read local store name synchronously to avoid title flicker.
   (function () {
@@ -1224,7 +1224,6 @@
                       <span class="switch-slider"></span>
                     </span>
                   </span>
-                  <input id="paymentCodFee" type="text" placeholder="Комісія/умови, напр. 2% + 20 грн">
                 </label>
 
                 <label class="social-item">
@@ -1241,6 +1240,16 @@
                     </span>
                   </span>
                   <input id="paymentPrepaymentAmount" type="number" min="1" step="1" inputmode="numeric" placeholder="Сума передоплати, грн">
+                  <div class="prepayment-acquirer-toggles">
+                    <label class="prepayment-acquirer-toggle">
+                      <input id="paymentPrepaymentViaMono" type="radio" name="paymentPrepaymentAcquirer" value="mono">
+                      <span>Через Plata by mono</span>
+                    </label>
+                    <label class="prepayment-acquirer-toggle">
+                      <input id="paymentPrepaymentViaLiqpay" type="radio" name="paymentPrepaymentAcquirer" value="liqpay">
+                      <span>Через LiqPay</span>
+                    </label>
+                  </div>
                   <small id="paymentPrepaymentHint" class="settings-note">Клієнт сплачує вказану суму онлайн через підключений еквайринг, а залишок — при отриманні. Доступно лише коли активовано Plata by mono або LiqPay.</small>
                 </label>
 

@@ -15,6 +15,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const VISITOR_EVENTS_KEY = "lavkaVisitEvents";
   const VISITOR_EVENT_RETENTION_DAYS = 180;
   const MAX_DESCRIPTION_LENGTH = 140;
+  const DEFAULT_STOREFRONT_TITLE = "Вітрина товарів";
+  const DEFAULT_STOREFRONT_DESCRIPTION = "Власник магазину ще не заповнив інформацію профілю.";
+  const EMPTY_AVATAR_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
   const profanityPatterns = [
     /бля/i,
     /хуй/i,
@@ -174,12 +177,33 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  const findProductForCartItem = (item) => {
+    const products = readProducts();
+    const rawId = String(item?.id || "").split("::")[0].trim();
+    const sku = String(item?.sku || "").trim().toUpperCase();
+    return products.find((product) => {
+      const productId = String(product?.id || "").trim();
+      const productSku = String(product?.sku || "").trim().toUpperCase();
+      return (rawId && productId === rawId) || (sku && sku !== "-" && productSku === sku);
+    }) || null;
+  };
+
+  // Same product may be shared across pages via the CART_KEY, so re-check live stock (not the value cached in the cart item) every time.
+  const getCartItemStockLimit = (item) => {
+    const product = findProductForCartItem(item);
+    if (!product) return Infinity;
+    const size = String(item?.size || "").trim().toUpperCase();
+    if (size && product.sizeStocks && typeof product.sizeStocks === "object") {
+      const sizeStock = Number.parseInt(product.sizeStocks[size], 10);
+      return Number.isFinite(sizeStock) && sizeStock > 0 ? sizeStock : 0;
+    }
+    const stock = Number.parseInt(product?.stock, 10);
+    return Number.isFinite(stock) && stock > 0 ? stock : 0;
+  };
+
   const getProductPhoto = (product) => {
     const list = Array.isArray(product?.photos) ? product.photos : [];
-    if (!list.length) {
-      const seed = String(product?.id || product?.sku || product?.name || "lavka-product").toLowerCase();
-      return `https://picsum.photos/seed/${encodeURIComponent(seed)}/500/500`;
-    }
+    if (!list.length) return "";
 
     const first = list[0];
     if (typeof first === "string" && first.trim()) return first.trim();
@@ -188,8 +212,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (direct) return direct;
     }
 
-    const seed = String(product?.id || product?.sku || product?.name || "lavka-product").toLowerCase();
-    return `https://picsum.photos/seed/${encodeURIComponent(seed)}/500/500`;
+    return "";
   };
 
   const normalizeStorefrontProduct = (product) => {
@@ -209,6 +232,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!id || !name || !visible) return null;
     if (DEMO_PRODUCT_SKUS.has(sku)) return null;
 
+    const discountValue = Number.parseFloat(product?.discount?.value);
+    const discountType = product?.discount?.type === "percent" ? "percent" : "uah";
+    const discount = Number.isFinite(discountValue) && discountValue > 0
+      ? { type: discountType, value: discountType === "percent" ? Math.min(100, discountValue) : discountValue }
+      : null;
+
     return {
       id,
       name,
@@ -216,8 +245,19 @@ document.addEventListener("DOMContentLoaded", () => {
       price: Number.isFinite(price) && price > 0 ? price : 0,
       stock: Number.isFinite(stock) ? stock : 0,
       categories,
-      photo: getProductPhoto(product)
+      photo: getProductPhoto(product),
+      discount,
+      hasSizes: Boolean(product?.isClothing) && Array.isArray(product?.sizes) && product.sizes.length > 0
     };
+  };
+
+  const getDiscountedPrice = (price, discount) => {
+    const base = Number(price) || 0;
+    if (!discount || !Number.isFinite(discount.value) || discount.value <= 0) return base;
+    const result = discount.type === "percent"
+      ? base * (1 - Math.min(100, discount.value) / 100)
+      : base - discount.value;
+    return Math.max(0, Math.round(result * 100) / 100);
   };
 
   const buildGalleryItems = () => {
@@ -259,17 +299,22 @@ document.addEventListener("DOMContentLoaded", () => {
       const cartButtonAttrs = isOrderingBlockedByPlanExpiry
         ? ' disabled aria-disabled="true" title="Магазин тимчасово не приймає замовлення"'
         : (inStock ? "" : ' disabled aria-disabled="true"');
+      const finalPrice = getDiscountedPrice(product.price, product.discount);
+      const hasDiscount = Boolean(product.discount) && finalPrice < product.price;
       return `
-        <article class="product${inStock ? "" : " out-of-stock"}" data-cat="${categoryToken}" data-product-id="${product.id}" data-product-sku="${product.sku}" data-product-stock="${product.stock}" tabindex="0" role="button" aria-label="Відкрити товар ${product.name}">
+        <article class="product${inStock ? "" : " out-of-stock"}" data-cat="${categoryToken}" data-product-id="${product.id}" data-product-sku="${product.sku}" data-product-stock="${product.stock}" data-product-has-sizes="${product.hasSizes ? "1" : "0"}" tabindex="0" role="button" aria-label="Відкрити товар ${product.name}">
           <div class="thumb">
-            <img src="${product.photo}" alt="${product.name}" loading="lazy">
+            ${product.photo ? `<img src="${product.photo}" alt="${product.name}" loading="lazy">` : ""}
           </div>
           <div class="p-info">
             <h3 class="p-name">${product.name}</h3>
             <p class="p-stock${inStock ? "" : " out"}">${stockLabel}</p>
             <div class="p-footer">
-              <p class="p-price">${toCurrency(product.price)}</p>
-              <button class="cart-btn" aria-label="Додати в кошик"${disableCartButton ? cartButtonAttrs : ""}>
+              <div class="p-price-group">
+                ${hasDiscount ? `<span class="p-price-old">${toCurrency(product.price)}</span>` : ""}
+                <p class="p-price">${toCurrency(finalPrice)}</p>
+              </div>
+              <button class="cart-btn" aria-label="${product.hasSizes ? "Обрати розмір" : "Додати в кошик"}"${disableCartButton ? cartButtonAttrs : ""}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M2 3h2l2.2 11.4a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L20 7H5.2"/></svg>
               </button>
             </div>
@@ -286,7 +331,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const resolveCategoryToken = (value) => {
     const normalized = String(value || "").trim().toLowerCase();
     if (!normalized) return "";
-    if (normalized === "all" || normalized === "все") return "all";
+    if (normalized === "all" || normalized === "все" || normalized === "всі") return "all";
     if (/cups|чашк/.test(normalized)) return "cups";
     if (/plates|таріл/.test(normalized)) return "plates";
     if (/vases|ваз/.test(normalized)) return "vases";
@@ -341,7 +386,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }).filter(Boolean);
 
     categoriesNav.innerHTML = [
-      '<button class="cat-btn active" data-cat="all">Все</button>',
+      '<button class="cat-btn active" data-cat="all">Всі</button>',
       ...items.map((item) => `<button class="cat-btn" data-cat="${item.token}">${item.name}</button>`)
     ].join("");
   };
@@ -375,6 +420,153 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch {
       return null;
     }
+  };
+
+  const stripHtml = (value) => String(value || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+
+  const toAbsoluteUrl = (value) => {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    try {
+      return new URL(raw, window.location.href).toString();
+    } catch {
+      return "";
+    }
+  };
+
+  const normalizeSeoSocialUrl = (value, key) => {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+
+    if (/^https?:\/\//i.test(raw)) {
+      return toAbsoluteUrl(raw);
+    }
+
+    if (key === "telegram") {
+      if (/^@/.test(raw)) {
+        return `https://t.me/${raw.slice(1)}`;
+      }
+      if (/^t\.me\//i.test(raw)) {
+        return `https://${raw}`;
+      }
+    }
+
+    if (key === "instagram" && /^@/.test(raw)) {
+      return `https://instagram.com/${raw.slice(1)}`;
+    }
+
+    if (key === "tiktok" && /^@/.test(raw)) {
+      return `https://tiktok.com/@${raw.slice(1)}`;
+    }
+
+    return toAbsoluteUrl(raw);
+  };
+
+  const upsertMetaByName = (name, content) => {
+    if (!name || !content) return;
+    let tag = document.head.querySelector(`meta[name="${name}"]`);
+    if (!tag) {
+      tag = document.createElement("meta");
+      tag.setAttribute("name", name);
+      document.head.appendChild(tag);
+    }
+    tag.setAttribute("content", content);
+  };
+
+  const upsertMetaByProperty = (property, content) => {
+    if (!property || !content) return;
+    let tag = document.head.querySelector(`meta[property="${property}"]`);
+    if (!tag) {
+      tag = document.createElement("meta");
+      tag.setAttribute("property", property);
+      document.head.appendChild(tag);
+    }
+    tag.setAttribute("content", content);
+  };
+
+  const upsertCanonical = (urlValue) => {
+    if (!urlValue) return;
+    let link = document.head.querySelector('link[rel="canonical"]');
+    if (!link) {
+      link = document.createElement("link");
+      link.setAttribute("rel", "canonical");
+      document.head.appendChild(link);
+    }
+    link.setAttribute("href", urlValue);
+  };
+
+  const upsertStoreStructuredData = (payload) => {
+    if (!payload || !payload.name) return;
+
+    let scriptNode = document.getElementById("storefront-jsonld");
+    if (!scriptNode) {
+      scriptNode = document.createElement("script");
+      scriptNode.type = "application/ld+json";
+      scriptNode.id = "storefront-jsonld";
+      document.head.appendChild(scriptNode);
+    }
+
+    scriptNode.textContent = JSON.stringify(payload);
+  };
+
+  const applyStorefrontSeoMetadata = () => {
+    const settings = readSettings() || {};
+    const registration = readRegistration() || {};
+    const rawName = String(settings.name || settings.storeName || registration.storeName || "").trim();
+    const rawDescription = String(settings.description || settings.storeDescription || "").trim();
+    const isAllowed = (value) => {
+      const text = String(value || "").toLowerCase();
+      if (!text) return true;
+      return !profanityPatterns.some((pattern) => pattern.test(text));
+    };
+
+    const cleanName = isAllowed(rawName) ? stripHtml(rawName).slice(0, 70) : "";
+    const cleanDescription = isAllowed(rawDescription)
+      ? stripHtml(rawDescription).slice(0, 160)
+      : "";
+
+    const seoTitle = cleanName ? `${cleanName} — ${DEFAULT_STOREFRONT_TITLE}` : DEFAULT_STOREFRONT_TITLE;
+    const seoDescription = cleanDescription || DEFAULT_STOREFRONT_DESCRIPTION;
+    document.title = seoTitle;
+
+    upsertMetaByName("description", seoDescription);
+    upsertMetaByName("robots", "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1");
+    upsertMetaByName("twitter:title", seoTitle);
+    upsertMetaByName("twitter:description", seoDescription);
+
+    upsertMetaByProperty("og:type", "website");
+    upsertMetaByProperty("og:locale", "uk_UA");
+    upsertMetaByProperty("og:site_name", "Вітрина");
+    upsertMetaByProperty("og:title", seoTitle);
+    upsertMetaByProperty("og:description", seoDescription);
+
+    const canonicalUrl = new URL(window.location.href);
+    canonicalUrl.hash = "";
+    upsertCanonical(canonicalUrl.toString());
+    upsertMetaByProperty("og:url", canonicalUrl.toString());
+
+    const avatar = toAbsoluteUrl(settings.avatar || settings.storeAvatar || "");
+    if (avatar) {
+      upsertMetaByProperty("og:image", avatar);
+      upsertMetaByName("twitter:image", avatar);
+    }
+
+    const sameAs = [
+      { key: "instagram", value: settings.instagram || settings.socialInstagram },
+      { key: "facebook", value: settings.facebook || settings.socialFacebook },
+      { key: "telegram", value: settings.telegram || settings.socialTelegram },
+      { key: "tiktok", value: settings.tiktok || settings.socialTiktok }
+    ].map((item) => normalizeSeoSocialUrl(item.value, item.key)).filter(Boolean);
+
+    upsertStoreStructuredData({
+      "@context": "https://schema.org",
+      "@type": "Store",
+      name: cleanName || "Магазин",
+      description: seoDescription,
+      url: canonicalUrl.toString(),
+      image: avatar || undefined,
+      sameAs: sameAs.length ? sameAs : undefined
+    });
   };
 
   const readBilling = () => {
@@ -480,7 +672,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const applyStorefrontCurrencyLabels = () => {
-    document.querySelectorAll(".p-price").forEach((priceNode) => {
+    document.querySelectorAll(".p-price, .p-price-old").forEach((priceNode) => {
       const raw = String(priceNode.textContent || "");
       const numeric = Number.parseFloat(raw.replace(/[^\d.,]/g, "").replace(",", "."));
       if (!Number.isFinite(numeric)) return;
@@ -561,7 +753,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!cartState.length) {
       cartItems.innerHTML = '<p class="cart-empty">Кошик порожній. Додайте товари з вітрини.</p>';
     } else {
-      cartItems.innerHTML = cartState.map((item) => `
+      cartItems.innerHTML = cartState.map((item) => {
+        const atStockLimit = item.qty >= getCartItemStockLimit(item);
+        return `
         <article class="cart-item" data-cart-id="${item.id}">
           <button type="button" class="cart-item-remove" aria-label="Видалити товар з кошика" title="Видалити">×</button>
           <img src="${item.image}" alt="${item.name}">
@@ -572,10 +766,11 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="cart-item-controls">
             <button type="button" class="cart-qty-minus" aria-label="Зменшити кількість">-</button>
             <span class="cart-item-qty">${item.qty}</span>
-            <button type="button" class="cart-qty-plus" aria-label="Збільшити кількість">+</button>
+            <button type="button" class="cart-qty-plus"${atStockLimit ? ' disabled aria-disabled="true" title="Досягнуто максимальний залишок"' : ""} aria-label="Збільшити кількість">+</button>
           </div>
         </article>
-      `).join("");
+      `;
+      }).join("");
     }
 
     const totalItems = cartState.reduce((sum, item) => sum + item.qty, 0);
@@ -626,7 +821,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const existing = cartState.find((item) => item.id === productId);
     if (existing) {
-      existing.qty += quantity;
+      if (existing.qty >= productStock) return;
+      existing.qty = Math.min(productStock, existing.qty + quantity);
     } else {
       cartState.push({
         id: productId || `${productName}-${Date.now()}`,
@@ -634,7 +830,7 @@ document.addEventListener("DOMContentLoaded", () => {
         name: productName,
         price: productPrice,
         image: productImage,
-        qty: quantity
+        qty: Math.min(productStock, quantity)
       });
     }
 
@@ -690,8 +886,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   trackVisit();
 
-  const savedSettings = readSettings() || {};
-  const savedRegistration = readRegistration() || {};
+  applyStorefrontSeoMetadata();
+
   const containsProfanity = (value) => {
     const text = (value || "").toLowerCase();
     return profanityPatterns.some((pattern) => pattern.test(text));
@@ -701,122 +897,132 @@ document.addEventListener("DOMContentLoaded", () => {
   const profileDescription = document.querySelector(".description");
   const profileAvatar = document.querySelector(".avatar");
   const socialsWrap = document.querySelector(".socials");
-
-  {
-    const normalizedName = String(savedSettings.name || savedSettings.storeName || savedRegistration.storeName || "").trim();
-    const normalizedDescription = String(savedSettings.description || savedSettings.storeDescription || "").trim();
-    const normalizedAvatar = String(savedSettings.avatar || savedSettings.storeAvatar || "").trim();
-
-    if (profileName && normalizedName && !containsProfanity(normalizedName)) {
-      profileName.textContent = normalizedName;
-      document.title = `${normalizedName} — Вітрина товарів`;
-    }
-
-    if (profileDescription && normalizedDescription && !containsProfanity(normalizedDescription)) {
-      profileDescription.textContent = normalizedDescription.slice(0, MAX_DESCRIPTION_LENGTH);
-    }
-
-    if (profileAvatar && normalizedAvatar) {
-      profileAvatar.src = normalizedAvatar;
-      profileAvatar.classList.remove("is-empty");
-    }
-
-    const isHexColor = (value) => /^#[0-9a-fA-F]{6}$/.test(value || "");
-    const hexToRgb = (hex) => {
-      const normalized = hex.replace("#", "");
-      const intValue = Number.parseInt(normalized, 16);
-      return {
-        r: (intValue >> 16) & 255,
-        g: (intValue >> 8) & 255,
-        b: intValue & 255
-      };
+  const defaultProfileName = String(profileName?.textContent || "Магазин").trim() || "Магазин";
+  const defaultProfileDescription = String(profileDescription?.textContent || "Власник магазину ще не заповнив інформацію профілю.").trim()
+    || "Власник магазину ще не заповнив інформацію профілю.";
+  const isHexColor = (value) => /^#[0-9a-fA-F]{6}$/.test(value || "");
+  const hexToRgb = (hex) => {
+    const normalized = hex.replace("#", "");
+    const intValue = Number.parseInt(normalized, 16);
+    return {
+      r: (intValue >> 16) & 255,
+      g: (intValue >> 8) & 255,
+      b: intValue & 255
     };
+  };
+  const socialKeys = ["instagram", "facebook", "telegram", "tiktok"];
+  const legacySocialFieldMap = {
+    instagram: "socialInstagram",
+    facebook: "socialFacebook",
+    telegram: "socialTelegram",
+    tiktok: "socialTiktok"
+  };
+  const normalizeSocialUrl = (value, key) => {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
 
-    const applySiteBackground = () => {
-      const backgroundType = savedSettings.siteBackgroundType === "image" ? "image" : "color";
-      const backgroundColor = isHexColor(savedSettings.siteBackgroundColor) ? savedSettings.siteBackgroundColor : "#eef1f4";
-      const backgroundImage = String(savedSettings.siteBackgroundImage || "").trim();
-      const storefrontCard = document.querySelector(".card");
-      const hasCustomBackground = Boolean(String(savedSettings.siteBackgroundColor || "").trim()) || (backgroundType === "image" && backgroundImage.length > 0);
+    if (/^https?:\/\//i.test(raw)) {
+      return raw;
+    }
 
-      document.body.style.backgroundColor = "";
-      document.body.style.backgroundImage = "none";
-      document.body.style.backgroundRepeat = "repeat";
-      document.body.style.backgroundPosition = "center";
-      document.body.style.backgroundSize = "auto";
-
-      if (!storefrontCard) {
-        return;
+    if (key === "telegram") {
+      if (/^@/.test(raw)) {
+        return `https://t.me/${raw.slice(1)}`;
       }
+      if (/^t\.me\//i.test(raw)) {
+        return `https://${raw}`;
+      }
+    }
 
-      storefrontCard.classList.toggle("custom-background", hasCustomBackground);
-      storefrontCard.style.backgroundColor = backgroundColor;
+    if ((key === "instagram" || key === "tiktok") && /^@/.test(raw)) {
+      const nickname = raw.slice(1);
+      return key === "instagram"
+        ? `https://instagram.com/${nickname}`
+        : `https://tiktok.com/@${nickname}`;
+    }
 
-      if (backgroundType === "image" && backgroundImage) {
-        storefrontCard.style.backgroundImage = `linear-gradient(rgba(17, 24, 39, 0.22), rgba(17, 24, 39, 0.22)), url("${backgroundImage}")`;
-        storefrontCard.style.backgroundRepeat = "no-repeat";
-        storefrontCard.style.backgroundPosition = "center";
-        storefrontCard.style.backgroundSize = "cover";
+    return `https://${raw}`;
+  };
+  const applySiteBackground = (settings) => {
+    const activeSettings = settings || {};
+    const backgroundType = activeSettings.siteBackgroundType === "image" ? "image" : "color";
+    const backgroundColor = isHexColor(activeSettings.siteBackgroundColor) ? activeSettings.siteBackgroundColor : "#eef1f4";
+    const backgroundImage = String(activeSettings.siteBackgroundImage || "").trim();
+    const storefrontCard = document.querySelector(".card");
+    const hasCustomBackground = Boolean(String(activeSettings.siteBackgroundColor || "").trim()) || (backgroundType === "image" && backgroundImage.length > 0);
+
+    document.body.style.backgroundColor = "";
+    document.body.style.backgroundImage = "none";
+    document.body.style.backgroundRepeat = "repeat";
+    document.body.style.backgroundPosition = "center";
+    document.body.style.backgroundSize = "auto";
+
+    if (!storefrontCard) {
+      return;
+    }
+
+    storefrontCard.classList.toggle("custom-background", hasCustomBackground);
+    storefrontCard.style.backgroundColor = backgroundColor;
+
+    if (backgroundType === "image" && backgroundImage) {
+      storefrontCard.style.backgroundImage = `linear-gradient(rgba(17, 24, 39, 0.22), rgba(17, 24, 39, 0.22)), url("${backgroundImage}")`;
+      storefrontCard.style.backgroundRepeat = "no-repeat";
+      storefrontCard.style.backgroundPosition = "center";
+      storefrontCard.style.backgroundSize = "cover";
+    } else {
+      storefrontCard.style.backgroundImage = "none";
+      storefrontCard.style.backgroundRepeat = "repeat";
+      storefrontCard.style.backgroundPosition = "center";
+      storefrontCard.style.backgroundSize = "auto";
+    }
+  };
+  const applyStorefrontSettingsUi = () => {
+    const currentSettings = readSettings() || {};
+    const currentRegistration = readRegistration() || {};
+
+    const normalizedName = String(currentSettings.name || currentSettings.storeName || currentRegistration.storeName || "").trim();
+    const normalizedDescription = String(currentSettings.description || currentSettings.storeDescription || "").trim();
+    const normalizedAvatar = String(currentSettings.avatar || currentSettings.storeAvatar || "").trim();
+
+    if (profileName) {
+      profileName.textContent = normalizedName && !containsProfanity(normalizedName)
+        ? normalizedName
+        : defaultProfileName;
+    }
+
+    if (profileDescription) {
+      profileDescription.textContent = normalizedDescription && !containsProfanity(normalizedDescription)
+        ? normalizedDescription.slice(0, MAX_DESCRIPTION_LENGTH)
+        : defaultProfileDescription;
+    }
+
+    if (profileAvatar) {
+      if (normalizedAvatar) {
+        profileAvatar.src = normalizedAvatar;
+        profileAvatar.classList.remove("is-empty");
       } else {
-        storefrontCard.style.backgroundImage = "none";
-        storefrontCard.style.backgroundRepeat = "repeat";
-        storefrontCard.style.backgroundPosition = "center";
-        storefrontCard.style.backgroundSize = "auto";
+        profileAvatar.src = EMPTY_AVATAR_SRC;
+        profileAvatar.classList.add("is-empty");
       }
-    };
+    }
 
-    applySiteBackground();
+    applySiteBackground(currentSettings);
     applyWatermarkVisibility();
 
-    if (isHexColor(savedSettings.siteColor)) {
-      const rgb = hexToRgb(savedSettings.siteColor);
-      document.documentElement.style.setProperty("--site-accent", savedSettings.siteColor);
+    if (isHexColor(currentSettings.siteColor)) {
+      const rgb = hexToRgb(currentSettings.siteColor);
+      document.documentElement.style.setProperty("--site-accent", currentSettings.siteColor);
       document.documentElement.style.setProperty("--site-accent-soft", `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.18)`);
       document.documentElement.style.setProperty("--site-accent-deep", `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.92)`);
-      document.documentElement.style.setProperty("--button-accent", savedSettings.siteColor);
+      document.documentElement.style.setProperty("--button-accent", currentSettings.siteColor);
       document.documentElement.style.setProperty("--button-accent-soft", `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.2)`);
       document.documentElement.style.setProperty("--button-accent-deep", `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.9)`);
       document.documentElement.style.setProperty("--button-accent-shadow", `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.28)`);
     }
 
-    if (isHexColor(savedSettings.cartIconColor)) {
-      document.documentElement.style.setProperty("--cart-icon-color", savedSettings.cartIconColor);
+    if (isHexColor(currentSettings.cartIconColor)) {
+      document.documentElement.style.setProperty("--cart-icon-color", currentSettings.cartIconColor);
     }
-
-    const socialKeys = ["instagram", "facebook", "telegram", "tiktok"];
-    const legacySocialFieldMap = {
-      instagram: "socialInstagram",
-      facebook: "socialFacebook",
-      telegram: "socialTelegram",
-      tiktok: "socialTiktok"
-    };
-
-    const normalizeSocialUrl = (value, key) => {
-      const raw = String(value || "").trim();
-      if (!raw) return "";
-
-      if (/^https?:\/\//i.test(raw)) {
-        return raw;
-      }
-
-      if (key === "telegram") {
-        if (/^@/.test(raw)) {
-          return `https://t.me/${raw.slice(1)}`;
-        }
-        if (/^t\.me\//i.test(raw)) {
-          return `https://${raw}`;
-        }
-      }
-
-      if ((key === "instagram" || key === "tiktok") && /^@/.test(raw)) {
-        const nickname = raw.slice(1);
-        return key === "instagram"
-          ? `https://instagram.com/${nickname}`
-          : `https://tiktok.com/@${nickname}`;
-      }
-
-      return `https://${raw}`;
-    };
 
     let visibleSocialsCount = 0;
     socialKeys.forEach((key) => {
@@ -824,12 +1030,12 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!node) return;
 
       const legacyField = legacySocialFieldMap[key];
-      const directValue = String(savedSettings[key] || "").trim();
-      const legacyValue = String(savedSettings[legacyField] || "").trim();
+      const directValue = String(currentSettings[key] || "").trim();
+      const legacyValue = String(currentSettings[legacyField] || "").trim();
       const normalizedHref = normalizeSocialUrl(directValue || legacyValue, key);
 
-      const directEnabled = savedSettings[`${key}Enabled`];
-      const legacyEnabled = savedSettings[`${legacyField}Enabled`];
+      const directEnabled = currentSettings[`${key}Enabled`];
+      const legacyEnabled = currentSettings[`${legacyField}Enabled`];
       const enabled = typeof directEnabled === "boolean"
         ? directEnabled
         : (typeof legacyEnabled === "boolean" ? legacyEnabled : Boolean(normalizedHref));
@@ -856,6 +1062,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (socialsWrap) {
       socialsWrap.style.display = visibleSocialsCount > 0 ? "flex" : "none";
     }
+  };
+
+  applyStorefrontSettingsUi();
+
+  if (profileAvatar) {
+    profileAvatar.addEventListener("error", () => {
+      profileAvatar.src = EMPTY_AVATAR_SRC;
+      profileAvatar.classList.add("is-empty");
+    });
   }
 
   applyStorefrontCurrencyLabels();
@@ -883,28 +1098,75 @@ document.addEventListener("DOMContentLoaded", () => {
     applyCategoryFilter(target.dataset.cat);
   };
 
+  const revealStorefront = () => {
+    document.body.classList.remove("lavka-booting");
+  };
+
   const initializeStorefront = async () => {
-    const isBlocked = await checkStoreAccess();
-    if (isBlocked) {
-      renderBlockedStorefront();
-      return;
+    try {
+      const isBlocked = await checkStoreAccess();
+      if (isBlocked) {
+        renderBlockedStorefront();
+        return;
+      }
+
+      renderStorefrontProducts();
+      buildCategoryButtons();
+
+      if (categoriesNav) {
+        categoriesNav.addEventListener("click", (event) => {
+          const btn = event.target.closest(".cat-btn");
+          if (!btn) return;
+          activateCategoryButton(btn.dataset.cat);
+        });
+      }
+
+      activateCategoryButton(hashParams.get("cat") || params.get("cat") || "all");
+    } finally {
+      revealStorefront();
     }
-
-    renderStorefrontProducts();
-    buildCategoryButtons();
-
-    if (categoriesNav) {
-      categoriesNav.addEventListener("click", (event) => {
-        const btn = event.target.closest(".cat-btn");
-        if (!btn) return;
-        activateCategoryButton(btn.dataset.cat);
-      });
-    }
-
-    activateCategoryButton(hashParams.get("cat") || params.get("cat") || "all");
   };
 
   initializeStorefront();
+
+  window.addEventListener("lavka-key-updated", (event) => {
+    const key = String(event?.detail?.key || "");
+    if (key === SETTINGS_KEY || key === "lavkaRegistration") {
+      applyStorefrontSeoMetadata();
+      applyStorefrontSettingsUi();
+      return;
+    }
+
+    if (key === "lavkaBilling") {
+      syncOrderLockUi();
+      renderStorefrontProducts();
+      buildCategoryButtons();
+      activateCategoryButton(hashParams.get("cat") || params.get("cat") || "all");
+      renderCart();
+      return;
+    }
+
+    if (key === PRODUCTS_KEY || key === CATEGORIES_KEY) {
+      renderStorefrontProducts();
+      buildCategoryButtons();
+      activateCategoryButton(hashParams.get("cat") || params.get("cat") || "all");
+      renderCart();
+      return;
+    }
+
+    if (key === CART_KEY) {
+      cartState = readCart();
+      renderCart();
+    }
+  });
+
+  window.addEventListener("storage", (event) => {
+    const key = String(event?.key || "");
+    if (key === SETTINGS_KEY || key === "lavkaRegistration") {
+      applyStorefrontSeoMetadata();
+      applyStorefrontSettingsUi();
+    }
+  });
 
   const scrollBtn = document.querySelector(".scroll-down");
   if (scrollBtn) {
@@ -932,6 +1194,13 @@ document.addEventListener("DOMContentLoaded", () => {
           renderCart();
           return;
         }
+
+        // Sized products (clothing) must go through the product page so the customer picks a size first.
+        if (productNode.dataset.productHasSizes === "1") {
+          openProductCard(productNode);
+          return;
+        }
+
         addProductToCart(productNode, 1);
         animateAddToCart(productNode);
 
@@ -1010,7 +1279,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (event.key !== SETTINGS_KEY && event.key !== CART_KEY && event.key !== PRODUCTS_KEY && event.key !== CATEGORIES_KEY) return;
     if (event.key === SETTINGS_KEY) {
-      applyWatermarkVisibility();
+      applyStorefrontSeoMetadata();
+      applyStorefrontSettingsUi();
     }
     if (event.key === PRODUCTS_KEY || event.key === CATEGORIES_KEY) {
       renderStorefrontProducts();
@@ -1047,7 +1317,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!item) return;
 
       if (event.target.closest(".cart-qty-plus")) {
-        item.qty += 1;
+        if (item.qty < getCartItemStockLimit(item)) {
+          item.qty += 1;
+        }
       }
 
       if (event.target.closest(".cart-qty-minus")) {

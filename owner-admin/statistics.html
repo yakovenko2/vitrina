@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Статистика - Адмінка власника | Лавка</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <script src="/auth-guard.js"></script>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <a class="brand" href="/index.html" aria-label="Вітрина - Owner Admin"><span class="brand-mark"><svg viewBox="150 240 290 290" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Вітрина"><rect x="150" y="240" width="290" height="290" rx="55" fill="#3B82E0"/><g fill="none" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"><path d="M215 350 L235 300 L355 300 L375 350"/><path d="M215 350 Q225 372 245 372 Q265 372 275 350"/><path d="M275 350 Q285 372 305 372 Q325 372 335 350"/><path d="M335 350 Q345 372 355 372 Q365 372 375 350"/><line x1="235" y1="372" x2="235" y2="450"/><line x1="355" y1="372" x2="355" y2="450"/><path d="M225 400 L365 400 L365 450 L225 450 Z"/><line x1="205" y1="470" x2="385" y2="470"/></g></svg></span><span><strong>Вітрина</strong><small>Owner Admin</small></span></a>
+      <nav class="menu" aria-label="Розділи адмінки власника">
+        <a href="/index.html">Головна (дашборд)</a>
+        <a href="/users.html">Користувачі</a>
+        <a href="/clients.html">База клієнтів</a>
+        <a href="/stores.html">Магазини</a>
+        <a href="/orders.html">Замовлення</a>
+        <a href="/plans.html">Тарифи та підписки</a>
+        <a href="/analytics.html">Аналітика</a>
+        <a class="active" href="/statistics.html">Статистика</a>
+        <a href="#" id="ownerLogoutLink">Вийти</a>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <div>
+          <h1>Статистика</h1>
+          <p>Реальні відвідування лендингу (landing.html) — оновлюється автоматично.</p>
+        </div>
+        <span class="badge" id="statsLiveBadge">Оновлення наживо</span>
+      </header>
+
+      <p class="table-action-status" id="statsStatus" aria-live="polite"></p>
+
+      <section class="grid grid-4">
+        <article class="card kpi">
+          <div class="label">Сьогодні</div>
+          <div class="value" id="statsToday">0</div>
+          <div class="meta">Відвідувань з початку доби</div>
+        </article>
+        <article class="card kpi">
+          <div class="label">Вчора</div>
+          <div class="value" id="statsYesterday">0</div>
+          <div class="meta">Відвідувань за попередню добу</div>
+        </article>
+        <article class="card kpi">
+          <div class="label">За 7 днів</div>
+          <div class="value" id="statsWeek">0</div>
+          <div class="meta">Сума за останні 7 діб</div>
+        </article>
+        <article class="card kpi">
+          <div class="label">Останні 5 хвилин</div>
+          <div class="value" id="statsLive">0</div>
+          <div class="meta"><span class="pill green live-pulse">наживо</span></div>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <h2>Відвідування за останні 7 днів</h2>
+          <div class="stats-chart" id="statsChart" aria-label="Графік відвідувань за 7 днів">
+            <p class="stats-chart-empty" id="statsChartEmpty">Завантажуємо дані...</p>
+          </div>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
+  <script src="/statistics.js"></script>
+</body>
+</html>

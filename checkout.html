@@ -4,9 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Оформлення замовлення</title>
-<link rel="stylesheet" href="checkout.css?v=20260731c">
+<link rel="stylesheet" href="checkout.css?v=20260802d">
 </head>
-<body>
+<body class="lavka-booting">
+  <div class="lavka-boot-loader" id="lavkaBootLoader" aria-hidden="true"><span class="lavka-boot-spinner"></span></div>
+  <script>
+    // Failsafe: reveal checkout even if rendering script fails or stalls.
+    window.setTimeout(function () {
+      if (document.body) document.body.classList.remove("lavka-booting");
+    }, 6000);
+  </script>
   <main class="checkout-page">
     <section class="checkout-card">
       <div class="checkout-head">
@@ -17,10 +24,7 @@
         </a>
         <h1>Оформлення замовлення</h1>
         <p>Заповніть контактні дані та оберіть спосіб доставки й оплати.</p>
-        <p id="checkoutOrderStatusBadge" class="checkout-order-status" hidden>
-          <span class="checkout-order-status-dot" aria-hidden="true"></span>
-          Магазин тимчасово не приймає замовлення
-        </p>
+        <p id="checkoutOrderStatusBadge" class="checkout-order-status" hidden>Магазин тимчасово не приймає замовлення</p>
       </div>
 
       <form id="checkoutForm" class="checkout-form">
@@ -172,7 +176,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
-<script src="firebase-sync.js?v=20260731a"></script>
-<script src="checkout.js?v=20260801a"></script>
+<script src="firebase-sync.js?v=20260803c"></script>
+<script src="checkout.js?v=20260803a"></script>
 </body>
 </html>

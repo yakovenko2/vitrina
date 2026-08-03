@@ -4,20 +4,23 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Магазини - Адмінка власника | Лавка</title>
-  <link rel="stylesheet" href="/owner-admin/styles.css" />
+  <link rel="stylesheet" href="/styles.css" />
+  <script src="/auth-guard.js"></script>
 </head>
 <body>
   <div class="layout">
     <aside class="sidebar">
-      <a class="brand" href="/owner-admin/index.html" aria-label="Вітрина - Owner Admin"><span class="brand-mark"><svg viewBox="150 240 290 290" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Вітрина"><rect x="150" y="240" width="290" height="290" rx="55" fill="#3B82E0"/><g fill="none" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"><path d="M215 350 L235 300 L355 300 L375 350"/><path d="M215 350 Q225 372 245 372 Q265 372 275 350"/><path d="M275 350 Q285 372 305 372 Q325 372 335 350"/><path d="M335 350 Q345 372 355 372 Q365 372 375 350"/><line x1="235" y1="372" x2="235" y2="450"/><line x1="355" y1="372" x2="355" y2="450"/><path d="M225 400 L365 400 L365 450 L225 450 Z"/><line x1="205" y1="470" x2="385" y2="470"/></g></svg></span><span><strong>Вітрина</strong><small>Owner Admin</small></span></a>
+      <a class="brand" href="/index.html" aria-label="Вітрина - Owner Admin"><span class="brand-mark"><svg viewBox="150 240 290 290" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Вітрина"><rect x="150" y="240" width="290" height="290" rx="55" fill="#3B82E0"/><g fill="none" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"><path d="M215 350 L235 300 L355 300 L375 350"/><path d="M215 350 Q225 372 245 372 Q265 372 275 350"/><path d="M275 350 Q285 372 305 372 Q325 372 335 350"/><path d="M335 350 Q345 372 355 372 Q365 372 375 350"/><line x1="235" y1="372" x2="235" y2="450"/><line x1="355" y1="372" x2="355" y2="450"/><path d="M225 400 L365 400 L365 450 L225 450 Z"/><line x1="205" y1="470" x2="385" y2="470"/></g></svg></span><span><strong>Вітрина</strong><small>Owner Admin</small></span></a>
       <nav class="menu" aria-label="Розділи адмінки власника">
-        <a href="/owner-admin/index.html">Головна (дашборд)</a>
-        <a href="/owner-admin/users.html">Користувачі</a>
-        <a href="/owner-admin/clients.html">База клієнтів</a>
-        <a class="active" href="/owner-admin/stores.html">Магазини</a>
-        <a href="/owner-admin/orders.html">Замовлення</a>
-        <a href="/owner-admin/plans.html">Тарифи та підписки</a>
-        <a href="/owner-admin/analytics.html">Аналітика</a>
+        <a href="/index.html">Головна (дашборд)</a>
+        <a href="/users.html">Користувачі</a>
+        <a href="/clients.html">База клієнтів</a>
+        <a class="active" href="/stores.html">Магазини</a>
+        <a href="/orders.html">Замовлення</a>
+        <a href="/plans.html">Тарифи та підписки</a>
+        <a href="/analytics.html">Аналітика</a>
+        <a href="/statistics.html">Статистика</a>
+        <a href="#" id="ownerLogoutLink">Вийти</a>
       </nav>
     </aside>
 
@@ -79,6 +82,18 @@
         </div>
 
         <div class="store-profile-block">
+          <h3>Власник</h3>
+          <div class="store-domain-edit">
+            <label for="storeModalOwnerTelegramInput"><strong>Телеграм нік власника:</strong></label>
+            <div class="store-domain-edit-row">
+              <input type="text" id="storeModalOwnerTelegramInput" placeholder="@username" autocomplete="off" spellcheck="false">
+              <button type="button" class="plan-apply-btn" id="storeModalOwnerTelegramSave">Зберегти</button>
+            </div>
+            <span class="table-action-status" id="storeModalOwnerTelegramMessage" aria-live="polite"></span>
+          </div>
+        </div>
+
+        <div class="store-profile-block">
           <h3>Товари і категорії</h3>
           <p><strong>Товари:</strong> <span id="storeModalProductsStats">-</span></p>
           <p><strong>Категорії:</strong> <span id="storeModalCategoriesStats">-</span></p>
@@ -105,6 +120,15 @@
           <p><strong>Методи доставки:</strong> <span id="storeModalShippingMethods">-</span></p>
           <p><strong>Сповіщення про замовлення:</strong> <span id="storeModalOrderNotify" class="pill blue">-</span></p>
         </div>
+
+        <div class="store-profile-block">
+          <h3>Прийом замовлень</h3>
+          <p><strong>Статус:</strong> <span id="storeModalOrdersStatus" class="pill green">-</span></p>
+          <p>
+            <button type="button" class="plan-apply-btn" id="storeModalOrdersToggleBtn">Вимкнути прийом замовлень</button>
+          </p>
+          <span class="table-action-status" id="storeModalOrdersMessage" aria-live="polite"></span>
+        </div>
       </div>
 
       <div class="store-profile-block store-profile-activity">
@@ -118,11 +142,23 @@
           </tbody>
         </table>
       </div>
+
+      <div class="store-profile-block store-profile-activity">
+        <h3>Коментарі</h3>
+        <div class="store-comment-form">
+          <textarea id="storeModalCommentInput" class="store-comment-textarea" placeholder="Додати свій коментар про цей магазин..." rows="2"></textarea>
+          <button type="button" class="plan-apply-btn" id="storeModalCommentAddBtn">Додати коментар</button>
+        </div>
+        <span class="table-action-status" id="storeModalCommentMessage" aria-live="polite"></span>
+        <ul class="store-comments-list" id="storeModalCommentsList">
+          <li class="store-comment-empty">Коментарів ще немає.</li>
+        </ul>
+      </div>
     </div>
   </div>
 
   <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
-  <script src="/owner-admin/stores.js"></script>
+  <script src="/stores.js"></script>
 </body>
 </html>

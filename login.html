@@ -534,7 +534,7 @@
 
   <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
-  <script src="firebase-sync.js?v=20260731a"></script>
+  <script src="firebase-sync.js?v=20260803c"></script>
   <script>
     (function () {
       var AUTH_KEY = "lavkaAuth";
@@ -790,6 +790,14 @@
           return;
         }
 
+        if (typeof window.lavkaCheckActionRateLimit === "function") {
+          var rateLimit = await window.lavkaCheckActionRateLimit("login-code", phone);
+          if (!rateLimit.ok) {
+            setStatus(step1Status, "Забагато спроб входу. Спробуй ще раз через кілька хвилин.", "error");
+            return;
+          }
+        }
+
         if (!pendingAccount || lastCheckedPhone !== phone) {
           try {
             setCheckingState(true);
@@ -862,7 +870,7 @@
         goToStep(1);
       });
 
-      loginForm.addEventListener("submit", function (event) {
+      loginForm.addEventListener("submit", async function (event) {
         event.preventDefault();
         setStatus(step2Status, "", "");
 
@@ -870,6 +878,14 @@
         if (enteredCode.length !== 4) {
           setStatus(step2Status, "Код має містити 4 цифри.", "error");
           return;
+        }
+
+        if (typeof window.lavkaCheckActionRateLimit === "function") {
+          var rateLimit = await window.lavkaCheckActionRateLimit("login-verify", normalizePhone(phoneInput.value));
+          if (!rateLimit.ok) {
+            setStatus(step2Status, "Забагато спроб входу. Спробуй ще раз через кілька хвилин.", "error");
+            return;
+          }
         }
 
         if (enteredCode !== generatedCode) {

@@ -1,5 +1,18 @@
 {
   "projects": {
     "default": "lavka-shop"
-  }
+  },
+  "targets": {
+    "lavka-shop": {
+      "hosting": {
+        "main": [
+          "lavka-shop"
+        ],
+        "owner": [
+          "vitrina-owner-x7k2p9"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

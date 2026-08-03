@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Вхід - Адмінка власника | Лавка</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .login-screen{
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .login-card{
+      width: 100%;
+      max-width: 360px;
+      background: var(--card-bg, #fff);
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 12px 32px rgba(0,0,0,.08);
+    }
+    .login-card .brand{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 24px;
+      text-decoration: none;
+      color: inherit;
+    }
+    .login-card .brand-mark svg{ width: 36px; height: 36px; display: block; }
+    .login-card h1{ font-size: 18px; margin: 0 0 4px; }
+    .login-card p.subtitle{ margin: 0 0 24px; color: #6b7280; font-size: 14px; }
+    .login-field{ margin-bottom: 16px; }
+    .login-field label{ display: block; font-size: 13px; margin-bottom: 6px; color: #374151; }
+    .login-field input{
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      font-size: 14px;
+    }
+    .login-submit{
+      width: 100%;
+      padding: 11px 12px;
+      border: none;
+      border-radius: 10px;
+      background: #3B82E0;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    .login-submit:disabled{ opacity: .6; cursor: default; }
+    .login-error{
+      margin: 0 0 16px;
+      color: #dc2626;
+      font-size: 13px;
+      display: none;
+    }
+    .login-error.is-visible{ display: block; }
+  </style>
+</head>
+<body>
+  <div class="login-screen">
+    <div class="login-card">
+      <a class="brand" href="/login.html" aria-label="Вітрина - Owner Admin">
+        <span class="brand-mark"><svg viewBox="150 240 290 290" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Вітрина"><rect x="150" y="240" width="290" height="290" rx="55" fill="#3B82E0"/><g fill="none" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"><path d="M215 350 L235 300 L355 300 L375 350"/><path d="M215 350 Q225 372 245 372 Q265 372 275 350"/><path d="M275 350 Q285 372 305 372 Q325 372 335 350"/><path d="M335 350 Q345 372 355 372 Q365 372 375 350"/><line x1="235" y1="372" x2="235" y2="450"/><line x1="355" y1="372" x2="355" y2="450"/><path d="M225 400 L365 400 L365 450 L225 450 Z"/><line x1="205" y1="470" x2="385" y2="470"/></g></svg></span>
+        <span><strong>Вітрина</strong></span>
+      </a>
+      <h1>Вхід в адмінку власника</h1>
+      <p class="subtitle">Доступ лише для власника платформи.</p>
+      <p class="login-error" id="loginError">Невірний логін або пароль.</p>
+      <form id="loginForm" novalidate>
+        <div class="login-field">
+          <label for="loginInput">Логін</label>
+          <input id="loginInput" name="login" type="text" autocomplete="username" required />
+        </div>
+        <div class="login-field">
+          <label for="passwordInput">Пароль</label>
+          <input id="passwordInput" name="password" type="password" autocomplete="current-password" required />
+        </div>
+        <button class="login-submit" type="submit" id="loginSubmitBtn">Увійти</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var ADMIN_LOGIN = "admin";
+      var ADMIN_PASSWORD = "ruslan213";
+      var AUTH_KEY = "ownerAdminAuth";
+
+      var form = document.getElementById("loginForm");
+      var loginInput = document.getElementById("loginInput");
+      var passwordInput = document.getElementById("passwordInput");
+      var submitBtn = document.getElementById("loginSubmitBtn");
+      var errorBox = document.getElementById("loginError");
+
+      function getRedirectTarget() {
+        var params = new URLSearchParams(window.location.search);
+        var redirect = String(params.get("redirect") || "").trim();
+        if (!redirect || redirect.startsWith("login.html")) {
+          return "/index.html";
+        }
+        return "/" + redirect.replace(/^\/+/, "");
+      }
+
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        errorBox.classList.remove("is-visible");
+
+        var login = loginInput.value.trim();
+        var password = passwordInput.value;
+
+        if (login !== ADMIN_LOGIN || password !== ADMIN_PASSWORD) {
+          errorBox.classList.add("is-visible");
+          passwordInput.value = "";
+          passwordInput.focus();
+          return;
+        }
+
+        submitBtn.disabled = true;
+        localStorage.setItem(AUTH_KEY, JSON.stringify({ authenticatedAt: Date.now() }));
+        window.location.href = getRedirectTarget();
+      });
+
+      loginInput.focus();
+    })();
+  </script>
+</body>
+</html>

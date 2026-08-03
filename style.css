@@ -34,7 +34,7 @@ body::-webkit-scrollbar {
 
 body::-webkit-scrollbar-track {
   background: #e9eff8;
-  border-radius: 999px;
+  border-radius: 14px;
 }
 
 body::-webkit-scrollbar-thumb {
@@ -56,6 +56,37 @@ body {
   display: flex;
   justify-content: center;
   padding: 32px 16px;
+}
+
+body.lavka-booting .card {
+  visibility: hidden;
+}
+
+.lavka-boot-loader {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-white, #fff);
+  z-index: 9999;
+}
+
+body.lavka-booting .lavka-boot-loader {
+  display: flex;
+}
+
+.lavka-boot-spinner {
+  width: 36px;
+  height: 36px;
+  border: 4px solid #e2e8f0;
+  border-top-color: #3B82E0;
+  border-radius: 50%;
+  animation: lavka-boot-spin 0.7s linear infinite;
+}
+
+@keyframes lavka-boot-spin {
+  to { transform: rotate(360deg); }
 }
 
 .card {
@@ -109,28 +140,26 @@ body {
 }
 
 .store-order-status {
-  margin: 10px auto 2px;
-  display: inline-flex;
+  margin: 10px auto 12px;
+  display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  width: fit-content;
   max-width: 100%;
-  padding: 8px 12px;
-  border-radius: 12px;
-  border: 1px solid #ffd9b0;
-  background: #fff2e2;
-  color: #955213;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(240, 153, 123, 0.45);
+  background: rgba(240, 153, 123, 0.14);
+  color: #b1502f;
   font-size: 12.5px;
-  font-weight: 800;
+  font-weight: 700;
+  line-height: 1.25;
   text-align: center;
 }
 
-.store-order-status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: #e18a2f;
-  box-shadow: 0 0 0 3px rgba(225, 138, 47, 0.2);
-  flex: 0 0 8px;
+.card.custom-background .store-order-status {
+  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(240, 153, 123, 0.55);
 }
 
 .store-order-status[hidden] {
@@ -402,6 +431,20 @@ body {
   font-size: 16px;
   font-weight: 800;
   color: #2d78c4;
+}
+
+.p-price-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.p-price-old {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: line-through;
 }
 
 .cart-btn {

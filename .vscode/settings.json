@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^node --check functions/index\\.js; firebase deploy --only functions:migrateAllStoresAcquirerSecrets$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

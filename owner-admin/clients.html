@@ -4,20 +4,23 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>База клієнтів - Адмінка власника | Лавка</title>
-  <link rel="stylesheet" href="/owner-admin/styles.css" />
+  <link rel="stylesheet" href="/styles.css" />
+  <script src="/auth-guard.js"></script>
 </head>
 <body>
   <div class="layout">
     <aside class="sidebar">
-      <a class="brand" href="/owner-admin/index.html" aria-label="Вітрина - Owner Admin"><span class="brand-mark"><svg viewBox="150 240 290 290" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Вітрина"><rect x="150" y="240" width="290" height="290" rx="55" fill="#3B82E0"/><g fill="none" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"><path d="M215 350 L235 300 L355 300 L375 350"/><path d="M215 350 Q225 372 245 372 Q265 372 275 350"/><path d="M275 350 Q285 372 305 372 Q325 372 335 350"/><path d="M335 350 Q345 372 355 372 Q365 372 375 350"/><line x1="235" y1="372" x2="235" y2="450"/><line x1="355" y1="372" x2="355" y2="450"/><path d="M225 400 L365 400 L365 450 L225 450 Z"/><line x1="205" y1="470" x2="385" y2="470"/></g></svg></span><span><strong>Вітрина</strong><small>Owner Admin</small></span></a>
+      <a class="brand" href="/index.html" aria-label="Вітрина - Owner Admin"><span class="brand-mark"><svg viewBox="150 240 290 290" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Вітрина"><rect x="150" y="240" width="290" height="290" rx="55" fill="#3B82E0"/><g fill="none" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"><path d="M215 350 L235 300 L355 300 L375 350"/><path d="M215 350 Q225 372 245 372 Q265 372 275 350"/><path d="M275 350 Q285 372 305 372 Q325 372 335 350"/><path d="M335 350 Q345 372 355 372 Q365 372 375 350"/><line x1="235" y1="372" x2="235" y2="450"/><line x1="355" y1="372" x2="355" y2="450"/><path d="M225 400 L365 400 L365 450 L225 450 Z"/><line x1="205" y1="470" x2="385" y2="470"/></g></svg></span><span><strong>Вітрина</strong><small>Owner Admin</small></span></a>
       <nav class="menu" aria-label="Розділи адмінки власника">
-        <a href="/owner-admin/index.html">Головна (дашборд)</a>
-        <a href="/owner-admin/users.html">Користувачі</a>
-        <a class="active" href="/owner-admin/clients.html">База клієнтів</a>
-        <a href="/owner-admin/stores.html">Магазини</a>
-        <a href="/owner-admin/orders.html">Замовлення</a>
-        <a href="/owner-admin/plans.html">Тарифи та підписки</a>
-        <a href="/owner-admin/analytics.html">Аналітика</a>
+        <a href="/index.html">Головна (дашборд)</a>
+        <a href="/users.html">Користувачі</a>
+        <a class="active" href="/clients.html">База клієнтів</a>
+        <a href="/stores.html">Магазини</a>
+        <a href="/orders.html">Замовлення</a>
+        <a href="/plans.html">Тарифи та підписки</a>
+        <a href="/analytics.html">Аналітика</a>
+        <a href="/statistics.html">Статистика</a>
+        <a href="#" id="ownerLogoutLink">Вийти</a>
       </nav>
     </aside>
 
@@ -56,14 +59,16 @@
                   <th>Дата та час реєстрації</th>
                   <th>Номер телефону</th>
                   <th>Назва магазину</th>
+                  <th>Категорія магазину</th>
                   <th>Домен</th>
                   <th>Тарифний план</th>
                   <th>Статус</th>
                   <th>IP адреса</th>
+                  <th>Дії</th>
                 </tr>
               </thead>
               <tbody id="clientsTableBody">
-                <tr><td colspan="8">Завантажуємо дані з бази...</td></tr>
+                <tr><td colspan="10">Завантажуємо дані з бази...</td></tr>
               </tbody>
             </table>
           </div>
@@ -74,6 +79,6 @@
 
   <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
-  <script src="/owner-admin/clients.js"></script>
+  <script src="/clients.js"></script>
 </body>
 </html>

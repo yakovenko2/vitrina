@@ -3,8 +3,74 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Demo/prototype mode: open access for client-side app.
     // Before production launch, replace with Firebase Auth + role checks.
+    //
+    // Exceptions to the blanket "allow everything" rule below:
+    //  - stores/{storeId}/private/** (acquirer API keys/secrets) is always
+    //    denied to every client — only Cloud Functions (Admin SDK, which
+    //    bypasses these rules) may read or write it.
+    //  - stores/{storeId}/data/{key} for a small set of "hot" keys (orders,
+    //    products, categories, registration, auth) is carved out and given
+    //    its own throttled rule further below, to slow down mass/bot writes
+    //    for anyone who bypasses the app and calls Firestore directly. The
+    //    app itself additionally enforces per-IP limits via the
+    //    checkActionRateLimit Cloud Function before these writes happen.
+    function isThrottledDataKey(key) {
+      return key in ['lavkaOrders', 'lavkaProducts', 'lavkaCategories', 'lavkaRegistration', 'lavkaAuth'];
+    }
+
+    function isThrottledDataPath() {
+      return request.path.size() >= 7 &&
+        request.path[3] == 'stores' &&
+        request.path[5] == 'data' &&
+        isThrottledDataKey(request.path[6]);
+    }
+
+    // Landing page visit tracking: publicly writable (append-only) so the
+    // marketing site can record real visits without auth, but clients can
+    // never edit/delete existing records or write arbitrary fields.
+    function isLandingVisitPath() {
+      return request.path.size() >= 4 && request.path[3] == 'landing_visits';
+    }
+
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if !(
+        request.path.size() >= 6 &&
+        request.path[3] == 'stores' &&
+        request.path[5] == 'private'
+      ) && !isThrottledDataPath() && !isLandingVisitPath();
+    }
+
+    match /landing_visits/{visitId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasOnly(['atMs', 'path', 'ref', 'visitorId']) &&
+        request.resource.data.atMs is int &&
+        request.resource.data.atMs > request.time.toMillis() - 300000 &&
+        request.resource.data.atMs <= request.time.toMillis() + 60000;
+      allow update, delete: if false;
+    }
+
+    // Мінімальний інтервал між записами в один і той самий документ для
+    // "гарячих" ключів. Кожен запис зберігає `updatedAtMs` (мс з епохи), тож
+    // наступний запис дозволений лише якщо з попереднього минуло достатньо
+    // часу. Це не блокує реальних користувачів (форми оформлюються значно
+    // повільніше), але обмежує швидкість масового ботованого запису.
+    function minWriteIntervalMs(key) {
+      return key == 'lavkaProducts' || key == 'lavkaCategories' ? 1000
+        : key == 'lavkaAuth' ? 2000
+        : 3000; // lavkaOrders, lavkaRegistration
+    }
+
+    match /stores/{storeId}/data/{key} {
+      allow read: if isThrottledDataKey(key);
+      allow create, update: if isThrottledDataKey(key) && (
+        !exists(/databases/$(database)/documents/stores/$(storeId)/data/$(key)) ||
+        !('updatedAtMs' in resource.data) ||
+        !(resource.data.updatedAtMs is int) ||
+        resource.data.updatedAtMs > request.time.toMillis() + 60000 ||
+        request.time.toMillis() > resource.data.updatedAtMs + minWriteIntervalMs(key)
+      );
+      allow delete: if isThrottledDataKey(key);
     }
   }
 }
+

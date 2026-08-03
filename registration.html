@@ -1158,7 +1158,8 @@
                   domain: payload.domain,
                   registeredAt: payload.registeredAt
                 },
-                updatedAt: new Date().toISOString()
+                updatedAt: new Date().toISOString(),
+                updatedAtMs: Date.now()
               }, { merge: true });
 
               transaction.set(settingsRef, {
@@ -1570,6 +1571,16 @@
         try {
           setSubmittingState(true);
           setStatus(step3Status, "Перевіряємо і реєструємо піддомен...", "");
+
+          if (typeof window.lavkaCheckActionRateLimit === "function") {
+            var rateLimit = await window.lavkaCheckActionRateLimit("register", subdomain);
+            if (!rateLimit.ok) {
+              setStatus(step3Status, "Забагато спроб реєстрації. Спробуй ще раз через кілька хвилин.", "error");
+              setSubmittingState(false);
+              return;
+            }
+          }
+
           await reserveSubdomainWithRetry(payload, 3);
         } catch (error) {
           var errorCode = String((error && error.code) || "").toLowerCase();

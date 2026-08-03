@@ -34,6 +34,9 @@
   var modalCustomDomainSaveEl = document.getElementById("storeModalCustomDomainSave");
   var modalCustomDomainMessageEl = document.getElementById("storeModalCustomDomainMessage");
   var modalCustomDomainStatusEl = document.getElementById("storeModalCustomDomainStatus");
+  var modalOwnerTelegramInputEl = document.getElementById("storeModalOwnerTelegramInput");
+  var modalOwnerTelegramSaveEl = document.getElementById("storeModalOwnerTelegramSave");
+  var modalOwnerTelegramMessageEl = document.getElementById("storeModalOwnerTelegramMessage");
   var modalProductsStatsEl = document.getElementById("storeModalProductsStats");
   var modalCategoriesStatsEl = document.getElementById("storeModalCategoriesStats");
   var modalStorageStatsEl = document.getElementById("storeModalStorageStats");
@@ -46,9 +49,18 @@
   var modalPaymentMethodsEl = document.getElementById("storeModalPaymentMethods");
   var modalShippingMethodsEl = document.getElementById("storeModalShippingMethods");
   var modalOrderNotifyEl = document.getElementById("storeModalOrderNotify");
+  var modalOrdersStatusEl = document.getElementById("storeModalOrdersStatus");
+  var modalOrdersToggleBtnEl = document.getElementById("storeModalOrdersToggleBtn");
+  var modalOrdersMessageEl = document.getElementById("storeModalOrdersMessage");
   var modalActivityBodyEl = document.getElementById("storeModalActivityBody");
+  var modalCommentInputEl = document.getElementById("storeModalCommentInput");
+  var modalCommentAddBtnEl = document.getElementById("storeModalCommentAddBtn");
+  var modalCommentMessageEl = document.getElementById("storeModalCommentMessage");
+  var modalCommentsListEl = document.getElementById("storeModalCommentsList");
   var storesState = [];
   var activeStoreId = "";
+  var activeStoreOrdersDisabled = false;
+  var activeStoreComments = [];
 
   function initDb() {
     if (!window.firebase) {
@@ -510,7 +522,8 @@
       orders: toArray(ordersDoc.value),
       billing: billingDoc.value || {},
       auth: authDoc.value || {},
-      checkoutUpdatedAt: checkoutDoc.updatedAt || null
+      checkoutUpdatedAt: checkoutDoc.updatedAt || null,
+      comments: toArray(registryDoc.comments)
     };
   }
 
@@ -535,6 +548,67 @@
     if (!modalEl) return;
     modalEl.hidden = true;
     document.body.style.overflow = "";
+  }
+
+  function renderOrdersToggleState() {
+    if (modalOrdersStatusEl) {
+      modalOrdersStatusEl.textContent = activeStoreOrdersDisabled ? "Вимкнено" : "Увімкнено";
+      modalOrdersStatusEl.classList.remove("green", "blue", "orange", "red");
+      modalOrdersStatusEl.classList.add(activeStoreOrdersDisabled ? "red" : "green");
+    }
+    if (modalOrdersToggleBtnEl) {
+      modalOrdersToggleBtnEl.textContent = activeStoreOrdersDisabled ? "Увімкнути прийом замовлень" : "Вимкнути прийом замовлень";
+    }
+  }
+
+  function setOrdersToggleMessage(message, kind) {
+    if (!modalOrdersMessageEl) return;
+    modalOrdersMessageEl.textContent = message || "";
+    modalOrdersMessageEl.classList.remove("error", "success");
+    if (kind) {
+      modalOrdersMessageEl.classList.add(kind);
+    }
+  }
+
+  async function toggleOrdersDisabled() {
+    var id = sanitizeStoreId(activeStoreId);
+    if (!id) {
+      return;
+    }
+
+    var nextDisabled = !activeStoreOrdersDisabled;
+    var confirmMessage = nextDisabled
+      ? "Вимкнути прийом замовлень для цього магазину? Покупці зможуть додавати товари в кошик, але не зможуть оформити замовлення."
+      : "Увімкнути прийом замовлень для цього магазину?";
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    if (modalOrdersToggleBtnEl) {
+      modalOrdersToggleBtnEl.disabled = true;
+    }
+    setOrdersToggleMessage("Зберігаємо...", "");
+
+    try {
+      var db = initDb();
+      var now = new Date().toISOString();
+      await db.collection("stores_registry").doc(id).set({
+        storeId: id,
+        ordersDisabled: nextDisabled,
+        updatedAt: now
+      }, { merge: true });
+
+      activeStoreOrdersDisabled = nextDisabled;
+      renderOrdersToggleState();
+      setOrdersToggleMessage(nextDisabled ? "Прийом замовлень вимкнено." : "Прийом замовлень увімкнено.", "success");
+    } catch (error) {
+      console.error("[owner-admin/stores] failed to toggle ordersDisabled:", error);
+      setOrdersToggleMessage("Не вдалося зберегти зміну.", "error");
+    } finally {
+      if (modalOrdersToggleBtnEl) {
+        modalOrdersToggleBtnEl.disabled = false;
+      }
+    }
   }
 
   function renderStoreModal(details) {
@@ -568,6 +642,14 @@
       modalCustomDomainStatusEl.textContent = customDomainStatus.label;
       modalCustomDomainStatusEl.classList.remove("green", "blue", "orange", "red");
       modalCustomDomainStatusEl.classList.add(customDomainStatus.className);
+    }
+
+    if (modalOwnerTelegramInputEl && document.activeElement !== modalOwnerTelegramInputEl) {
+      modalOwnerTelegramInputEl.value = cleanText(settings.ownerTelegram);
+    }
+    if (modalOwnerTelegramMessageEl) {
+      modalOwnerTelegramMessageEl.textContent = "";
+      modalOwnerTelegramMessageEl.classList.remove("error", "success");
     }
 
     var productStats = getProductStats(details.products);
@@ -630,6 +712,13 @@
       modalOrderNotifyEl.classList.add(notifyEnabled ? "green" : "orange");
     }
 
+    activeStoreOrdersDisabled = Boolean(registry.ordersDisabled);
+    renderOrdersToggleState();
+    if (modalOrdersMessageEl) {
+      modalOrdersMessageEl.textContent = "";
+      modalOrdersMessageEl.classList.remove("error", "success");
+    }
+
     var activityItems = buildActivityItems({
       settings: settings,
       checkout: Object.assign({}, details.checkout || {}, { updatedAt: details.checkoutUpdatedAt || (details.checkout || {}).updatedAt }),
@@ -653,6 +742,13 @@
       }
     }
 
+    activeStoreComments = toArray(details.comments);
+    renderComments();
+    if (modalCommentMessageEl) {
+      modalCommentMessageEl.textContent = "";
+      modalCommentMessageEl.classList.remove("error", "success");
+    }
+
     setModalStatus("Детальна картка магазину: " + details.storeId, "success");
   }
 
@@ -663,10 +759,14 @@
     }
 
     activeStoreId = id;
+    activeStoreComments = [];
     openModal();
     setModalStatus("Завантажуємо картку магазину...", "");
     if (modalActivityBodyEl) {
       modalActivityBodyEl.innerHTML = '<tr><td colspan="3">Завантажуємо активність...</td></tr>';
+    }
+    if (modalCommentsListEl) {
+      modalCommentsListEl.innerHTML = '<li class="store-comment-empty">Завантажуємо коментарі...</li>';
     }
 
     try {
@@ -835,7 +935,7 @@
       var lastActivity = auth.authorizedAt || auth.updatedAt || authData.updatedAt || null;
       var registeredAt = registration.registeredAt || registrationData.updatedAt || registryData.createdAt || null;
 
-      var ownerHref = "/owner-admin/users.html?store=" + encodeURIComponent(storeId)
+      var ownerHref = "/users.html?store=" + encodeURIComponent(storeId)
         + "&phone=" + encodeURIComponent(phone)
         + "&domain=" + encodeURIComponent(domainHost || domain);
 
@@ -976,6 +1076,152 @@
     }
   }
 
+  function setOwnerTelegramMessage(message, kind) {
+    if (!modalOwnerTelegramMessageEl) {
+      return;
+    }
+    modalOwnerTelegramMessageEl.textContent = message || "";
+    modalOwnerTelegramMessageEl.classList.remove("error", "success");
+    if (kind) {
+      modalOwnerTelegramMessageEl.classList.add(kind);
+    }
+  }
+
+  async function saveOwnerTelegram() {
+    var id = sanitizeStoreId(activeStoreId);
+    if (!id) {
+      return;
+    }
+
+    var telegram = cleanText(modalOwnerTelegramInputEl ? modalOwnerTelegramInputEl.value : "");
+    if (telegram && !/^@?[a-zA-Z0-9_]{4,32}$/.test(telegram)) {
+      setOwnerTelegramMessage("Введіть коректний телеграм нік, наприклад @username.", "error");
+      return;
+    }
+    if (telegram && telegram.charAt(0) !== "@") {
+      telegram = "@" + telegram;
+    }
+
+    if (modalOwnerTelegramSaveEl) {
+      modalOwnerTelegramSaveEl.disabled = true;
+    }
+    setOwnerTelegramMessage("Зберігаємо...", "");
+
+    try {
+      var db = initDb();
+      var now = new Date().toISOString();
+      var settingsRef = db.collection("stores").doc(id).collection("data").doc(SETTINGS_KEY);
+
+      var snap = await settingsRef.get();
+      var currentDoc = snap.exists ? (snap.data() || {}) : {};
+      var value = Object.assign({}, currentDoc.value || {});
+      value.ownerTelegram = telegram;
+      value.updatedAt = now;
+
+      await settingsRef.set({ key: SETTINGS_KEY, value: value, updatedAt: now }, { merge: true });
+      await db.collection("stores_registry").doc(id).set({
+        storeId: id,
+        ownerTelegram: telegram,
+        updatedAt: now
+      }, { merge: true });
+
+      if (modalOwnerTelegramInputEl && document.activeElement !== modalOwnerTelegramInputEl) {
+        modalOwnerTelegramInputEl.value = telegram;
+      }
+      setOwnerTelegramMessage(telegram ? "Телеграм нік збережено." : "Телеграм нік очищено.", "success");
+    } catch (error) {
+      console.error("[owner-admin/stores] failed to save owner telegram:", error);
+      setOwnerTelegramMessage("Не вдалося зберегти телеграм нік.", "error");
+    } finally {
+      if (modalOwnerTelegramSaveEl) {
+        modalOwnerTelegramSaveEl.disabled = false;
+      }
+    }
+  }
+
+  function setCommentMessage(message, kind) {
+    if (!modalCommentMessageEl) {
+      return;
+    }
+    modalCommentMessageEl.textContent = message || "";
+    modalCommentMessageEl.classList.remove("error", "success");
+    if (kind) {
+      modalCommentMessageEl.classList.add(kind);
+    }
+  }
+
+  function renderComments() {
+    if (!modalCommentsListEl) {
+      return;
+    }
+    if (!activeStoreComments.length) {
+      modalCommentsListEl.innerHTML = '<li class="store-comment-empty">Коментарів ще немає.</li>';
+      return;
+    }
+
+    var sorted = activeStoreComments.slice().sort(function (a, b) {
+      var atA = toDate(a.at);
+      var atB = toDate(b.at);
+      return (atB ? atB.getTime() : 0) - (atA ? atA.getTime() : 0);
+    });
+
+    modalCommentsListEl.innerHTML = sorted.map(function (comment) {
+      return '<li class="store-comment-item">'
+        + '<span class="store-comment-date">' + escapeHtml(formatDateTime(comment.at)) + '</span>'
+        + '<span class="store-comment-text">' + escapeHtml(cleanText(comment.text)) + '</span>'
+        + '</li>';
+    }).join("");
+  }
+
+  async function addComment() {
+    var id = sanitizeStoreId(activeStoreId);
+    if (!id) {
+      return;
+    }
+
+    var text = cleanText(modalCommentInputEl ? modalCommentInputEl.value : "");
+    if (!text) {
+      setCommentMessage("Введіть текст коментаря.", "error");
+      return;
+    }
+
+    if (modalCommentAddBtnEl) {
+      modalCommentAddBtnEl.disabled = true;
+    }
+    setCommentMessage("Зберігаємо...", "");
+
+    try {
+      var db = initDb();
+      var now = new Date().toISOString();
+      var registryRef = db.collection("stores_registry").doc(id);
+
+      var snap = await registryRef.get();
+      var currentData = snap.exists ? (snap.data() || {}) : {};
+      var comments = toArray(currentData.comments).slice();
+      comments.push({ text: text, at: now });
+
+      await registryRef.set({
+        storeId: id,
+        comments: comments,
+        updatedAt: now
+      }, { merge: true });
+
+      activeStoreComments = comments;
+      renderComments();
+      if (modalCommentInputEl) {
+        modalCommentInputEl.value = "";
+      }
+      setCommentMessage("Коментар додано.", "success");
+    } catch (error) {
+      console.error("[owner-admin/stores] failed to add comment:", error);
+      setCommentMessage("Не вдалося зберегти коментар.", "error");
+    } finally {
+      if (modalCommentAddBtnEl) {
+        modalCommentAddBtnEl.disabled = false;
+      }
+    }
+  }
+
   function bindEvents() {
     if (!tableBodyEl) {
       return;
@@ -1005,6 +1251,27 @@
 
     if (modalCustomDomainSaveEl) {
       modalCustomDomainSaveEl.addEventListener("click", saveCustomDomain);
+    }
+
+    if (modalOwnerTelegramSaveEl) {
+      modalOwnerTelegramSaveEl.addEventListener("click", saveOwnerTelegram);
+    }
+
+    if (modalOwnerTelegramInputEl) {
+      modalOwnerTelegramInputEl.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          saveOwnerTelegram();
+        }
+      });
+    }
+
+    if (modalCommentAddBtnEl) {
+      modalCommentAddBtnEl.addEventListener("click", addComment);
+    }
+
+    if (modalOrdersToggleBtnEl) {
+      modalOrdersToggleBtnEl.addEventListener("click", toggleOrdersDisabled);
     }
 
     if (modalCustomDomainInputEl) {

@@ -132,6 +132,30 @@ document.addEventListener("DOMContentLoaded", () => {
     return products.find((item) => String(item?.sku || "").trim().toUpperCase() === normalizedId.toUpperCase()) || null;
   };
 
+  const findProductForCartItem = (item) => {
+    const rawId = String(item?.id || "").split("::")[0].trim();
+    const sku = String(item?.sku || "").trim().toUpperCase();
+    const products = readProducts();
+    return products.find((product) => {
+      const productId = String(product?.id || "").trim();
+      const productSku = String(product?.sku || "").trim().toUpperCase();
+      return (rawId && productId === rawId) || (sku && sku !== "-" && productSku === sku);
+    }) || null;
+  };
+
+  // The cart can hold items from any product on the storefront, so re-check live stock for each cart item rather than relying on the value cached when it was added.
+  const getCartItemStockLimit = (item) => {
+    const matchedProduct = findProductForCartItem(item);
+    if (!matchedProduct) return Infinity;
+    const size = String(item?.size || "").trim().toUpperCase();
+    if (size && matchedProduct.sizeStocks && typeof matchedProduct.sizeStocks === "object") {
+      const sizeStock = Number.parseInt(matchedProduct.sizeStocks[size], 10);
+      return Number.isFinite(sizeStock) && sizeStock > 0 ? sizeStock : 0;
+    }
+    const stock = Number.parseInt(matchedProduct?.stock, 10);
+    return Number.isFinite(stock) && stock > 0 ? stock : 0;
+  };
+
   const adminProduct = findProductFromAdmin(productId);
   if (!adminProduct || adminProduct.visible === false) {
     window.location.replace(`index.html#cat=${encodeURIComponent(fromCategory)}`);
@@ -148,13 +172,7 @@ document.addEventListener("DOMContentLoaded", () => {
       })
       .filter(Boolean);
 
-    if (normalized.length) return normalized;
-    const seed = String(rawProduct?.id || rawProduct?.sku || rawProduct?.name || "lavka-product").toLowerCase();
-    return [
-      `https://picsum.photos/seed/${encodeURIComponent(seed)}-1/900/900`,
-      `https://picsum.photos/seed/${encodeURIComponent(seed)}-2/900/900`,
-      `https://picsum.photos/seed/${encodeURIComponent(seed)}-3/900/900`
-    ];
+    return normalized;
   };
 
   const product = {
@@ -171,6 +189,23 @@ document.addEventListener("DOMContentLoaded", () => {
     sizeStocks: adminProduct?.sizeStocks && typeof adminProduct.sizeStocks === "object" ? adminProduct.sizeStocks : {},
     images: normalizeProductImages(adminProduct)
   };
+
+  const productDiscountValue = Number.parseFloat(adminProduct?.discount?.value);
+  const productDiscountType = adminProduct?.discount?.type === "percent" ? "percent" : "uah";
+  product.discount = Number.isFinite(productDiscountValue) && productDiscountValue > 0
+    ? { type: productDiscountType, value: productDiscountType === "percent" ? Math.min(100, productDiscountValue) : productDiscountValue }
+    : null;
+
+  const getDiscountedPrice = (price, discount) => {
+    const base = Number(price) || 0;
+    if (!discount || !Number.isFinite(discount.value) || discount.value <= 0) return base;
+    const result = discount.type === "percent"
+      ? base * (1 - Math.min(100, discount.value) / 100)
+      : base - discount.value;
+    return Math.max(0, Math.round(result * 100) / 100);
+  };
+
+  product.finalPrice = getDiscountedPrice(product.price, product.discount);
 
   const getSizeStock = (size) => {
     const raw = product.sizeStocks?.[String(size || "").trim().toUpperCase()];
@@ -364,6 +399,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   const mainImage = document.getElementById("mainImage");
+  const mainImageWrap = mainImage ? mainImage.closest(".main-image-wrap") : null;
+  const productGallery = document.getElementById("productGallery");
   const photoFullscreen = document.getElementById("photoFullscreen");
   const photoFullscreenBackdrop = document.getElementById("photoFullscreenBackdrop");
   const photoFullscreenClose = document.getElementById("photoFullscreenClose");
@@ -400,6 +437,109 @@ document.addEventListener("DOMContentLoaded", () => {
   let isOrderingBlockedByPlanExpiry = false;
 
   const hasSizesEnabled = Boolean(product.isClothing && Array.isArray(product.sizes) && product.sizes.length);
+  let activeProductImageIndex = 0;
+  let suppressMainImageClick = false;
+
+  const shiftProductImage = (delta) => {
+    if (!Array.isArray(product.images) || product.images.length <= 1) return;
+    const direction = Number(delta) || 0;
+    if (!direction) return;
+    const nextIndex = (activeProductImageIndex + direction + product.images.length) % product.images.length;
+    setActiveProductImage(nextIndex);
+  };
+
+  const setupSwipeNavigation = (target, onSwipeLeft, onSwipeRight) => {
+    if (!target) return;
+
+    let startX = 0;
+    let startY = 0;
+
+    target.addEventListener("touchstart", (event) => {
+      if (!event.touches || event.touches.length !== 1) return;
+      startX = event.touches[0].clientX;
+      startY = event.touches[0].clientY;
+    }, { passive: true });
+
+    target.addEventListener("touchend", (event) => {
+      if (!event.changedTouches || event.changedTouches.length !== 1) return;
+      const endX = event.changedTouches[0].clientX;
+      const endY = event.changedTouches[0].clientY;
+      const deltaX = endX - startX;
+      const deltaY = endY - startY;
+
+      // Horizontal swipe only: ignore short or mostly vertical gestures.
+      if (Math.abs(deltaX) < 36 || Math.abs(deltaX) <= Math.abs(deltaY)) {
+        return;
+      }
+
+      if (deltaX < 0) {
+        onSwipeLeft?.();
+      } else {
+        onSwipeRight?.();
+      }
+    }, { passive: true });
+  };
+
+  const setActiveProductImage = (index) => {
+    if (!mainImage || !Array.isArray(product.images) || !product.images.length) {
+      return;
+    }
+
+    const safeIndex = Math.max(0, Math.min(product.images.length - 1, Number(index) || 0));
+    const imageSrc = String(product.images[safeIndex] || "").trim();
+    if (!imageSrc) return;
+
+    activeProductImageIndex = safeIndex;
+    mainImage.src = imageSrc;
+    mainImage.alt = `${product.name} — фото ${safeIndex + 1}`;
+
+    if (photoFullscreen?.classList.contains("open") && photoFullscreenImage) {
+      photoFullscreenImage.src = imageSrc;
+      photoFullscreenImage.alt = `${product.name} — фото ${safeIndex + 1}`;
+    }
+
+    if (productGallery) {
+      productGallery.querySelectorAll(".product-gallery-item").forEach((button, buttonIndex) => {
+        button.classList.toggle("active", buttonIndex === safeIndex);
+        button.setAttribute("aria-current", buttonIndex === safeIndex ? "true" : "false");
+      });
+    }
+  };
+
+  const renderProductGallery = () => {
+    if (!productGallery) return;
+
+    productGallery.innerHTML = "";
+
+    if (!Array.isArray(product.images) || product.images.length <= 1) {
+      productGallery.hidden = true;
+      return;
+    }
+
+    productGallery.hidden = false;
+    product.images.forEach((src, index) => {
+      const imageSrc = String(src || "").trim();
+      if (!imageSrc) return;
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "product-gallery-item";
+      button.setAttribute("aria-label", `Показати фото ${index + 1}`);
+
+      const image = document.createElement("img");
+      image.src = imageSrc;
+      image.alt = `${product.name} — мініатюра ${index + 1}`;
+      button.append(image);
+
+      button.addEventListener("click", () => {
+        setActiveProductImage(index);
+      });
+
+      productGallery.append(button);
+    });
+
+    setActiveProductImage(activeProductImageIndex);
+  };
 
   const readCartState = () => {
     try {
@@ -550,7 +690,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!cartState.length) {
       productCartItems.innerHTML = '<p class="product-cart-empty">Кошик порожній. Додайте товари з вітрини.</p>';
     } else {
-      productCartItems.innerHTML = cartState.map((item) => `
+      productCartItems.innerHTML = cartState.map((item) => {
+        const atStockLimit = (Number(item.qty) || 0) >= getCartItemStockLimit(item);
+        return `
         <article class="product-cart-item" data-cart-id="${item.id}">
           <button type="button" class="product-cart-item-remove" aria-label="Видалити товар з кошика" title="Видалити">×</button>
           <img src="${item.image}" alt="${item.name}">
@@ -561,10 +703,11 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="product-cart-item-controls">
             <button type="button" class="product-cart-qty-minus" aria-label="Зменшити кількість">-</button>
             <span class="product-cart-item-qty">${item.qty}</span>
-            <button type="button" class="product-cart-qty-plus" aria-label="Збільшити кількість">+</button>
+            <button type="button" class="product-cart-qty-plus"${atStockLimit ? ' disabled aria-disabled="true" title="Досягнуто максимальний залишок"' : ""} aria-label="Збільшити кількість">+</button>
           </div>
         </article>
-      `).join("");
+      `;
+      }).join("");
     }
 
     const totalItems = cartState.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
@@ -618,16 +761,70 @@ document.addEventListener("DOMContentLoaded", () => {
 
   productName.textContent = product.name;
   productSku.textContent = product.sku;
-  productPrice.textContent = `${product.price} ${getCurrencyLabel(activeCurrency)}`;
+  if (product.discount && product.finalPrice < product.price) {
+    const priceRow = productPrice.closest(".price-row");
+    let oldPriceNode = priceRow?.querySelector(".price-old");
+    if (priceRow && !oldPriceNode) {
+      oldPriceNode = document.createElement("p");
+      oldPriceNode.className = "price-old";
+      priceRow.insertBefore(oldPriceNode, productPrice);
+    }
+    if (oldPriceNode) {
+      oldPriceNode.hidden = false;
+      oldPriceNode.textContent = `${product.price} ${getCurrencyLabel(activeCurrency)}`;
+    }
+    productPrice.textContent = `${product.finalPrice} ${getCurrencyLabel(activeCurrency)}`;
+  } else {
+    productPrice.textContent = `${product.price} ${getCurrencyLabel(activeCurrency)}`;
+  }
   productDescription.textContent = product.description;
-  mainImage.src = product.images[0];
-  mainImage.alt = product.name;
+  if (product.images.length) {
+    mainImage.hidden = false;
+    if (mainImageWrap) mainImageWrap.hidden = false;
+    setActiveProductImage(0);
+    renderProductGallery();
+  } else {
+    mainImage.hidden = true;
+    if (mainImageWrap) mainImageWrap.hidden = true;
+    if (productGallery) {
+      productGallery.hidden = true;
+      productGallery.innerHTML = "";
+    }
+  }
   document.title = storeTitleName
     ? `${product.name} — ${storeTitleName}`
     : product.name;
 
   if (mainImage) {
-    mainImage.addEventListener("click", () => setPhotoFullscreenOpen(true));
+    mainImage.addEventListener("click", () => {
+      if (suppressMainImageClick) {
+        suppressMainImageClick = false;
+        return;
+      }
+      setPhotoFullscreenOpen(true);
+    });
+  }
+
+  if (Array.isArray(product.images) && product.images.length > 1) {
+    setupSwipeNavigation(mainImageWrap, () => {
+      suppressMainImageClick = true;
+      shiftProductImage(1);
+      setTimeout(() => {
+        suppressMainImageClick = false;
+      }, 260);
+    }, () => {
+      suppressMainImageClick = true;
+      shiftProductImage(-1);
+      setTimeout(() => {
+        suppressMainImageClick = false;
+      }, 260);
+    });
+
+    setupSwipeNavigation(photoFullscreenImage, () => {
+      shiftProductImage(1);
+    }, () => {
+      shiftProductImage(-1);
+    });
   }
 
   if (photoFullscreenBackdrop) {
@@ -760,7 +957,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!item) return;
 
       if (event.target.closest(".product-cart-qty-plus")) {
-        item.qty = (Number(item.qty) || 0) + 1;
+        if ((Number(item.qty) || 0) < getCartItemStockLimit(item)) {
+          item.qty = (Number(item.qty) || 0) + 1;
+        }
       }
 
       if (event.target.closest(".product-cart-qty-minus")) {
@@ -796,6 +995,28 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   renderSizeOptions();
+
+  // Оновлюємо доступність розмірів при зміні залишків у реальному часі.
+  window.addEventListener("lavka-key-updated", (event) => {
+    if (event.detail?.key !== PRODUCTS_KEY) return;
+    try {
+      const raw = localStorage.getItem(PRODUCTS_KEY);
+      const updatedProducts = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(updatedProducts)) return;
+      const updatedProduct = updatedProducts.find((p) => String(p.id || "").trim() === product.id);
+      if (!updatedProduct) return;
+      if (updatedProduct.sizeStocks && typeof updatedProduct.sizeStocks === "object") {
+        product.sizeStocks = updatedProduct.sizeStocks;
+      }
+      if (Number.isFinite(Number(updatedProduct.stock))) {
+        product.stock = Math.max(0, Number(updatedProduct.stock));
+      }
+    } catch (e) {
+      // ignore
+    }
+    renderSizeOptions();
+    renderStockStatus();
+  });
 
   if (productSizesList) {
     productSizesList.addEventListener("click", (event) => {
@@ -853,9 +1074,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const normalizeQty = () => {
     const parsed = Number.parseInt(qtyInput.value, 10);
+    const maxQty = Math.max(1, getAvailableStock());
     if (!Number.isFinite(parsed) || parsed < 1) {
       qtyInput.value = "1";
       return 1;
+    }
+    if (parsed > maxQty) {
+      qtyInput.value = String(maxQty);
+      return maxQty;
     }
     qtyInput.value = String(parsed);
     return parsed;
@@ -868,7 +1094,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   plusQty.addEventListener("click", () => {
     const current = normalizeQty();
-    qtyInput.value = String(current + 1);
+    qtyInput.value = String(Math.min(Math.max(1, getAvailableStock()), current + 1));
   });
 
   qtyInput.addEventListener("change", normalizeQty);
@@ -906,7 +1132,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const existing = cartState.find((item) => String(item.id || "").trim() === cartItemKey);
 
     if (existing) {
-      existing.qty = Math.max(1, Number(existing.qty) || 1) + quantity;
+      existing.qty = Math.min(getAvailableStock(), Math.max(1, Number(existing.qty) || 1) + quantity);
       if (hasSizesEnabled) {
         existing.size = selectedSize;
       }
@@ -915,9 +1141,9 @@ document.addEventListener("DOMContentLoaded", () => {
         id: cartItemKey,
         sku: product.sku,
         name: product.name,
-        price: Number(product.price) || 0,
+        price: Number(product.finalPrice) || 0,
         image: product.images[0] || "",
-        qty: quantity,
+        qty: Math.min(getAvailableStock(), quantity),
         ...(hasSizesEnabled ? { size: selectedSize } : {})
       });
     }
@@ -952,4 +1178,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
   });
+
+  document.body.classList.remove("lavka-booting");
 });

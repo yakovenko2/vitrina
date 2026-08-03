@@ -58,6 +58,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const MAX_PRODUCT_DESCRIPTION_LENGTH = 240;
   const MAX_PRODUCT_PHOTOS = 10;
   const MAX_PRODUCT_PHOTO_SIZE = 3 * 1024 * 1024;
+  const PRODUCT_PHOTO_MAX_DIMENSION = 1920;
+  const PRODUCT_PHOTO_TARGET_UPLOAD_BYTES = 1100 * 1024;
+  const STORAGE_UPLOAD_TIMEOUT_MS = 60000;
+  const STORAGE_URL_TIMEOUT_MS = 25000;
+  const STORAGE_UPLOAD_RETRY_ATTEMPTS = 3;
+  const PRODUCT_UPLOAD_CONCURRENCY = 2;
   const MAX_BACKGROUND_FILE_SIZE = 5 * 1024 * 1024;
   const MAX_CATEGORY_NAME_LENGTH = 40;
   const PRODUCTS_PER_PAGE = 5;
@@ -283,26 +289,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const storage = firebase.storage();
     if (typeof storage.setMaxUploadRetryTime === "function") {
-      storage.setMaxUploadRetryTime(12000);
+      storage.setMaxUploadRetryTime(120000);
     }
     if (typeof storage.setMaxOperationRetryTime === "function") {
-      storage.setMaxOperationRetryTime(12000);
+      storage.setMaxOperationRetryTime(60000);
     }
     return storage;
   };
 
   const getStorageClientForBucket = (bucketName) => {
     const normalizedBucket = String(bucketName || "").trim();
-    const defaultBucket = String(FIREBASE_CONFIG.storageBucket || "").trim();
-    const storage = normalizedBucket && normalizedBucket !== defaultBucket
+    const storage = normalizedBucket
       ? firebase.app().storage(`gs://${normalizedBucket}`)
       : getStorageClient();
 
     if (typeof storage.setMaxUploadRetryTime === "function") {
-      storage.setMaxUploadRetryTime(12000);
+      storage.setMaxUploadRetryTime(120000);
     }
     if (typeof storage.setMaxOperationRetryTime === "function") {
-      storage.setMaxOperationRetryTime(12000);
+      storage.setMaxOperationRetryTime(60000);
     }
 
     return storage;
@@ -1136,12 +1141,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const productSizesWrap = document.getElementById("productSizesWrap");
   const productSizes = document.getElementById("productSizes");
   const productSizesCustom = document.getElementById("productSizesCustom");
-  const productOldPrice = document.getElementById("productOldPrice");
-  const productNewPrice = document.getElementById("productNewPrice");
   const productVisible = document.getElementById("productVisible");
   const productPhotos = document.getElementById("productPhotos");
   const productPhotosPolicyLabel = document.getElementById("productPhotosPolicyLabel");
   const productPhotosPolicyHint = document.getElementById("productPhotosPolicyHint");
+  const productPhotosPreview = document.getElementById("productPhotosPreview");
   const productSavedMessage = document.getElementById("productSavedMessage");
   const productEditingId = document.getElementById("productEditingId");
   const productModalTitle = document.getElementById("productModalTitle");
@@ -1170,6 +1174,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const bulkDiscountValue = document.getElementById("bulkDiscountValue");
   const bulkDiscountUnit = document.getElementById("bulkDiscountUnit");
   const applyBulkDiscount = document.getElementById("applyBulkDiscount");
+  const applyBulkDelete = document.getElementById("applyBulkDelete");
   const clearBulkSelection = document.getElementById("clearBulkSelection");
   const bulkActionMessage = document.getElementById("bulkActionMessage");
   const categoryCreateForm = document.getElementById("categoryCreateForm");
@@ -1177,6 +1182,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const categoryNameCounter = document.getElementById("categoryNameCounter");
   const categorySavedMessage = document.getElementById("categorySavedMessage");
   const categoriesList = document.getElementById("categoriesList");
+  let currentProductStoredPhotos = [];
+  let currentProductSelectedFiles = [];
+  let productPreviewObjectUrls = [];
   let productsLoadingTimer = null;
   let productsLoadingStartedAt = Date.now();
   const ordersTableBody = document.getElementById("ordersTableBody");
@@ -1433,10 +1441,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const CHECKOUT_SETTINGS_FIELDS = [
     "paymentMonoEnabled",
-    "paymentMonoSecret",
     "paymentLiqpayEnabled",
     "paymentLiqpayPublicKey",
-    "paymentLiqpayPrivateKey",
     "paymentCodEnabled",
     "paymentCodFee",
     "paymentPrepaymentEnabled",
@@ -2005,7 +2011,7 @@ document.addEventListener("DOMContentLoaded", () => {
         "До 3 категорій товарів",
         "Онлайн-оплата",
         "7-денний тестовий період з повним доступом до можливостей \"Про\"",
-        "Підтримка через спільноту/чат-бота"
+        "Підтримка у Telegram-чаті"
       ],
       excludes: [
         "Промокоди",
@@ -2033,7 +2039,7 @@ document.addEventListener("DOMContentLoaded", () => {
         "Можливість прибрати водяний знак",
         "Базове SEO",
         "7-денний тестовий період",
-        "Підтримка email, відповідь до 24 год"
+        "Підтримка у Telegram-чаті"
       ],
       excludes: [
         "Власний домен",
@@ -2058,7 +2064,7 @@ document.addEventListener("DOMContentLoaded", () => {
         "Власний домен",
         "Розширене SEO-налаштування",
         "7-денний тестовий період",
-        "Пріоритетна підтримка, відповідь до 1 год"
+        "Підтримка у Telegram-чаті"
       ],
       excludes: []
     }
@@ -2759,7 +2765,8 @@ document.addEventListener("DOMContentLoaded", () => {
     sku: String(item?.sku || "-"),
     name: String(item?.name || "Без назви"),
     price: Number.isFinite(Number(item?.price)) ? Math.max(0, Number(item.price)) : 0,
-    qty: Number.isFinite(Number(item?.qty)) ? Math.max(1, Number(item.qty)) : 1
+    qty: Number.isFinite(Number(item?.qty)) ? Math.max(1, Number(item.qty)) : 1,
+    size: String(item?.size || "").trim().toUpperCase()
   });
 
   const normalizeOrder = (order) => {
@@ -3309,6 +3316,56 @@ document.addEventListener("DOMContentLoaded", () => {
     renderOrdersTable(orders);
   };
 
+  const restoreInventoryForOrder = (order) => {
+    if (!order || !order.inventoryApplied) {
+      return { order, restored: false };
+    }
+
+    let matchedItemsCount = 0;
+    const nextProducts = products.map((product) => ({ ...product }));
+
+    order.items.forEach((item) => {
+      const normalizedSku = String(item?.sku || "").trim().toUpperCase();
+      const normalizedName = String(item?.name || "").trim().toLowerCase();
+      const qty = Number.isFinite(Number(item?.qty)) ? Math.max(1, Number(item.qty)) : 1;
+
+      let targetIndex = -1;
+      if (normalizedSku && normalizedSku !== "-") {
+        targetIndex = nextProducts.findIndex((product) => String(product.sku || "").trim().toUpperCase() === normalizedSku);
+      }
+      if (targetIndex < 0 && normalizedName) {
+        targetIndex = nextProducts.findIndex((product) => String(product.name || "").trim().toLowerCase() === normalizedName);
+      }
+      if (targetIndex < 0) return;
+
+      matchedItemsCount += 1;
+      const targetProduct = nextProducts[targetIndex];
+
+      if (hasSizedStockAccounting(targetProduct)) {
+        const sizeStockMap = { ...(targetProduct.sizeStocks || {}) };
+        const orderedSizeKey = String(item?.size || "").trim().toUpperCase();
+        if (orderedSizeKey && Object.prototype.hasOwnProperty.call(sizeStockMap, orderedSizeKey)) {
+          sizeStockMap[orderedSizeKey] = Math.max(0, (Number.parseInt(sizeStockMap[orderedSizeKey], 10) || 0) + qty);
+        }
+        nextProducts[targetIndex].sizeStocks = sizeStockMap;
+      }
+
+      const currentStock = getProductTotalStock(targetProduct);
+      nextProducts[targetIndex].stock = currentStock + qty;
+      nextProducts[targetIndex].updatedAt = new Date().toISOString();
+    });
+
+    if (!matchedItemsCount) {
+      return { order, restored: false };
+    }
+
+    products = nextProducts;
+    return {
+      order: { ...order, inventoryApplied: false },
+      restored: true
+    };
+  };
+
   const updateModalScrollLock = () => {
     const isProductOpen = Boolean(productModal?.classList.contains("open"));
     const isOrderOpen = Boolean(orderDetailsModal?.classList.contains("open"));
@@ -3400,10 +3457,12 @@ document.addEventListener("DOMContentLoaded", () => {
       orderItemsTableBody.innerHTML = "";
       order.items.forEach((item) => {
         const row = document.createElement("tr");
+        const size = String(item.size || "").trim();
         row.innerHTML = `
           <td><img class="order-items-thumb" src="${item.photo}" alt="${item.name}"></td>
           <td>${item.sku}</td>
           <td>${item.name}</td>
+          <td>${size || "-"}</td>
           <td>${formatPrice(item.price)}</td>
           <td>${item.qty}</td>
         `;
@@ -3428,15 +3487,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       : null;
 
-    const oldPrice = Number.parseFloat(product?.oldPrice);
-    const newPrice = Number.parseFloat(product?.newPrice);
-    const hasValidComparePrices = Number.isFinite(oldPrice)
-      && Number.isFinite(newPrice)
-      && oldPrice > 0
-      && newPrice > 0
-      && oldPrice > newPrice;
-    const normalizedOldPrice = hasValidComparePrices ? Math.round(oldPrice * 100) / 100 : null;
-    const normalizedNewPrice = hasValidComparePrices ? Math.round(newPrice * 100) / 100 : null;
     const normalizedPrice = Number.parseFloat(product?.price);
     const fallbackPrice = Number.isFinite(normalizedPrice) && normalizedPrice > 0
       ? Math.round(normalizedPrice * 100) / 100
@@ -3469,9 +3519,7 @@ document.addEventListener("DOMContentLoaded", () => {
         : (Number.isFinite(parsedStock) ? Math.max(0, parsedStock) : 0),
       visible: product?.visible !== false,
       discount: normalizedDiscount,
-      oldPrice: normalizedOldPrice,
-      newPrice: normalizedNewPrice,
-      price: normalizedNewPrice || fallbackPrice
+      price: fallbackPrice
     };
   };
 
@@ -3547,7 +3595,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const updateBulkSelectionState = () => {
     const selectedCount = selectedProductIds.size;
-    const canUseBulkTools = selectedCount > 1;
+    const canUseBulkTools = selectedCount >= 1;
 
     if (bulkToolsPanel) {
       bulkToolsPanel.hidden = !canUseBulkTools;
@@ -4008,14 +4056,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const visibilityClass = isVisible ? "is-visible" : "is-hidden";
       const toggleLabel = isVisible ? "Приховати" : "Відобразити";
       const discountLabel = formatDiscount(product.discount);
-      const hasComparePrices = Number.isFinite(product.oldPrice)
-        && Number.isFinite(product.newPrice)
-        && product.oldPrice > 0
-        && product.newPrice > 0
-        && product.oldPrice > product.newPrice;
-      const priceHtml = hasComparePrices
-        ? `<span class="product-price-compare"><s>${formatPrice(product.oldPrice)}</s><strong>${formatPrice(product.newPrice)}</strong></span>`
-        : formatPrice(product.price);
+      const priceHtml = formatPrice(product.price);
 
       row.innerHTML = `
         <td class="products-select-col">
@@ -4161,6 +4202,169 @@ document.addEventListener("DOMContentLoaded", () => {
     return "";
   };
 
+  const resolveProductPhotoSrc = (photo) => {
+    if (typeof photo === "string") {
+      return String(photo).trim();
+    }
+    if (!photo || typeof photo !== "object") {
+      return "";
+    }
+    return String(photo.src || photo.url || photo.dataUrl || "").trim();
+  };
+
+  const moveListItem = (list, fromIndex, toIndex) => {
+    if (!Array.isArray(list)) return [];
+    const next = [...list];
+    if (fromIndex < 0 || fromIndex >= next.length || toIndex < 0 || toIndex >= next.length || fromIndex === toIndex) {
+      return next;
+    }
+    const [item] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, item);
+    return next;
+  };
+
+  const revokeProductPreviewObjectUrls = () => {
+    productPreviewObjectUrls.forEach((url) => {
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        // ignore URL cleanup errors
+      }
+    });
+    productPreviewObjectUrls = [];
+  };
+
+  const refreshProductPhotoPreview = () => {
+    renderProductPhotoPreview({
+      selectedFiles: currentProductSelectedFiles,
+      storedPhotos: currentProductStoredPhotos
+    });
+  };
+
+  const createProductPhotoPreviewCard = ({ src, name, badge, badgeClass, alt, index, total, onMove }) => {
+    const card = document.createElement("div");
+    card.className = "product-photo-preview-item";
+
+    const stopFilePickerActivation = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    const image = document.createElement("img");
+    image.src = src;
+    image.alt = alt;
+    card.append(image);
+
+    const nameNode = document.createElement("span");
+    nameNode.className = "product-photo-preview-name";
+    nameNode.textContent = name;
+    card.append(nameNode);
+
+    const badgeNode = document.createElement("span");
+    badgeNode.className = `product-photo-preview-badge ${badgeClass}`;
+    badgeNode.textContent = badge;
+    card.append(badgeNode);
+
+    const controls = document.createElement("div");
+    controls.className = "product-photo-preview-controls";
+
+    const moveLeftButton = document.createElement("button");
+    moveLeftButton.type = "button";
+    moveLeftButton.className = "product-photo-preview-move-btn";
+    moveLeftButton.textContent = "<";
+    moveLeftButton.setAttribute("aria-label", "Перемістити фото лівіше");
+    moveLeftButton.disabled = index <= 0;
+    moveLeftButton.addEventListener("mousedown", stopFilePickerActivation);
+    moveLeftButton.addEventListener("touchstart", stopFilePickerActivation, { passive: false });
+    moveLeftButton.addEventListener("click", (event) => {
+      stopFilePickerActivation(event);
+      onMove(index, index - 1);
+    });
+    controls.append(moveLeftButton);
+
+    const moveRightButton = document.createElement("button");
+    moveRightButton.type = "button";
+    moveRightButton.className = "product-photo-preview-move-btn";
+    moveRightButton.textContent = ">";
+    moveRightButton.setAttribute("aria-label", "Перемістити фото правіше");
+    moveRightButton.disabled = index >= total - 1;
+    moveRightButton.addEventListener("mousedown", stopFilePickerActivation);
+    moveRightButton.addEventListener("touchstart", stopFilePickerActivation, { passive: false });
+    moveRightButton.addEventListener("click", (event) => {
+      stopFilePickerActivation(event);
+      onMove(index, index + 1);
+    });
+    controls.append(moveRightButton);
+
+    card.append(controls);
+
+    return card;
+  };
+
+  const renderProductPhotoPreview = ({ selectedFiles = [], storedPhotos = [] } = {}) => {
+    if (!productPhotosPreview) return;
+
+    revokeProductPreviewObjectUrls();
+    productPhotosPreview.innerHTML = "";
+
+    const files = Array.isArray(selectedFiles) ? selectedFiles : [];
+    const saved = Array.isArray(storedPhotos) ? storedPhotos : [];
+
+    if (files.length) {
+      files.forEach((file, index) => {
+        const objectUrl = URL.createObjectURL(file);
+        productPreviewObjectUrls.push(objectUrl);
+        const card = createProductPhotoPreviewCard({
+          src: objectUrl,
+          name: String(file?.name || `Фото ${index + 1}`),
+          badge: "Нове фото",
+          badgeClass: "pending",
+          alt: String(file?.name || `Нове фото ${index + 1}`),
+          index,
+          total: files.length,
+          onMove: (fromIndex, toIndex) => {
+            currentProductSelectedFiles = moveListItem(currentProductSelectedFiles, fromIndex, toIndex);
+            refreshProductPhotoPreview();
+          }
+        });
+        productPhotosPreview.append(card);
+      });
+      return;
+    }
+
+    const savedWithSrc = saved
+      .map((photo, index) => ({
+        src: resolveProductPhotoSrc(photo),
+        name: String(photo?.name || `Фото ${index + 1}`).trim() || `Фото ${index + 1}`
+      }))
+      .filter((entry) => Boolean(entry.src));
+
+    if (savedWithSrc.length) {
+      savedWithSrc.forEach((photo, index) => {
+        const card = createProductPhotoPreviewCard({
+          src: photo.src,
+          name: photo.name,
+          badge: "У базі",
+          badgeClass: "stored",
+          alt: `Збережене фото ${index + 1}`,
+          index,
+          total: savedWithSrc.length,
+          onMove: (fromIndex, toIndex) => {
+            currentProductStoredPhotos = moveListItem(currentProductStoredPhotos, fromIndex, toIndex);
+            refreshProductPhotoPreview();
+          }
+        });
+        productPhotosPreview.append(card);
+      });
+      return;
+    }
+
+    const empty = document.createElement("div");
+    empty.className = "product-photos-preview-empty";
+    empty.textContent = "Фото ще не обрано.";
+    productPhotosPreview.append(empty);
+  };
+
   const setProductModalOpen = (open) => {
     if (!productModal) return;
     productModal.classList.toggle("open", open);
@@ -4169,6 +4373,8 @@ document.addEventListener("DOMContentLoaded", () => {
       productUnitSelect.classList.remove("open");
       productUnitSelect.setAttribute("aria-expanded", "false");
       productUnitOptions.hidden = true;
+      currentProductSelectedFiles = [];
+      revokeProductPreviewObjectUrls();
     }
     updateModalScrollLock();
   };
@@ -4179,8 +4385,45 @@ document.addEventListener("DOMContentLoaded", () => {
       return sanitizeStoreId(authState.storeId);
     }
 
+    const search = new URLSearchParams(window.location.search || "");
+    const hashParams = new URLSearchParams(String(window.location.hash || "").replace(/^#/, ""));
+    const fromUrl = sanitizeStoreId(search.get("store") || search.get("subdomain") || hashParams.get("store") || hashParams.get("subdomain") || "");
+    if (fromUrl) {
+      return fromUrl;
+    }
+
+    const host = String(window.location.hostname || "").toLowerCase();
+    if (host && host.includes(".")) {
+      const hostPrefix = sanitizeStoreId(host.split(".")[0] || "");
+      if (hostPrefix && hostPrefix !== "www") {
+        return hostPrefix;
+      }
+    }
+
     const context = getCurrentStoreContext();
     return sanitizeStoreId(context.subdomain || "") || "default-store";
+  };
+
+  const buildStorageBucketCandidates = () => {
+    const fromApp = String(firebase?.apps?.[0]?.options?.storageBucket || "").trim();
+    const raw = [
+      fromApp,
+      FIREBASE_CONFIG.storageBucket,
+      ...STORAGE_BUCKET_CANDIDATES
+    ].map((value) => String(value || "").trim()).filter(Boolean);
+
+    const expanded = [];
+    raw.forEach((bucket) => {
+      expanded.push(bucket);
+      if (bucket.endsWith(".appspot.com")) {
+        expanded.push(bucket.replace(/\.appspot\.com$/i, ".firebasestorage.app"));
+      }
+      if (bucket.endsWith(".firebasestorage.app")) {
+        expanded.push(bucket.replace(/\.firebasestorage\.app$/i, ".appspot.com"));
+      }
+    });
+
+    return expanded.filter((value, index, arr) => arr.indexOf(value) === index);
   };
 
   const sanitizeStorageFileName = (name) => {
@@ -4250,6 +4493,72 @@ document.addEventListener("DOMContentLoaded", () => {
     return Math.max(0, Math.floor((base64.length * 3) / 4));
   };
 
+  const dataUrlToBlob = (dataUrl) => {
+    const parts = String(dataUrl || "").split(",");
+    const header = parts[0] || "";
+    const base64 = parts[1] || "";
+    const mimeMatch = header.match(/data:([^;]+);base64/i);
+    const mimeType = mimeMatch && mimeMatch[1] ? mimeMatch[1] : "image/jpeg";
+    const binary = window.atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return new Blob([bytes], { type: mimeType });
+  };
+
+  const sleep = (ms) => new Promise((resolve) => {
+    window.setTimeout(resolve, Math.max(0, Number(ms) || 0));
+  });
+
+  const optimizeProductPhotoForUpload = async (file, index) => {
+    const rawType = String(file?.type || "").toLowerCase();
+    const isImage = rawType.startsWith("image/");
+    if (!isImage) {
+      return file;
+    }
+
+    // Small photos are uploaded as-is to avoid unnecessary recompression.
+    if ((Number(file?.size) || 0) <= PRODUCT_PHOTO_TARGET_UPLOAD_BYTES * 0.8) {
+      return file;
+    }
+
+    const sourceDataUrl = await readFileAsDataUrl(file);
+    const sourceImage = await loadImageFromDataUrl(sourceDataUrl);
+    const size = clampDimension(sourceImage.width, sourceImage.height, PRODUCT_PHOTO_MAX_DIMENSION);
+    const canvas = document.createElement("canvas");
+    canvas.width = size.width;
+    canvas.height = size.height;
+    const context = canvas.getContext("2d", { alpha: false });
+    if (!context) {
+      return file;
+    }
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, size.width, size.height);
+    context.drawImage(sourceImage, 0, 0, size.width, size.height);
+
+    let quality = 0.9;
+    let dataUrl = canvasToDataUrl(canvas, quality);
+    let bytes = estimateDataUrlBytes(dataUrl);
+    while (bytes > PRODUCT_PHOTO_TARGET_UPLOAD_BYTES && quality > 0.56) {
+      quality -= 0.06;
+      dataUrl = canvasToDataUrl(canvas, quality);
+      bytes = estimateDataUrlBytes(dataUrl);
+    }
+
+    const blob = dataUrlToBlob(dataUrl);
+    if (!blob || !blob.size || blob.size >= (Number(file?.size) || 0)) {
+      return file;
+    }
+
+    const baseName = String(file?.name || `photo-${index + 1}`).replace(/\.[^.]+$/, "");
+    return new File([blob], `${baseName}.jpg`, {
+      type: "image/jpeg",
+      lastModified: Date.now()
+    });
+  };
+
   const buildEmbeddedProductPhoto = async (file, policy, index, uploadErrorCode) => {
     const sourceDataUrl = await readFileAsDataUrl(file);
     const sourceImage = await loadImageFromDataUrl(sourceDataUrl);
@@ -4305,50 +4614,60 @@ document.addEventListener("DOMContentLoaded", () => {
     return "jpg";
   };
 
-  const uploadProductPhotoToStorage = async (file, storeId, productId, index, policy) => {
-    const extension = getExtensionFromFile(file);
+  const uploadProductPhotoToStorage = async (file, storeId, productId, index) => {
+    const uploadFile = await optimizeProductPhotoForUpload(file, index);
+    const extension = getExtensionFromFile(uploadFile);
     const nameRoot = sanitizeStorageFileName(String(file?.name || `photo-${index + 1}`)).replace(/\.[^.]+$/, "");
     const objectPath = `stores/${storeId}/products/${productId}/${Date.now()}-${index + 1}-${nameRoot}.${extension}`;
-    const metadata = { contentType: String(file?.type || "image/jpeg") };
-    const bucketCandidates = [
-      FIREBASE_CONFIG.storageBucket,
-      ...STORAGE_BUCKET_CANDIDATES
-    ].map((value) => String(value || "").trim()).filter(Boolean).filter((value, i, arr) => arr.indexOf(value) === i);
+    const metadata = {
+      contentType: String(uploadFile?.type || file?.type || "image/jpeg"),
+      cacheControl: "public,max-age=31536000,immutable"
+    };
+    const bucketCandidates = buildStorageBucketCandidates();
 
     let lastError = null;
     for (let i = 0; i < bucketCandidates.length; i += 1) {
-      try {
-        const bucket = bucketCandidates[i];
-        const storage = getStorageClientForBucket(bucket);
-        const ref = storage.ref().child(objectPath);
-        const snapshot = await withTimeout(ref.put(file, metadata), 15000, "storage-upload-timeout");
-        const downloadUrl = await withTimeout(snapshot.ref.getDownloadURL(), 10000, "storage-url-timeout");
+      const bucket = bucketCandidates[i];
+      const storage = getStorageClientForBucket(bucket);
+      const ref = storage.ref().child(objectPath);
 
-        return {
-          id: `photo-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
-          name: String(file?.name || `photo-${index + 1}`).trim() || `photo-${index + 1}`,
-          type: String(file?.type || "image/jpeg"),
-          size: Number(file?.size) || 0,
-          url: downloadUrl,
-          src: downloadUrl,
-          path: objectPath,
-          bucket,
-          storageSync: "firebase-storage",
-          updatedAt: new Date().toISOString()
-        };
-      } catch (error) {
-        lastError = error;
+      for (let attempt = 1; attempt <= STORAGE_UPLOAD_RETRY_ATTEMPTS; attempt += 1) {
+        try {
+          const snapshot = await withTimeout(ref.put(uploadFile, metadata), STORAGE_UPLOAD_TIMEOUT_MS, "storage-upload-timeout");
+          const downloadUrl = await withTimeout(snapshot.ref.getDownloadURL(), STORAGE_URL_TIMEOUT_MS, "storage-url-timeout");
+
+          return {
+            id: `photo-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+            name: String(file?.name || `photo-${index + 1}`).trim() || `photo-${index + 1}`,
+            type: String(uploadFile?.type || file?.type || "image/jpeg"),
+            size: Number(uploadFile?.size || file?.size) || 0,
+            url: downloadUrl,
+            src: downloadUrl,
+            path: objectPath,
+            bucket,
+            storageSync: "firebase-storage",
+            updatedAt: new Date().toISOString()
+          };
+        } catch (error) {
+          lastError = error;
+          if (attempt < STORAGE_UPLOAD_RETRY_ATTEMPTS) {
+            await sleep(400 * attempt);
+          }
+        }
       }
     }
 
-    console.warn("[admin] storage upload failed, using embedded fallback", {
+    console.warn("[admin] storage upload failed", {
       storeId,
       productId,
       fileName: String(file?.name || ""),
       error: lastError
     });
 
-    return buildEmbeddedProductPhoto(file, policy, index, lastError?.code || lastError?.message || "storage-upload-failed");
+    const uploadError = new Error("storage-upload-failed");
+    uploadError.code = lastError?.code || lastError?.message || "storage-upload-failed";
+    uploadError.cause = lastError || null;
+    throw uploadError;
   };
 
   // Uploads the store avatar to Firebase Storage so it stays small enough to sync
@@ -4358,10 +4677,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const nameRoot = sanitizeStorageFileName(String(file?.name || "avatar")).replace(/\.[^.]+$/, "");
     const objectPath = `stores/${storeId}/avatar/${Date.now()}-${nameRoot}.${extension}`;
     const metadata = { contentType: String(file?.type || "image/jpeg") };
-    const bucketCandidates = [
-      FIREBASE_CONFIG.storageBucket,
-      ...STORAGE_BUCKET_CANDIDATES
-    ].map((value) => String(value || "").trim()).filter(Boolean).filter((value, i, arr) => arr.indexOf(value) === i);
+    const bucketCandidates = buildStorageBucketCandidates();
 
     let lastError = null;
     for (let i = 0; i < bucketCandidates.length; i += 1) {
@@ -4410,14 +4726,35 @@ document.addEventListener("DOMContentLoaded", () => {
       return [];
     }
 
-    const policy = getPhotoPolicyByPlan();
     const storeId = resolveStoreIdForUploads();
     const safeProductId = sanitizeStorageFileName(String(productId || `product-${Date.now()}`));
-    const results = [];
-    for (let index = 0; index < list.length; index += 1) {
-      const entry = await uploadProductPhotoToStorage(list[index], storeId, safeProductId, index, policy);
-      results.push(entry);
-    }
+    const photoPolicy = getPhotoPolicyByPlan();
+    const results = new Array(list.length);
+    const concurrency = Math.max(1, Math.min(PRODUCT_UPLOAD_CONCURRENCY, list.length));
+    let cursor = 0;
+
+    const worker = async () => {
+      while (cursor < list.length) {
+        const index = cursor;
+        cursor += 1;
+        let entry;
+        try {
+          entry = await uploadProductPhotoToStorage(list[index], storeId, safeProductId, index);
+        } catch (error) {
+          console.warn("[admin] product photo storage upload failed, using embedded fallback", {
+            storeId,
+            productId: safeProductId,
+            index,
+            fileName: String(list[index]?.name || ""),
+            error
+          });
+          entry = await buildEmbeddedProductPhoto(list[index], photoPolicy, index, error?.code || error?.message);
+        }
+        results[index] = entry;
+      }
+    };
+
+    await Promise.all(Array.from({ length: concurrency }, () => worker()));
     return results;
   };
 
@@ -4518,6 +4855,9 @@ document.addEventListener("DOMContentLoaded", () => {
     updateProductDescriptionCounter();
     productSavedMessage.classList.remove("error");
     productSavedMessage.textContent = "";
+    currentProductStoredPhotos = [];
+    currentProductSelectedFiles = [];
+    refreshProductPhotoPreview();
 
     if (mode === "edit" && product) {
       productEditingId.value = product.id;
@@ -4533,8 +4873,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       syncProductSizesVisibility();
       applyProductSizes(product.sizes || []);
-      productOldPrice.value = product.oldPrice || "";
-      productNewPrice.value = product.newPrice || "";
       productVisible.checked = product.visible !== false;
       const categoryNames = getCategoryNames(categories);
       const selectedCategories = Array.isArray(product.categories) && product.categories.length
@@ -4543,6 +4881,9 @@ document.addEventListener("DOMContentLoaded", () => {
       Array.from(productCategories.querySelectorAll('input[type="checkbox"]')).forEach((checkbox) => {
         checkbox.checked = selectedCategories.includes(checkbox.value) && categoryNames.includes(checkbox.value);
       });
+      currentProductStoredPhotos = Array.isArray(product.photos) ? product.photos : [];
+      currentProductSelectedFiles = [];
+      refreshProductPhotoPreview();
       updateProductNameCounter();
       updateProductDescriptionCounter();
       return;
@@ -4557,12 +4898,70 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     syncProductSizesVisibility();
     clearProductSizesSelection();
-    productOldPrice.value = "";
-    productNewPrice.value = "";
     productVisible.checked = true;
     Array.from(productCategories.querySelectorAll('input[type="checkbox"]')).forEach((checkbox) => {
       checkbox.checked = false;
     });
+    refreshProductPhotoPreview();
+  };
+
+  const SAVE_ACQUIRER_SECRETS_URL = "https://us-central1-lavka-shop.cloudfunctions.net/saveStoreAcquirerSecrets";
+  const GET_ACQUIRER_SECRETS_STATUS_URL = "https://us-central1-lavka-shop.cloudfunctions.net/getStoreAcquirerSecretsStatus";
+  let acquirerSecretsStatus = { hasMonoSecret: false, hasLiqpayPrivateKey: false };
+
+  // Mono/LiqPay secret keys never round-trip through localStorage/Firestore
+  // (open rules would expose them) — only this endpoint tells us whether a
+  // key is already saved, so the password fields can show a placeholder
+  // instead of the real value.
+  const refreshAcquirerSecretsStatus = async () => {
+    const storeId = resolveStoreIdForUploads();
+    if (!storeId || storeId === "default-store") return;
+
+    try {
+      const response = await fetch(`${GET_ACQUIRER_SECRETS_STATUS_URL}?storeId=${encodeURIComponent(storeId)}`);
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data || !data.ok) return;
+
+      acquirerSecretsStatus = {
+        hasMonoSecret: Boolean(data.hasMonoSecret),
+        hasLiqpayPrivateKey: Boolean(data.hasLiqpayPrivateKey)
+      };
+
+      if (paymentMonoSecret) {
+        paymentMonoSecret.placeholder = acquirerSecretsStatus.hasMonoSecret
+          ? "Збережено • введіть новий, щоб змінити"
+          : "Вставте API key еквайрингу mono";
+      }
+      if (paymentLiqpayPrivateKey) {
+        paymentLiqpayPrivateKey.placeholder = acquirerSecretsStatus.hasLiqpayPrivateKey
+          ? "Збережено • введіть новий, щоб змінити"
+          : "Приватний ключ LiqPay";
+      }
+    } catch (error) {
+      console.warn("refreshAcquirerSecretsStatus error:", error);
+    }
+  };
+
+  const saveAcquirerSecrets = async ({ monoSecret, liqpayPrivateKey }) => {
+    const storeId = resolveStoreIdForUploads();
+    if (!storeId || storeId === "default-store") return;
+
+    const payload = { storeId };
+    if (monoSecret) payload.paymentMonoSecret = monoSecret;
+    if (liqpayPrivateKey) payload.paymentLiqpayPrivateKey = liqpayPrivateKey;
+    if (!("paymentMonoSecret" in payload) && !("paymentLiqpayPrivateKey" in payload)) return;
+
+    const response = await fetch(SAVE_ACQUIRER_SECRETS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data || !data.ok) {
+      throw new Error(String(data && data.error || "save-secrets-failed"));
+    }
+
+    await refreshAcquirerSecretsStatus();
   };
 
   const mergeAndSaveSettings = (partialPayload) => {
@@ -4643,7 +5042,7 @@ document.addEventListener("DOMContentLoaded", () => {
       paymentMonoEnabled.checked = Boolean(settings.paymentMonoEnabled);
     }
     if (paymentMonoSecret) {
-      paymentMonoSecret.value = String(settings.paymentMonoSecret || "").trim();
+      paymentMonoSecret.value = "";
     }
     if (paymentLiqpayEnabled) {
       paymentLiqpayEnabled.checked = Boolean(settings.paymentLiqpayEnabled);
@@ -4652,8 +5051,9 @@ document.addEventListener("DOMContentLoaded", () => {
       paymentLiqpayPublicKey.value = String(settings.paymentLiqpayPublicKey || "").trim();
     }
     if (paymentLiqpayPrivateKey) {
-      paymentLiqpayPrivateKey.value = String(settings.paymentLiqpayPrivateKey || "").trim();
+      paymentLiqpayPrivateKey.value = "";
     }
+    void refreshAcquirerSecretsStatus();
     if (paymentCodEnabled) {
       paymentCodEnabled.checked = settings.paymentCodEnabled ?? true;
     }
@@ -4838,6 +5238,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
       orders = latestOrders;
       saveOrders(orders);
+
+      // Списати залишки для нових замовлень, що прийшли в реальному часі.
+      applyInventoryForPendingOrders();
+
       renderOrdersTable(orders);
       if (currentSection === "sales") {
         renderSalesFromForm();
@@ -5398,7 +5802,7 @@ document.addEventListener("DOMContentLoaded", () => {
       updateCategoryNameCounter();
     });
 
-    categoryCreateForm.addEventListener("submit", (event) => {
+    categoryCreateForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const normalized = normalizeCategoryName(categoryNameInput.value);
 
@@ -5428,6 +5832,16 @@ document.addEventListener("DOMContentLoaded", () => {
         categorySavedMessage.textContent = "Категорія з такою назвою вже існує.";
         categorySavedMessage.classList.add("error");
         return;
+      }
+
+      if (typeof window.lavkaCheckActionRateLimit === "function") {
+        const storeIdForLimit = await getAdminStoreId();
+        const rateLimit = await window.lavkaCheckActionRateLimit("create-category", storeIdForLimit);
+        if (!rateLimit.ok) {
+          categorySavedMessage.textContent = "Забагато категорій створено за короткий час. Спробуйте трохи пізніше.";
+          categorySavedMessage.classList.add("error");
+          return;
+        }
       }
 
       categories.push({
@@ -5461,6 +5875,12 @@ document.addEventListener("DOMContentLoaded", () => {
           `Підтвердіть видалення замовлення ${orderIdToDelete}.\n\nЦю дію неможливо скасувати.`
         );
         if (!confirmed) return;
+
+        const restoreResult = restoreInventoryForOrder(orderToDelete);
+        if (restoreResult.restored) {
+          saveProducts(products);
+          renderProductsTable(products);
+        }
 
         orders = orders.filter((item) => item.id !== orderIdToDelete);
         saveOrders(orders);
@@ -5784,14 +6204,20 @@ document.addEventListener("DOMContentLoaded", () => {
         productSavedMessage.textContent = photoError;
         productSavedMessage.classList.add("error");
         productPhotos.value = "";
+        currentProductSelectedFiles = [];
+        refreshProductPhotoPreview();
         return;
       }
       if (files.length) {
         const totalBytes = files.reduce((sum, file) => sum + (Number(file?.size) || 0), 0);
         const policy = getPhotoPolicyByPlan();
         productSavedMessage.textContent = `Обрано ${files.length} з ${policy.maxPhotos}. Загальна вага: ${formatMegabytes(totalBytes)} МБ.`;
+        currentProductSelectedFiles = files;
+        refreshProductPhotoPreview();
       } else {
+        currentProductSelectedFiles = [];
         productSavedMessage.textContent = getPhotoPolicyHint();
+        refreshProductPhotoPreview();
       }
       productSavedMessage.classList.remove("error");
     });
@@ -5810,10 +6236,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const normalizedUnit = String(productUnit?.value || "шт").trim() || "шт";
       const isClothing = Boolean(productIsClothing?.checked);
       const selectedSizes = isClothing ? collectProductSizes() : [];
-      const parsedOldPrice = productOldPrice.value.trim() ? Number.parseFloat(productOldPrice.value) : null;
-      const parsedNewPrice = productNewPrice.value.trim() ? Number.parseFloat(productNewPrice.value) : null;
       const isVisible = Boolean(productVisible.checked);
-      const files = Array.from(productPhotos.files || []);
+      const files = Array.isArray(currentProductSelectedFiles) ? currentProductSelectedFiles : [];
       const categoryNames = getCategoryNames(categories);
       const existingProduct = editingId ? products.find((product) => product.id === editingId) : null;
 
@@ -5839,24 +6263,6 @@ document.addEventListener("DOMContentLoaded", () => {
         productSavedMessage.classList.add("error");
         return;
       }
-
-      const hasOldPrice = Number.isFinite(parsedOldPrice) && parsedOldPrice > 0;
-      const hasNewPrice = Number.isFinite(parsedNewPrice) && parsedNewPrice > 0;
-
-      if ((hasOldPrice && !hasNewPrice) || (!hasOldPrice && hasNewPrice)) {
-        productSavedMessage.textContent = "Для порівняння ціни вкажіть і стару, і нову ціну.";
-        productSavedMessage.classList.add("error");
-        return;
-      }
-
-      if (hasOldPrice && hasNewPrice && parsedOldPrice <= parsedNewPrice) {
-        productSavedMessage.textContent = "Для знижки стара ціна має бути більшою за нову.";
-        productSavedMessage.classList.add("error");
-        return;
-      }
-
-      const normalizedOldPrice = hasOldPrice ? Math.round(parsedOldPrice * 100) / 100 : null;
-      const normalizedNewPrice = hasNewPrice ? Math.round(parsedNewPrice * 100) / 100 : null;
 
       if (containsProfanity(normalizedName) || containsProfanity(normalizedDescription)) {
         productSavedMessage.textContent = "Назва або опис містять нецензурні слова.";
@@ -5891,9 +6297,21 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      if (!editingId && typeof window.lavkaCheckActionRateLimit === "function") {
+        const storeIdForLimit = await getAdminStoreId();
+        const rateLimit = await window.lavkaCheckActionRateLimit("create-product", storeIdForLimit);
+        if (!rateLimit.ok) {
+          productSavedMessage.textContent = "Забагато товарів створено за короткий час. Спробуйте трохи пізніше.";
+          productSavedMessage.classList.add("error");
+          return;
+        }
+      }
+
       const nextProductId = editingId || `product-${Date.now()}`;
 
-      let nextPhotos = existingProduct?.photos || [];
+      let nextPhotos = Array.isArray(currentProductStoredPhotos)
+        ? [...currentProductStoredPhotos]
+        : (existingProduct?.photos || []);
       if (files.length) {
         try {
           productSavedMessage.textContent = "Завантажуємо фото у базу...";
@@ -5922,13 +6340,11 @@ document.addEventListener("DOMContentLoaded", () => {
         category: normalizedCategories[0],
         categories: normalizedCategories,
         description: normalizedDescription,
-        price: normalizedNewPrice || parsedPrice,
+        price: parsedPrice,
         unit: normalizedUnit,
         isClothing,
         sizes: selectedSizes,
         sizeStocks: preservedSizeStocks,
-        oldPrice: normalizedOldPrice,
-        newPrice: normalizedNewPrice,
         stock: isClothing ? totalStockFromSizes : (existingProduct?.stock ?? 0),
         discount: existingProduct?.discount || null,
         visible: isVisible,
@@ -5936,6 +6352,11 @@ document.addEventListener("DOMContentLoaded", () => {
         createdAt: existingProduct?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
+
+      currentProductStoredPhotos = Array.isArray(nextProduct.photos) ? nextProduct.photos : [];
+      currentProductSelectedFiles = [];
+      productPhotos.value = "";
+      refreshProductPhotoPreview();
 
       if (editingId) {
         products = products.map((product) => (product.id === editingId ? nextProduct : product));
@@ -6056,33 +6477,15 @@ document.addEventListener("DOMContentLoaded", () => {
             ? product.price * (value / 100)
             : value;
 
-          const sourcePrice = Number.isFinite(product.newPrice) && product.newPrice > 0
-            ? product.newPrice
-            : product.price;
-
           const nextPrice = operation === "decrease"
-            ? Math.max(1, sourcePrice - delta)
-            : sourcePrice + delta;
+            ? Math.max(1, product.price - delta)
+            : product.price + delta;
 
           const roundedNextPrice = Math.round(nextPrice * 100) / 100;
-
-          const hasComparePrices = Number.isFinite(product.oldPrice)
-            && Number.isFinite(product.newPrice)
-            && product.oldPrice > 0
-            && product.newPrice > 0;
-
-          const nextOldPrice = hasComparePrices && product.oldPrice > roundedNextPrice
-            ? product.oldPrice
-            : null;
-          const nextNewPrice = hasComparePrices && product.oldPrice > roundedNextPrice
-            ? roundedNextPrice
-            : null;
 
           return {
             ...product,
             price: roundedNextPrice,
-            oldPrice: nextOldPrice,
-            newPrice: nextNewPrice,
             updatedAt: new Date().toISOString()
           };
         });
@@ -6156,6 +6559,29 @@ document.addEventListener("DOMContentLoaded", () => {
         saveProducts(products);
         renderProductsTable(products);
         showBulkMessage("Знижку для вибраних товарів оновлено.");
+      });
+    }
+
+    if (applyBulkDelete) {
+      applyBulkDelete.addEventListener("click", () => {
+        const selected = getSelectedProducts();
+        if (!selected.length) {
+          showBulkMessage("Оберіть хоча б один товар.", true);
+          return;
+        }
+
+        const confirmed = window.confirm(
+          `Видалити вибрані товари (${selected.length})?\n\nЦю дію неможливо скасувати.`
+        );
+        if (!confirmed) return;
+
+        const selectedIds = new Set(selected.map((item) => item.id));
+        products = products.filter((item) => !selectedIds.has(item.id));
+        selectedProductIds.clear();
+
+        saveProducts(products);
+        renderProductsTable(products);
+        showBulkMessage(`Видалено товарів: ${selected.length}.`);
       });
     }
 
@@ -6563,7 +6989,7 @@ document.addEventListener("DOMContentLoaded", () => {
       paymentPrepaymentEnabled.addEventListener("change", syncPrepaymentControls);
     }
 
-    paymentMethodsForm.addEventListener("submit", (event) => {
+    paymentMethodsForm.addEventListener("submit", async (event) => {
       event.preventDefault();
 
       const monoEnabled = Boolean(paymentMonoEnabled?.checked);
@@ -6575,6 +7001,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const monoSecret = String(paymentMonoSecret?.value || "").trim();
       const liqpayPublicKey = String(paymentLiqpayPublicKey?.value || "").trim();
       const liqpayPrivateKey = String(paymentLiqpayPrivateKey?.value || "").trim();
+      const hasMonoSecret = Boolean(monoSecret || acquirerSecretsStatus.hasMonoSecret);
+      const hasLiqpayPrivateKey = Boolean(liqpayPrivateKey || acquirerSecretsStatus.hasLiqpayPrivateKey);
       const codFee = String(paymentCodFee?.value || "").trim();
       const prepaymentAmount = Math.max(0, Math.round(Number(paymentPrepaymentAmount?.value) || 0));
       const prepaymentAcquirer = (monoEnabled && paymentPrepaymentViaMono?.checked)
@@ -6586,7 +7014,7 @@ document.addEventListener("DOMContentLoaded", () => {
         paymentsSavedMessage.classList.remove("error");
       }
 
-      if (monoEnabled && !monoSecret) {
+      if (monoEnabled && !hasMonoSecret) {
         if (paymentsSavedMessage) {
           paymentsSavedMessage.textContent = "Для Plata by mono вкажіть Secret key (API key).";
           paymentsSavedMessage.classList.add("error");
@@ -6594,7 +7022,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      if (liqpayEnabled && (!liqpayPublicKey || !liqpayPrivateKey)) {
+      if (liqpayEnabled && (!liqpayPublicKey || !hasLiqpayPrivateKey)) {
         if (paymentsSavedMessage) {
           paymentsSavedMessage.textContent = "Для LiqPay вкажіть Public key і Private key.";
           paymentsSavedMessage.classList.add("error");
@@ -6635,12 +7063,21 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      try {
+        await saveAcquirerSecrets({ monoSecret, liqpayPrivateKey });
+      } catch (error) {
+        console.warn("saveAcquirerSecrets error:", error);
+        if (paymentsSavedMessage) {
+          paymentsSavedMessage.textContent = "Не вдалося зберегти API ключі. Спробуйте ще раз.";
+          paymentsSavedMessage.classList.add("error");
+        }
+        return;
+      }
+
       mergeAndSaveSettings({
         paymentMonoEnabled: monoEnabled,
-        paymentMonoSecret: monoSecret,
         paymentLiqpayEnabled: liqpayEnabled,
         paymentLiqpayPublicKey: liqpayPublicKey,
-        paymentLiqpayPrivateKey: liqpayPrivateKey,
         paymentCodEnabled: codEnabled,
         paymentCodFee: codFee,
         paymentPrepaymentEnabled: prepaymentEnabled,
@@ -6650,6 +7087,9 @@ document.addEventListener("DOMContentLoaded", () => {
         paymentBankRequisites: bankRequisites,
         paymentDeliveryMatrix: collectPaymentDeliveryMatrixFromUi()
       });
+
+      if (paymentMonoSecret) paymentMonoSecret.value = "";
+      if (paymentLiqpayPrivateKey) paymentLiqpayPrivateKey.value = "";
 
       syncPrepaymentControls();
 
@@ -6697,6 +7137,22 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   setupRangePresets(viewsRangePresets, viewsRangeFrom, viewsRangeTo, renderViewsCustomRange);
+
+  const resetViewsStatsBtn = document.getElementById("resetViewsStatsBtn");
+  if (resetViewsStatsBtn) {
+    resetViewsStatsBtn.addEventListener("click", () => {
+      const confirmed = window.confirm(
+        "Скинути всю статистику переглядів до нуля?\n\nЦю дію неможливо скасувати."
+      );
+      if (!confirmed) return;
+      localStorage.removeItem(VISITOR_EVENTS_KEY);
+      renderViewsStats();
+      if (viewsRangeResult) {
+        viewsRangeResult.classList.remove("error");
+        viewsRangeResult.textContent = "Оберіть дати, щоб побачити кількість унікальних відвідувачів.";
+      }
+    });
+  }
 
   if (salesRangeForm) {
     salesRangeForm.addEventListener("submit", (event) => {

@@ -605,6 +605,25 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   };
 
+  // Re-checked at render time and again at submit, since stock can change on another tab/device between adding to cart and placing the order.
+  const getAvailableStockForCartItem = (item) => {
+    const products = readProducts();
+    const product = findMatchingProduct(products, item);
+    if (!product) return Infinity;
+    const size = String(item?.size || "").trim().toUpperCase();
+    if (size && product?.sizeStocks && typeof product.sizeStocks === "object") {
+      const sizeStock = Number.parseInt(product.sizeStocks[size], 10);
+      return Number.isFinite(sizeStock) && sizeStock > 0 ? sizeStock : 0;
+    }
+    const stock = Number.parseInt(product?.stock, 10);
+    return Number.isFinite(stock) && stock > 0 ? stock : 0;
+  };
+
+  const getOverstockCartItems = () => cartState.filter((item) => {
+    const qty = Math.max(0, Number(item.qty) || 0);
+    return qty > getAvailableStockForCartItem(item);
+  });
+
   const saveOrders = (orders) => {
     localStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
   };
@@ -629,6 +648,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let cartState = readCart();
   let appliedPromo = null;
   let isOrderingBlockedByPlanExpiry = false;
+  let isOrdersDisabledByOwner = false;
   let novaCitySearchTimer = null;
   let novaLastCities = [];
   let novaLastBranches = [];
@@ -695,7 +715,7 @@ document.addEventListener("DOMContentLoaded", () => {
       enabled: Boolean(activeSettings.paymentMonoEnabled),
       value: "Plata by mono",
       title: "Plata by mono",
-      subtitle: "Еквайринг Monobank",
+      subtitle: "Оплата карткою будь-якого банку: Visa, Mastercard, Apple Pay, Google Pay",
       logo: "plata-by-mono.png"
     },
     {
@@ -703,7 +723,7 @@ document.addEventListener("DOMContentLoaded", () => {
       enabled: Boolean(activeSettings.paymentLiqpayEnabled),
       value: "LiqPay",
       title: "LiqPay",
-      subtitle: "Еквайринг ПриватБанк",
+      subtitle: "Оплата карткою будь-якого банку: Visa, Mastercard, Apple Pay, Google Pay",
       logo: "liqpay.png"
     },
     {
@@ -1567,6 +1587,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const cartId = String(item.id || `${name}-${index}`).trim();
       const photo = String(item.image || "https://picsum.photos/seed/lavka-order-item/80/80").trim();
       const encodedCartId = encodeURIComponent(cartId);
+      const atStockLimit = qty >= getAvailableStockForCartItem(item);
 
       return `
         <article class="cart-line">
@@ -1581,7 +1602,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="cart-line-controls">
             <button type="button" class="cart-qty-btn" data-action="decrease" data-cart-id="${encodedCartId}" aria-label="Зменшити кількість">−</button>
             <span class="cart-line-qty">${qty}</span>
-            <button type="button" class="cart-qty-btn" data-action="increase" data-cart-id="${encodedCartId}" aria-label="Збільшити кількість">+</button>
+            <button type="button" class="cart-qty-btn" data-action="increase" data-cart-id="${encodedCartId}"${atStockLimit ? ' disabled aria-disabled="true" title="Досягнуто максимальний залишок"' : ""} aria-label="Збільшити кількість">+</button>
             <button type="button" class="cart-remove-btn" data-action="remove" data-cart-id="${encodedCartId}">Видалити</button>
           </div>
         </article>
@@ -1591,11 +1612,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const baseCheckoutEnabled = () => {
     const { totalItems } = getCartTotals();
-    return !isOrderingBlockedByPlanExpiry && totalItems > 0 && shippingMethods.length > 0 && paymentMethods.length > 0;
+    return !isOrderingBlockedByPlanExpiry && !isOrdersDisabledByOwner && totalItems > 0 && shippingMethods.length > 0 && paymentMethods.length > 0;
   };
 
   const updateAvailabilityMessage = () => {
     if (!checkoutMessage) return;
+
+    if (isOrdersDisabledByOwner) {
+      checkoutMessage.classList.add("error");
+      checkoutMessage.textContent = "Магазин тимчасово не приймає замовлення. Спробуйте пізніше.";
+      return;
+    }
 
     if (isOrderingBlockedByPlanExpiry) {
       checkoutMessage.classList.add("error");
@@ -1637,12 +1664,35 @@ document.addEventListener("DOMContentLoaded", () => {
   const syncOrderLockUi = () => {
     isOrderingBlockedByPlanExpiry = hasExpiredSubscription();
     if (checkoutOrderStatusBadge) {
-      checkoutOrderStatusBadge.hidden = !isOrderingBlockedByPlanExpiry;
+      checkoutOrderStatusBadge.hidden = !(isOrderingBlockedByPlanExpiry || isOrdersDisabledByOwner);
     }
     applyWatermarkVisibility();
   };
 
+  // Дозволяє власнику вимкнути прийом замовлень для конкретного магазину
+  // (додавання в кошик і перехід у чекаут лишаються доступними).
+  const watchOwnerOrdersDisabledFlag = async () => {
+    try {
+      const storeId = await resolveStoreIdForNotify();
+      if (!storeId || storeId === "default-store") return;
+      if (!window.firebase || !firebase.apps || !firebase.apps.length) return;
+
+      firebase.firestore().collection("stores_registry").doc(storeId).onSnapshot((snap) => {
+        const data = snap.exists ? (snap.data() || {}) : {};
+        isOrdersDisabledByOwner = data.ordersDisabled === true;
+        syncOrderLockUi();
+        updateSubmitState();
+        updateAvailabilityMessage();
+      }, (error) => {
+        console.warn("[checkout] failed to watch ordersDisabled flag:", error);
+      });
+    } catch (error) {
+      console.warn("[checkout] watchOwnerOrdersDisabledFlag failed:", error);
+    }
+  };
+
   syncOrderLockUi();
+  watchOwnerOrdersDisabledFlag();
   updateCheckoutSummary();
   renderCartSummary();
   showPaymentReturnStatus();
@@ -1714,7 +1764,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (index === -1) return;
 
       if (action === "increase") {
-        cartState[index].qty = Math.max(1, Number(cartState[index].qty) || 1) + 1;
+        const current = Math.max(1, Number(cartState[index].qty) || 1);
+        if (current < getAvailableStockForCartItem(cartState[index])) {
+          cartState[index].qty = current + 1;
+        }
       }
 
       if (action === "decrease") {
@@ -1751,6 +1804,15 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      if (isOrdersDisabledByOwner) {
+        if (checkoutMessage) {
+          checkoutMessage.classList.add("error");
+          checkoutMessage.textContent = "Магазин тимчасово не приймає замовлення. Спробуйте пізніше.";
+        }
+        updateSubmitState();
+        return;
+      }
+
       if (!baseCheckoutEnabled()) {
         return;
       }
@@ -1761,6 +1823,18 @@ document.addEventListener("DOMContentLoaded", () => {
           checkoutMessage.classList.add("error");
           const names = unavailableItems.map((item) => String(item?.name || "товар")).join(", ");
           checkoutMessage.textContent = `Немає в наявності: ${names}. Видаліть ці товари з кошика, щоб оформити замовлення.`;
+        }
+        return;
+      }
+
+      const overstockItems = getOverstockCartItems();
+      if (overstockItems.length) {
+        if (checkoutMessage) {
+          checkoutMessage.classList.add("error");
+          const names = overstockItems
+            .map((item) => `${String(item?.name || "товар")} (доступно: ${getAvailableStockForCartItem(item)})`)
+            .join(", ");
+          checkoutMessage.textContent = `Недостатньо залишку: ${names}. Зменшіть кількість у кошику, щоб оформити замовлення.`;
         }
         return;
       }
@@ -1812,6 +1886,25 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      if (submitOrderBtn) {
+        submitOrderBtn.disabled = true;
+      }
+
+      if (typeof window.lavkaCheckActionRateLimit === "function") {
+        const storeIdForLimit = await resolveStoreIdForNotify();
+        const rateLimit = await window.lavkaCheckActionRateLimit("create-order", storeIdForLimit);
+        if (!rateLimit.ok) {
+          if (submitOrderBtn) {
+            submitOrderBtn.disabled = false;
+          }
+          if (checkoutMessage) {
+            checkoutMessage.classList.add("error");
+            checkoutMessage.textContent = "Забагато спроб оформити замовлення. Спробуйте ще раз через хвилину.";
+          }
+          return;
+        }
+      }
+
       const { totalAmount, promoDiscount } = getCartTotals();
       const payableAmount = getPayableAmount();
       const prepaymentAmount = isPrepaymentMethod(paymentMethod) ? payableAmount : 0;
@@ -1821,7 +1914,8 @@ document.addEventListener("DOMContentLoaded", () => {
         sku: String(item.sku || item.id || "-"),
         name: String(item.name || "Товар"),
         price: Math.max(0, Number(item.price) || 0),
-        qty: Math.max(1, Number(item.qty) || 1)
+        qty: Math.max(1, Number(item.qty) || 1),
+        size: String(item.size || "").trim().toUpperCase()
       }));
 
       const nextOrder = {
@@ -2084,4 +2178,6 @@ document.addEventListener("DOMContentLoaded", () => {
       refreshFromSettings();
     }
   });
+
+  document.body.classList.remove("lavka-booting");
 });

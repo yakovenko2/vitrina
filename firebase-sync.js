@@ -27,6 +27,12 @@
   const DELETED_CLIENTS_COLLECTION = "clients_registry";
   const IP_CACHE_KEY = "lavkaClientIpCache";
   const IP_CACHE_TTL_MS = 10 * 60 * 1000;
+  const WRITE_DEBOUNCE_MS_DEFAULT = 500;
+  const WRITE_DEBOUNCE_MS_BY_KEY = {
+    lavkaAuth: 2200,
+    lavkaRegistration: 3200,
+    lavkaOrders: 3200
+  };
 
   const originalAddEventListener = document.addEventListener.bind(document);
   const queuedDomListeners = [];
@@ -368,8 +374,45 @@
 
   const toTimestamp = () => new Date().toISOString();
 
+  // ── Anти-бот rate limiting (масові дії) ──────────────────────────────────
+  // Один спільний хелпер для checkout.js / admin.js / registration.html /
+  // login.html: перевіряє через Cloud Function (яка бачить реальний IP
+  // виклику) чи не перевищено ліміт дії, ПЕРЕД тим як виконати саму дію
+  // (створення замовлення/товару/категорії, реєстрація, вхід).
+  // "Fail open": якщо сама функція недоступна/впала — дію не блокуємо,
+  // щоб збій лімітера ніколи не поклав робочий магазин.
+  const RATE_LIMIT_ENDPOINT = "https://us-central1-lavka-shop.cloudfunctions.net/checkActionRateLimit";
+
+  window.lavkaCheckActionRateLimit = async (action, storeId) => {
+    try {
+      const response = await fetch(RATE_LIMIT_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: String(action || ""), storeId: String(storeId || "") })
+      });
+
+      if (response.status === 429) {
+        const data = await response.json().catch(() => ({}));
+        return { ok: false, retryAfterSeconds: Number(data.retryAfterSeconds) || 60 };
+      }
+
+      if (!response.ok) {
+        return { ok: true };
+      }
+
+      const data = await response.json().catch(() => ({}));
+      return { ok: data.ok !== false };
+    } catch (error) {
+      console.warn("[lavka-sync] Rate limit check failed, allowing action:", error);
+      return { ok: true };
+    }
+  };
+
   let firestore = null;
   let syncingFromRemote = false;
+  const pendingWriteTimers = new Map();
+  const pendingWriteValues = new Map();
+  const pendingWriteRetries = new Map();
 
   const parseStoredValue = (raw) => {
     if (raw === null || typeof raw === "undefined") return null;
@@ -414,7 +457,10 @@
     const payload = {
       key,
       value,
-      updatedAt: toTimestamp()
+      updatedAt: toTimestamp(),
+      // Числова версія часу запису — потрібна у Firestore Rules для throttling
+      // (rules не вміють парсити ISO-рядок updatedAt як timestamp).
+      updatedAtMs: Date.now()
     };
     try {
       console.debug("[lavka-sync] writeKeyToRemote store=", storeId, "key=", key, "value=", value);
@@ -432,6 +478,49 @@
     }
   };
 
+  const getWriteDelayMs = (key) => {
+    const normalizedKey = String(key || "").trim();
+    return Math.max(0, Number(WRITE_DEBOUNCE_MS_BY_KEY[normalizedKey]) || WRITE_DEBOUNCE_MS_DEFAULT);
+  };
+
+  const scheduleWriteToRemote = (storeId, key, rawValue, immediate) => {
+    const normalizedKey = String(key || "");
+    if (!normalizedKey) return;
+
+    pendingWriteValues.set(normalizedKey, rawValue);
+
+    const existingTimer = pendingWriteTimers.get(normalizedKey);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    const delayMs = immediate ? 0 : getWriteDelayMs(normalizedKey);
+    const timer = setTimeout(() => {
+      pendingWriteTimers.delete(normalizedKey);
+      const nextRawValue = pendingWriteValues.get(normalizedKey);
+      writeKeyToRemote(storeId, normalizedKey, nextRawValue)
+        .then(() => {
+          pendingWriteRetries.delete(normalizedKey);
+        })
+        .catch((error) => {
+          const code = String((error && error.code) || (error && error.message) || "");
+          const retries = Number(pendingWriteRetries.get(normalizedKey) || 0);
+          const canRetry = /permission-denied|resource-exhausted|deadline-exceeded|aborted/i.test(code) && retries < 3;
+
+          if (canRetry) {
+            pendingWriteRetries.set(normalizedKey, retries + 1);
+            scheduleWriteToRemote(storeId, normalizedKey, pendingWriteValues.get(normalizedKey), false);
+            return;
+          }
+
+          pendingWriteRetries.delete(normalizedKey);
+          console.warn("[lavka-sync] Failed to write key:", normalizedKey, error);
+        });
+    }, delayMs);
+
+    pendingWriteTimers.set(normalizedKey, timer);
+  };
+
   const patchLocalStorageSync = (storeId) => {
     const originalSetItem = localStorage.setItem.bind(localStorage);
     const originalRemoveItem = localStorage.removeItem.bind(localStorage);
@@ -444,9 +533,7 @@
         console.debug("[lavka-sync] localStorage.setItem -> sync key=", String(key), "store=", storeId);
       } catch (e) {}
 
-      writeKeyToRemote(storeId, String(key), value).catch((error) => {
-        console.warn("[lavka-sync] Failed to write key:", key, error);
-      });
+      scheduleWriteToRemote(storeId, String(key), value, false);
     };
 
     localStorage.removeItem = function (key) {
@@ -454,11 +541,20 @@
       if (!firestore || syncingFromRemote) return;
       if (!SYNCED_KEYS.includes(String(key))) return;
 
+      const normalizedKey = String(key);
+      const pendingTimer = pendingWriteTimers.get(normalizedKey);
+      if (pendingTimer) {
+        clearTimeout(pendingTimer);
+        pendingWriteTimers.delete(normalizedKey);
+      }
+      pendingWriteValues.delete(normalizedKey);
+      pendingWriteRetries.delete(normalizedKey);
+
       firestore
         .collection("stores")
         .doc(storeId)
         .collection("data")
-        .doc(String(key))
+        .doc(normalizedKey)
         .delete()
         .catch((error) => {
           console.warn("[lavka-sync] Failed to remove key:", key, error);
@@ -509,6 +605,7 @@
             try {
               syncingFromRemote = true;
               localStorage.setItem(key, JSON.stringify(payload.value));
+              window.dispatchEvent(new CustomEvent("lavka-key-updated", { detail: { key } }));
             } catch (e) {
               // ignore
             } finally {

@@ -7,9 +7,16 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="product.css?v=20260731c">
+<link rel="stylesheet" href="product.css?v=20260802e">
 </head>
-<body>
+<body class="lavka-booting">
+  <div class="lavka-boot-loader" id="lavkaBootLoader" aria-hidden="true"><span class="lavka-boot-spinner"></span></div>
+  <script>
+    // Failsafe: reveal the product page even if rendering script fails or stalls.
+    window.setTimeout(function () {
+      if (document.body) document.body.classList.remove("lavka-booting");
+    }, 6000);
+  </script>
   <main class="product-page">
     <a id="backToCategory" class="back-btn" href="index.html" aria-label="Повернутися в категорію" title="Повернутися в категорію">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
@@ -29,15 +36,13 @@
       </svg>
     </button>
 
-    <p id="storeOrderStatusBadge" class="store-order-status" hidden>
-      <span class="store-order-status-dot" aria-hidden="true"></span>
-      Магазин тимчасово не приймає замовлення
-    </p>
+    <p id="storeOrderStatusBadge" class="store-order-status" hidden>Магазин тимчасово не приймає замовлення</p>
 
     <section class="product-card" id="productCard">
       <div class="main-image-wrap">
         <img id="mainImage" class="main-image" src="" alt="Фото товару">
       </div>
+      <div id="productGallery" class="product-gallery" aria-label="Галерея фото товару"></div>
 
       <div class="product-head">
         <h1 id="productName" class="product-name"></h1>
@@ -123,7 +128,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
-<script src="firebase-sync.js?v=20260731a"></script>
-<script src="product.js?v=20260731d"></script>
+<script src="firebase-sync.js?v=20260803c"></script>
+<script src="product.js?v=20260802c"></script>
 </body>
 </html>

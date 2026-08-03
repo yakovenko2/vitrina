@@ -10,6 +10,7 @@
 
   var REGISTRATION_KEY = "lavkaRegistration";
   var STORE_SETTINGS_KEY = "lavkaStoreSettings";
+  var DELETE_STORE_ACCOUNT_URL = "https://us-central1-lavka-shop.cloudfunctions.net/deleteStoreAccountCascade";
   var DASH = "-";
 
   var badgeEl = document.getElementById("usersTotalBadge");
@@ -948,6 +949,7 @@
         registeredAt: registrationValue.registeredAt || registryData.createdAt || registryData.updatedAt || "",
         phone: cleanText(registrationValue.phone) || cleanText(registryData.phone),
         storeName: cleanText(registrationValue.storeName) || cleanText(settingsValue.storeName) || cleanText(registryData.storeName),
+        category: cleanText(registrationValue.category) || cleanText(settingsValue.category) || cleanText(registryData.category),
         domain: domain,
         planId: planId,
         planName: planId && planNames[planId] ? planNames[planId] : (planId ? planId : ""),
@@ -962,47 +964,30 @@
   }
 
   async function deleteStoreAccount(storeId) {
-    var db = initDb();
     var safeStoreId = sanitizeStoreId(storeId);
     if (!safeStoreId) {
       throw new Error("invalid-store-id");
     }
 
-    var storeRef = db.collection("stores").doc(safeStoreId);
-    var dataCollectionRef = storeRef.collection("data");
+    var response = await fetch(DELETE_STORE_ACCOUNT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ storeId: safeStoreId })
+    });
 
-    await archiveClientBeforeDelete(db, safeStoreId);
-
-    var snapshots = await Promise.all([
-      dataCollectionRef.doc("lavkaAuth").get().catch(function () { return null; }),
-      db.collection("store_subdomains").doc(safeStoreId).get().catch(function () { return null; }),
-      db.collection("stores_registry").doc(safeStoreId).get().catch(function () { return null; })
-    ]);
-
-    var authValue = (snapshots[0] && snapshots[0].exists ? snapshots[0].data() || {} : {}).value || {};
-    var subdomainValue = snapshots[1] && snapshots[1].exists ? snapshots[1].data() || {} : {};
-    var registryValue = snapshots[2] && snapshots[2].exists ? snapshots[2].data() || {} : {};
-    var normalizedIp = normalizeIp(
-      authValue.lastIpAddress
-      || authValue.ipAddress
-      || subdomainValue.lastIpAddress
-      || registryValue.lastIpAddress
-      || ""
-    );
-
-    await deleteCollectionDocs(dataCollectionRef, 200);
-
-    var batch = db.batch();
-    batch.delete(storeRef);
-    batch.delete(db.collection("stores_registry").doc(safeStoreId));
-    batch.delete(db.collection("store_subdomains").doc(safeStoreId));
-    batch.delete(db.collection("store_telegram").doc(safeStoreId));
-    if (normalizedIp) {
-      batch.delete(db.collection("blocked_ips").doc(encodeIpKey(normalizedIp)));
+    var payload = null;
+    try {
+      payload = await response.json();
+    } catch (error) {
+      payload = null;
     }
-    await batch.commit();
 
-    await deleteQueryDocs(db.collection("billing_invoices").where("storeId", "==", safeStoreId), 200);
+    if (!response.ok || !payload || payload.ok !== true) {
+      var code = String((payload && payload.error) || "delete-failed");
+      var error = new Error(code);
+      error.code = code;
+      throw error;
+    }
   }
 
   async function handleDeleteClick(storeId) {

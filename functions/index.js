@@ -47,6 +47,154 @@ const CF_API_BASE = "https://api.cloudflare.com/client/v4";
 
 setGlobalOptions({ region: "us-central1", maxInstances: 10 });
 
+// ─────────────────────────────────────────────────────────────────────────
+// One-time infra fix: Storage bucket CORS doesn't allow uploads from store
+// custom domains (browsers block the preflight request). This endpoint sets
+// bucket CORS via the already-authenticated Admin SDK, since gsutil/gcloud
+// aren't available in this environment. Call it once, then it can stay —
+// it's idempotent and safe to re-run.
+const STORAGE_CORS_SETUP_TOKEN = "vitrina-storage-cors-setup-2026";
+const STORAGE_CORS_BUCKETS = ["lavka-shop.firebasestorage.app", "lavka-shop.appspot.com"];
+
+exports.configureStorageCors = onRequest(async (req, res) => {
+  if (String(req.query.token || "") !== STORAGE_CORS_SETUP_TOKEN) {
+    res.status(403).json({ ok: false, error: "forbidden" });
+    return;
+  }
+
+  if (req.query.list === "1") {
+    try {
+      const defaultBucket = admin.storage().bucket();
+      const [defaultExists] = await defaultBucket.exists();
+      const checks = [];
+      for (const name of [...STORAGE_CORS_BUCKETS, defaultBucket.name]) {
+        try {
+          const [exists] = await admin.storage().bucket(name).exists();
+          checks.push({ bucket: name, exists });
+        } catch (error) {
+          checks.push({ bucket: name, error: String((error && error.message) || error) });
+        }
+      }
+      res.status(200).json({ ok: true, defaultBucketName: defaultBucket.name, defaultExists, checks });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: String((error && error.message) || error) });
+    }
+    return;
+  }
+
+  const corsConfig = [
+    {
+      origin: ["*"],
+      method: ["GET", "HEAD", "PUT", "POST", "DELETE"],
+      responseHeader: ["Content-Type", "Content-Length", "x-goog-resumable", "x-goog-meta-*"],
+      maxAgeSeconds: 3600
+    }
+  ];
+
+  const results = [];
+  for (const bucketName of STORAGE_CORS_BUCKETS) {
+    try {
+      await admin.storage().bucket(bucketName).setMetadata({ cors: corsConfig });
+      results.push({ bucket: bucketName, ok: true });
+    } catch (error) {
+      results.push({ bucket: bucketName, ok: false, error: String((error && error.message) || error) });
+    }
+  }
+
+  res.status(200).json({ ok: true, results });
+});
+
+const STOREFRONT_HOST = "vitryna-shop.com";
+const SITEMAP_STATIC_URLS = [
+  { loc: `https://${STOREFRONT_HOST}/landing.html`, changefreq: "weekly", priority: "1.0" },
+  { loc: `https://${STOREFRONT_HOST}/login.html`, changefreq: "monthly", priority: "0.7" },
+  { loc: `https://${STOREFRONT_HOST}/registration.html`, changefreq: "monthly", priority: "0.8" }
+];
+
+const xmlEscape = (value) => String(value == null ? "" : value)
+  .replace(/&/g, "&amp;")
+  .replace(/</g, "&lt;")
+  .replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;")
+  .replace(/'/g, "&apos;");
+
+const formatLastMod = (value) => {
+  if (!value) return "";
+  const directDate = value instanceof Date ? value : null;
+  const timestampDate = typeof value.toDate === "function" ? value.toDate() : null;
+  const parsedDate = !directDate && !timestampDate ? new Date(value) : null;
+  const resolved = directDate || timestampDate || parsedDate;
+  if (!(resolved instanceof Date) || Number.isNaN(resolved.getTime())) {
+    return "";
+  }
+  return resolved.toISOString();
+};
+
+const isStoreIndexable = (statusValue) => {
+  const status = String(statusValue || "").trim().toLowerCase();
+  if (!status) return true;
+  return !["blocked", "deleted", "disabled", "inactive", "suspended"].includes(status);
+};
+
+const buildSitemapXml = (entries) => {
+  const rows = entries.map((entry) => {
+    const parts = [`    <loc>${xmlEscape(entry.loc)}</loc>`];
+    if (entry.lastmod) parts.push(`    <lastmod>${xmlEscape(entry.lastmod)}</lastmod>`);
+    if (entry.changefreq) parts.push(`    <changefreq>${xmlEscape(entry.changefreq)}</changefreq>`);
+    if (entry.priority) parts.push(`    <priority>${xmlEscape(entry.priority)}</priority>`);
+    return `  <url>\n${parts.join("\n")}\n  </url>`;
+  });
+
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows.join("\n")}\n</urlset>\n`;
+};
+
+exports.storefrontSitemap = onRequest({ cors: true }, async (req, res) => {
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    res.status(405).send("Method Not Allowed");
+    return;
+  }
+
+  try {
+    const mapByLoc = new Map();
+    SITEMAP_STATIC_URLS.forEach((entry) => mapByLoc.set(entry.loc, { ...entry }));
+
+    const storesSnap = await db.collection("stores_registry").get();
+    storesSnap.forEach((docSnap) => {
+      const storeId = sanitizeStoreId(docSnap.id);
+      if (!storeId) return;
+
+      const data = docSnap.data() || {};
+      if (!isStoreIndexable(data.status)) return;
+
+      const subdomain = sanitizeStoreId(data.subdomain || storeId);
+      if (!subdomain) return;
+
+      const loc = `https://${subdomain}.${STOREFRONT_HOST}/`;
+      const lastmod = formatLastMod(data.updatedAt || data.createdAt || null);
+
+      mapByLoc.set(loc, {
+        loc,
+        lastmod,
+        changefreq: "daily",
+        priority: "0.9"
+      });
+    });
+
+    const xml = buildSitemapXml(Array.from(mapByLoc.values()));
+    res.set("Content-Type", "application/xml; charset=utf-8");
+    res.set("Cache-Control", "public, max-age=1800, s-maxage=1800");
+    res.status(200).send(xml);
+  } catch (error) {
+    console.error("storefrontSitemap error:", error);
+    res.status(500).send("internal-error");
+  }
+});
+
 const sanitizeDomain = (value) =>
   String(value || "")
     .trim()
@@ -344,6 +492,163 @@ const parseStorePayload = (payload) => {
   const withoutPrefix = raw.startsWith("store_") ? raw.slice(6) : raw;
   return sanitizeStoreId(withoutPrefix);
 };
+
+const cleanText = (value) => {
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
+};
+
+const normalizeIp = (value) => String(value || "").trim().toLowerCase();
+
+const encodeIpKey = (ip) => normalizeIp(ip).replace(/[^a-z0-9:.]/g, "_");
+
+const deleteCollectionDocsAdmin = async (collectionRef, chunkSize = 200) => {
+  const size = Math.max(1, Number(chunkSize) || 200);
+  while (true) {
+    const pageSnap = await collectionRef.limit(size).get();
+    if (pageSnap.empty) break;
+
+    const batch = db.batch();
+    pageSnap.docs.forEach((docSnap) => batch.delete(docSnap.ref));
+    await batch.commit();
+
+    if (pageSnap.size < size) break;
+  }
+};
+
+const deleteQueryDocsAdmin = async (queryRef, chunkSize = 200) => {
+  const size = Math.max(1, Number(chunkSize) || 200);
+  while (true) {
+    const pageSnap = await queryRef.limit(size).get();
+    if (pageSnap.empty) break;
+
+    const batch = db.batch();
+    pageSnap.docs.forEach((docSnap) => batch.delete(docSnap.ref));
+    await batch.commit();
+
+    if (pageSnap.size < size) break;
+  }
+};
+
+const archiveClientBeforeDeleteAdmin = async (storeId) => {
+  const safeStoreId = sanitizeStoreId(storeId);
+  if (!safeStoreId) return;
+
+  const dataCol = db.collection("stores").doc(safeStoreId).collection("data");
+  const snaps = await Promise.all([
+    dataCol.doc("lavkaRegistration").get().catch(() => null),
+    dataCol.doc("lavkaStoreSettings").get().catch(() => null),
+    dataCol.doc("lavkaAuth").get().catch(() => null),
+    dataCol.doc("lavkaBilling").get().catch(() => null),
+    db.collection("store_subdomains").doc(safeStoreId).get().catch(() => null),
+    db.collection("stores_registry").doc(safeStoreId).get().catch(() => null)
+  ]);
+
+  const registrationValue = (snaps[0] && snaps[0].exists ? (snaps[0].data() || {}) : {}).value || {};
+  const settingsValue = (snaps[1] && snaps[1].exists ? (snaps[1].data() || {}) : {}).value || {};
+  const authValue = (snaps[2] && snaps[2].exists ? (snaps[2].data() || {}) : {}).value || {};
+  const billingValue = (snaps[3] && snaps[3].exists ? (snaps[3].data() || {}) : {}).value || {};
+  const subdomainData = snaps[4] && snaps[4].exists ? (snaps[4].data() || {}) : {};
+  const registryData = snaps[5] && snaps[5].exists ? (snaps[5].data() || {}) : {};
+
+  const planId = cleanText(billingValue.currentPlanId).toLowerCase();
+  const planNames = { starter: "Старт", business: "Бізнес", pro: "Про" };
+  const domain = cleanText(settingsValue.customDomain)
+    || cleanText(registrationValue.customDomain)
+    || cleanText(registrationValue.domain)
+    || cleanText(settingsValue.domain)
+    || cleanText(registryData.domain)
+    || cleanText(subdomainData.domain);
+  const clientName = cleanText(registrationValue.clientName)
+    || cleanText(registrationValue.ownerName)
+    || cleanText(registrationValue.fullName)
+    || cleanText(registrationValue.name)
+    || cleanText(registryData.clientName);
+
+  await db.collection("clients_registry").doc(safeStoreId).set({
+    storeId: safeStoreId,
+    clientName,
+    registeredAt: registrationValue.registeredAt || registryData.createdAt || registryData.updatedAt || "",
+    phone: cleanText(registrationValue.phone) || cleanText(registryData.phone),
+    storeName: cleanText(registrationValue.storeName) || cleanText(settingsValue.storeName) || cleanText(registryData.storeName),
+    domain,
+    planId,
+    planName: planId && planNames[planId] ? planNames[planId] : (planId || ""),
+    status: "deleted",
+    ipAddress: cleanText(authValue.lastIpAddress || authValue.ipAddress || registryData.lastIpAddress || subdomainData.lastIpAddress || ""),
+    deletedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }, { merge: true });
+};
+
+exports.deleteStoreAccountCascade = onRequest({ cors: true }, async (req, res) => {
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+
+  if (req.method !== "POST") {
+    res.status(405).json({ ok: false, error: "method-not-allowed" });
+    return;
+  }
+
+  const safeStoreId = sanitizeStoreId(req.body && req.body.storeId);
+  if (!safeStoreId) {
+    res.status(400).json({ ok: false, error: "invalid-store-id" });
+    return;
+  }
+
+  try {
+    const storeRef = db.collection("stores").doc(safeStoreId);
+    const dataCollectionRef = storeRef.collection("data");
+    const privateCollectionRef = storeRef.collection("private");
+
+    await archiveClientBeforeDeleteAdmin(safeStoreId).catch((error) => {
+      console.warn("[deleteStoreAccountCascade] archive before delete failed:", error);
+    });
+
+    const snapshots = await Promise.all([
+      dataCollectionRef.doc("lavkaAuth").get().catch(() => null),
+      db.collection("store_subdomains").doc(safeStoreId).get().catch(() => null),
+      db.collection("stores_registry").doc(safeStoreId).get().catch(() => null)
+    ]);
+
+    const authValue = (snapshots[0] && snapshots[0].exists ? (snapshots[0].data() || {}) : {}).value || {};
+    const subdomainValue = snapshots[1] && snapshots[1].exists ? (snapshots[1].data() || {}) : {};
+    const registryValue = snapshots[2] && snapshots[2].exists ? (snapshots[2].data() || {}) : {};
+    const normalizedIp = normalizeIp(
+      authValue.lastIpAddress
+      || authValue.ipAddress
+      || subdomainValue.lastIpAddress
+      || registryValue.lastIpAddress
+      || ""
+    );
+
+    await deleteCollectionDocsAdmin(dataCollectionRef, 200);
+    await deleteCollectionDocsAdmin(privateCollectionRef, 200);
+
+    const batch = db.batch();
+    batch.delete(storeRef);
+    batch.delete(db.collection("stores_registry").doc(safeStoreId));
+    batch.delete(db.collection("store_subdomains").doc(safeStoreId));
+    batch.delete(db.collection("store_telegram").doc(safeStoreId));
+    if (normalizedIp) {
+      batch.delete(db.collection("blocked_ips").doc(encodeIpKey(normalizedIp)));
+    }
+    await batch.commit();
+
+    await Promise.all([
+      deleteQueryDocsAdmin(db.collection("billing_invoices").where("storeId", "==", safeStoreId), 200),
+      deleteQueryDocsAdmin(db.collection("store_order_invoices").where("storeId", "==", safeStoreId), 200),
+      deleteQueryDocsAdmin(db.collection("store_order_liqpay_invoices").where("storeId", "==", safeStoreId), 200)
+    ]);
+
+    res.status(200).json({ ok: true, storeId: safeStoreId });
+  } catch (error) {
+    console.error("deleteStoreAccountCascade error:", error);
+    res.status(500).json({ ok: false, error: "internal" });
+  }
+});
 
 const escapeTelegramHtml = (value) =>
   String(value == null ? "" : value)
@@ -1436,6 +1741,57 @@ const normalizeLiqpayCurrency = (value) => {
   return "UAH";
 };
 
+const STORE_PRIVATE_ACQUIRER_DOC = "acquirer";
+const ACQUIRER_SECRET_FIELDS = ["paymentMonoSecret", "paymentLiqpayPrivateKey"];
+
+// One-time, self-healing migration: acquirer secrets used to live in the
+// publicly-readable settings/checkout docs (open Firestore rules). This moves
+// them into stores/{storeId}/private/acquirer, which the rules always deny to
+// clients — only this Admin SDK code (Cloud Functions) can read/write it —
+// and scrubs the plaintext copies left behind in the public docs.
+const migrateAcquirerSecrets = async (storeId, checkoutValue, settingsValue) => {
+  const privateRef = db.collection("stores").doc(storeId).collection("private").doc(STORE_PRIVATE_ACQUIRER_DOC);
+  const privateSnap = await privateRef.get();
+  const privateData = privateSnap.exists ? (privateSnap.data() || {}) : {};
+
+  const resolved = {};
+  const toMigrate = {};
+  const toScrubCheckout = {};
+  const toScrubSettings = {};
+
+  ACQUIRER_SECRET_FIELDS.forEach((field) => {
+    const stored = String(privateData[field] || "").trim();
+    const legacyFromCheckout = String(checkoutValue[field] || "").trim();
+    const legacyFromSettings = String(settingsValue[field] || "").trim();
+    resolved[field] = stored || legacyFromCheckout || legacyFromSettings;
+
+    if (!stored && resolved[field]) {
+      toMigrate[field] = resolved[field];
+    }
+    if (legacyFromCheckout) toScrubCheckout[field] = "";
+    if (legacyFromSettings) toScrubSettings[field] = "";
+  });
+
+  const tasks = [];
+  if (Object.keys(toMigrate).length) {
+    tasks.push(privateRef.set({ ...toMigrate, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true }));
+  }
+  const baseRef = db.collection("stores").doc(storeId).collection("data");
+  if (Object.keys(toScrubCheckout).length) {
+    tasks.push(baseRef.doc(STORE_CHECKOUT_KEY).set({ value: toScrubCheckout }, { merge: true }));
+  }
+  if (Object.keys(toScrubSettings).length) {
+    tasks.push(baseRef.doc(STORE_SETTINGS_KEY).set({ value: toScrubSettings }, { merge: true }));
+  }
+  if (tasks.length) {
+    await Promise.all(tasks).catch((error) => {
+      console.error("migrateAcquirerSecrets error:", error);
+    });
+  }
+
+  return resolved;
+};
+
 const readStoreCheckoutConfig = async (storeId) => {
   const baseRef = db.collection("stores").doc(storeId).collection("data");
   const [checkoutSnap, settingsSnap] = await Promise.all([
@@ -1451,7 +1807,8 @@ const readStoreCheckoutConfig = async (storeId) => {
       ? checkoutValue.paymentMonoEnabled
       : settingsValue.paymentMonoEnabled
   );
-  const token = String(checkoutValue.paymentMonoSecret || settingsValue.paymentMonoSecret || "").trim();
+  const secrets = await migrateAcquirerSecrets(storeId, checkoutValue, settingsValue);
+  const token = secrets.paymentMonoSecret;
   const merchantId = String(checkoutValue.paymentMonoMerchantId || settingsValue.paymentMonoMerchantId || "").trim();
 
   return {
@@ -1505,7 +1862,8 @@ const readStoreLiqpayConfig = async (storeId) => {
       : settingsValue.paymentLiqpayEnabled
   );
   const publicKey = String(checkoutValue.paymentLiqpayPublicKey || settingsValue.paymentLiqpayPublicKey || "").trim();
-  const privateKey = String(checkoutValue.paymentLiqpayPrivateKey || settingsValue.paymentLiqpayPrivateKey || "").trim();
+  const secrets = await migrateAcquirerSecrets(storeId, checkoutValue, settingsValue);
+  const privateKey = secrets.paymentLiqpayPrivateKey;
 
   return {
     enabled,
@@ -1519,6 +1877,145 @@ const createLiqpayOrderReference = (storeId, orderId) => {
   const compactOrder = String(orderId || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 24) || "order";
   return `liqpay_${storeId}_${compactOrder}_${Date.now()}_${randomPart}`;
 };
+
+// Admin panel calls this to save the mono/LiqPay secret keys. It writes
+// straight to stores/{storeId}/private/acquirer via Admin SDK (rules deny
+// clients access to that path), and never echoes the secret back in the
+// response.
+exports.saveStoreAcquirerSecrets = onRequest(
+  { cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
+    if (req.method !== "POST") {
+      res.status(405).json({ ok: false, error: "method-not-allowed" });
+      return;
+    }
+
+    const storeId = sanitizeStoreIdStrict(req.body && req.body.storeId);
+    if (!storeId) {
+      res.status(400).json({ ok: false, error: "invalid-store-id" });
+      return;
+    }
+
+    const update = {};
+    if (typeof req.body?.paymentMonoSecret === "string" && req.body.paymentMonoSecret.trim()) {
+      update.paymentMonoSecret = req.body.paymentMonoSecret.trim();
+    }
+    if (typeof req.body?.paymentLiqpayPrivateKey === "string" && req.body.paymentLiqpayPrivateKey.trim()) {
+      update.paymentLiqpayPrivateKey = req.body.paymentLiqpayPrivateKey.trim();
+    }
+
+    if (!Object.keys(update).length) {
+      res.status(200).json({ ok: true, updated: false });
+      return;
+    }
+
+    try {
+      await db.collection("stores").doc(storeId).collection("private").doc(STORE_PRIVATE_ACQUIRER_DOC).set({
+        ...update,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      res.status(200).json({ ok: true, updated: true });
+    } catch (error) {
+      console.error("saveStoreAcquirerSecrets error:", error);
+      res.status(500).json({ ok: false, error: "internal" });
+    }
+  }
+);
+
+// Lets the admin panel know whether mono/LiqPay secrets are already
+// configured (to show "збережено" instead of the real value) without ever
+// exposing the secret itself back to the client.
+exports.getStoreAcquirerSecretsStatus = onRequest(
+  { cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
+    const storeId = sanitizeStoreIdStrict(req.method === "GET" ? req.query.storeId : (req.body && req.body.storeId));
+    if (!storeId) {
+      res.status(400).json({ ok: false, error: "invalid-store-id" });
+      return;
+    }
+
+    try {
+      const snap = await db.collection("stores").doc(storeId).collection("private").doc(STORE_PRIVATE_ACQUIRER_DOC).get();
+      const data = snap.exists ? (snap.data() || {}) : {};
+      res.status(200).json({
+        ok: true,
+        hasMonoSecret: Boolean(String(data.paymentMonoSecret || "").trim()),
+        hasLiqpayPrivateKey: Boolean(String(data.paymentLiqpayPrivateKey || "").trim())
+      });
+    } catch (error) {
+      console.error("getStoreAcquirerSecretsStatus error:", error);
+      res.status(500).json({ ok: false, error: "internal" });
+    }
+  }
+);
+
+// One-time cleanup utility: scrubs plaintext acquirer secrets left behind in
+// the (previously public) checkout/settings docs for every store, moving
+// them into the protected private/acquirer doc. Safe to call repeatedly
+// (idempotent) — it never returns secret values, only a per-store summary.
+exports.migrateAllStoresAcquirerSecrets = onRequest(
+  { cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).json({ ok: false, error: "method-not-allowed" });
+      return;
+    }
+
+    try {
+      // stores/{storeId} documents are often never written directly (they
+      // only exist implicitly as parents of subcollections), so they don't
+      // show up via db.collection("stores").get(). Use a collectionGroup
+      // query on "data" instead, keyed by the known settings/checkout doc ids.
+      const dataDocs = await db.collectionGroup("data").get();
+      const storeIds = new Set();
+      dataDocs.docs.forEach((doc) => {
+        if (doc.id !== STORE_CHECKOUT_KEY && doc.id !== STORE_SETTINGS_KEY) return;
+        const storeId = doc.ref.parent.parent?.id;
+        if (storeId) storeIds.add(storeId);
+      });
+
+      const results = [];
+
+      for (const storeId of storeIds) {
+        const baseRef = db.collection("stores").doc(storeId).collection("data");
+        const [checkoutSnap, settingsSnap] = await Promise.all([
+          baseRef.doc(STORE_CHECKOUT_KEY).get(),
+          baseRef.doc(STORE_SETTINGS_KEY).get()
+        ]);
+        const checkoutValue = checkoutSnap.exists ? ((checkoutSnap.data() || {}).value || {}) : {};
+        const settingsValue = settingsSnap.exists ? ((settingsSnap.data() || {}).value || {}) : {};
+
+        const hadLegacySecret = ACQUIRER_SECRET_FIELDS.some((field) =>
+          String(checkoutValue[field] || "").trim() || String(settingsValue[field] || "").trim());
+
+        if (hadLegacySecret) {
+          await migrateAcquirerSecrets(storeId, checkoutValue, settingsValue);
+        }
+
+        results.push({ storeId, migrated: hadLegacySecret });
+      }
+
+      res.status(200).json({ ok: true, storesChecked: results.length, results });
+    } catch (error) {
+      console.error("migrateAllStoresAcquirerSecrets error:", error);
+      res.status(500).json({ ok: false, error: "internal" });
+    }
+  }
+);
 
 // LiqPay signs every request as base64(sha1(private_key + data + private_key)).
 const buildLiqpaySignature = (privateKey, dataBase64) =>
@@ -2155,3 +2652,106 @@ exports.monoStoreOrderWebhook = onRequest(
     }
   }
 );
+
+// ─────────────────────────────────────────────────────────────────────────
+// Anти-бот rate limiting для масових дій
+// ─────────────────────────────────────────────────────────────────────────
+// Клієнт (checkout.js / admin.js / registration.html / login.html) звертається
+// сюди ПЕРЕД тим, як створити замовлення/товар/категорію або зареєструватись/
+// увійти. Лічильники прив'язані до IP-адреси виклику (доступна тільки тут,
+// на сервері — у Firestore Rules IP недоступний), тому це реальний захист від
+// скриптів-ботів, а не лише клієнтський UI-throttling.
+//
+// Firestore rules (`stores/{storeId}/data/{key}`) додатково обмежують темп
+// прямих записів у Firestore як другий рубіж захисту (на випадок, якщо бот
+// оминає сайт і пише напряму через Firestore SDK/REST).
+
+const RATE_LIMIT_COLLECTION = "rate_limits";
+
+// { limit: максимум спроб, windowSeconds: тривалість вікна }
+const RATE_LIMIT_RULES = {
+  register: { limit: 5, windowSeconds: 3600 },
+  "login-code": { limit: 10, windowSeconds: 3600 },
+  "login-verify": { limit: 20, windowSeconds: 3600 },
+  "create-order": { limit: 30, windowSeconds: 3600 },
+  "create-product": { limit: 90, windowSeconds: 3600 },
+  "create-category": { limit: 60, windowSeconds: 3600 }
+};
+
+const getClientIp = (req) => {
+  const forwardedFor = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  return forwardedFor || String(req.ip || "").trim() || "unknown";
+};
+
+const sanitizeRateLimitKeyPart = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_.-]/g, "_")
+    .slice(0, 120);
+
+// Просте fixed-window обмеження темпу, що зберігається в Firestore
+// (works across all Cloud Functions instances, on-line for the caller's IP).
+const consumeRateLimit = async (key, limit, windowSeconds) => {
+  const ref = db.collection(RATE_LIMIT_COLLECTION).doc(sanitizeRateLimitKeyPart(key) || "unknown");
+  const nowMs = Date.now();
+  const windowMs = windowSeconds * 1000;
+
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const data = snap.exists ? snap.data() || {} : {};
+    const windowStart = Number(data.windowStart) || 0;
+    const isSameWindow = windowStart > 0 && nowMs - windowStart < windowMs;
+    const count = isSameWindow ? Number(data.count) || 0 : 0;
+
+    if (count >= limit) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((windowStart + windowMs - nowMs) / 1000));
+      return { allowed: false, retryAfterSeconds };
+    }
+
+    tx.set(ref, {
+      count: count + 1,
+      windowStart: isSameWindow ? windowStart : nowMs,
+      updatedAt: FieldValue.serverTimestamp()
+    });
+
+    return { allowed: true, retryAfterSeconds: 0 };
+  });
+};
+
+// POST { action: "register"|"login-code"|"login-verify"|"create-order"|"create-product"|"create-category", storeId?: string }
+// -> 200 { ok: true } якщо дозволено, 429 { ok: false, error: "rate-limited", retryAfterSeconds } якщо перевищено ліміт.
+exports.checkActionRateLimit = onRequest({ cors: true }, async (req, res) => {
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  if (req.method !== "POST") {
+    res.status(405).json({ ok: false, error: "method-not-allowed" });
+    return;
+  }
+
+  const action = String((req.body && req.body.action) || "").trim();
+  const rule = RATE_LIMIT_RULES[action];
+  if (!rule) {
+    res.status(400).json({ ok: false, error: "invalid-action" });
+    return;
+  }
+
+  const storeId = sanitizeRateLimitKeyPart(req.body && req.body.storeId);
+  const ip = sanitizeRateLimitKeyPart(getClientIp(req));
+  const key = storeId ? `${action}__${storeId}__${ip}` : `${action}__${ip}`;
+
+  try {
+    const result = await consumeRateLimit(key, rule.limit, rule.windowSeconds);
+    if (!result.allowed) {
+      res.status(429).json({ ok: false, error: "rate-limited", retryAfterSeconds: result.retryAfterSeconds });
+      return;
+    }
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    console.error("checkActionRateLimit error:", error);
+    // Fail open: не блокуємо реальних користувачів, якщо сам лімітер впав.
+    res.status(200).json({ ok: true });
+  }
+});

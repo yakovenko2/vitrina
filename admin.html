@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="admin.css?v=20260802b">
+<link rel="stylesheet" href="admin.css?v=20260802e">
 <script>
   // Early title boot: read local store name synchronously to avoid title flicker.
   (function () {
@@ -454,6 +454,7 @@
                       <th>Фото</th>
                       <th>Артикул</th>
                       <th>Назва</th>
+                      <th>Розмір</th>
                       <th>Ціна</th>
                       <th>Кількість</th>
                     </tr>
@@ -520,45 +521,59 @@
             <button class="mini-btn products-filter-btn" id="showHiddenProducts" type="button">Приховані</button>
           </div>
 
-          <p id="bulkToolsHint" class="products-bulk-hint">Для масових дій оберіть щонайменше 2 товари.</p>
+          <p id="bulkToolsHint" class="products-bulk-hint">Оберіть щонайменше один товар для масових дій.</p>
 
           <div id="bulkToolsPanel" class="products-bulk-tools" aria-label="Масові дії з товарами" hidden>
-            <p id="bulkSelectionInfo" class="bulk-selection-info">Вибрано товарів: 0</p>
-
-            <div class="bulk-tool-group">
-              <strong>Ціна</strong>
-              <select id="bulkPriceOperation">
-                <option value="increase">Додати</option>
-                <option value="decrease">Відняти</option>
-              </select>
-              <input id="bulkPriceValue" type="number" min="0.01" step="0.01" placeholder="Значення">
-              <select id="bulkPriceUnit">
-                <option value="uah">грн</option>
-                <option value="percent">%</option>
-              </select>
-              <button id="applyBulkPrice" type="button" class="mini-btn">Застосувати</button>
+            <div class="bulk-tools-header">
+              <p id="bulkSelectionInfo" class="bulk-selection-info">Вибрано товарів: 0</p>
+              <button id="clearBulkSelection" type="button" class="mini-btn bulk-clear-btn">Очистити вибір</button>
             </div>
 
             <div class="bulk-tool-group">
-              <strong>Видимість</strong>
-              <select id="bulkVisibilityValue">
-                <option value="visible">Видимий</option>
-                <option value="hidden">Прихований</option>
-              </select>
-              <button id="applyBulkVisibility" type="button" class="mini-btn">Застосувати</button>
+              <span class="bulk-tool-label">Ціна</span>
+              <div class="bulk-tool-controls">
+                <select id="bulkPriceOperation">
+                  <option value="increase">Додати</option>
+                  <option value="decrease">Відняти</option>
+                </select>
+                <input id="bulkPriceValue" type="number" min="0.01" step="0.01" placeholder="Значення">
+                <select id="bulkPriceUnit">
+                  <option value="uah">грн</option>
+                  <option value="percent">%</option>
+                </select>
+              </div>
+              <button id="applyBulkPrice" type="button" class="mini-btn primary">Застосувати</button>
             </div>
 
             <div class="bulk-tool-group">
-              <strong>Знижка</strong>
-              <input id="bulkDiscountValue" type="number" min="0" step="0.01" placeholder="Значення">
-              <select id="bulkDiscountUnit">
-                <option value="uah">грн</option>
-                <option value="percent">%</option>
-              </select>
-              <button id="applyBulkDiscount" type="button" class="mini-btn">Застосувати</button>
+              <span class="bulk-tool-label">Видимість</span>
+              <div class="bulk-tool-controls">
+                <select id="bulkVisibilityValue">
+                  <option value="visible">Видимий</option>
+                  <option value="hidden">Прихований</option>
+                </select>
+              </div>
+              <button id="applyBulkVisibility" type="button" class="mini-btn primary">Застосувати</button>
             </div>
 
-            <button id="clearBulkSelection" type="button" class="mini-btn">Очистити вибір</button>
+            <div class="bulk-tool-group">
+              <span class="bulk-tool-label">Знижка</span>
+              <div class="bulk-tool-controls">
+                <input id="bulkDiscountValue" type="number" min="0" step="0.01" placeholder="Значення">
+                <select id="bulkDiscountUnit">
+                  <option value="uah">грн</option>
+                  <option value="percent">%</option>
+                </select>
+              </div>
+              <button id="applyBulkDiscount" type="button" class="mini-btn primary">Застосувати</button>
+            </div>
+
+            <div class="bulk-tool-group">
+              <span class="bulk-tool-label">Видалення</span>
+              <div class="bulk-tool-controls"></div>
+              <button id="applyBulkDelete" type="button" class="mini-btn danger">Видалити вибрані</button>
+            </div>
+
             <p id="bulkActionMessage" class="saved-message" aria-live="polite"></p>
           </div>
 
@@ -645,20 +660,6 @@
                   </label>
                 </div>
 
-                <div class="product-compare-prices">
-                  <p class="product-compare-prices-hint">Для знижки: вкажіть стару і нову ціну, щоб показати порівняння вартості.</p>
-                  <div class="product-compare-prices-grid">
-                    <label>
-                      Стара ціна (грн)
-                      <input id="productOldPrice" type="number" min="1" step="1" placeholder="Наприклад: 1200">
-                    </label>
-                    <label>
-                      Нова ціна (грн)
-                      <input id="productNewPrice" type="number" min="1" step="1" placeholder="Наприклад: 990">
-                    </label>
-                  </div>
-                </div>
-
                 <label class="product-visibility-toggle" for="productVisible">
                   <input id="productVisible" type="checkbox" checked>
                   Показувати товар у вітрині
@@ -668,6 +669,7 @@
                   <span id="productPhotosPolicyLabel">Фото товару</span>
                   <input id="productPhotos" type="file" accept="image/*" multiple>
                   <small id="productPhotosPolicyHint" class="input-hint"></small>
+                  <div id="productPhotosPreview" class="product-photos-preview" aria-live="polite"></div>
                 </label>
 
                 <button id="productSubmitButton" type="submit" class="action-btn">Створити товар</button>
@@ -830,6 +832,11 @@
             <p>Останні 30 днів</p>
             <strong id="viewsThirtyDaysCount">0</strong>
           </article>
+        </div>
+
+        <div class="panel-box views-reset-box">
+          <p class="views-reset-warning">⚠️ Скидання видалить усю історію переглядів безповоротно.</p>
+          <button type="button" id="resetViewsStatsBtn" class="action-btn danger">Скинути статистику переглядів</button>
         </div>
       </section>
 
@@ -1165,7 +1172,7 @@
                     <img class="payment-provider-logo" src="plata-by-mono.png" alt="Plata by mono">
                     <div>
                       <p class="payment-provider-title">Plata by mono</p>
-                      <p class="payment-provider-subtitle">Еквайринг Monobank</p>
+                      <p class="payment-provider-subtitle">Оплата карткою будь-якого банку: Visa, Mastercard, Apple Pay, Google Pay</p>
                     </div>
                   </div>
                   <label class="switch-wrap" for="paymentMonoEnabled" aria-label="Увімкнути Plata by mono">
@@ -1187,7 +1194,7 @@
                     <img class="payment-provider-logo" src="liqpay.png" alt="LiqPay ПриватБанк">
                     <div>
                       <p class="payment-provider-title">LiqPay</p>
-                      <p class="payment-provider-subtitle">Еквайринг ПриватБанк</p>
+                      <p class="payment-provider-subtitle">Оплата карткою будь-якого банку: Visa, Mastercard, Apple Pay, Google Pay</p>
                     </div>
                   </div>
                   <label class="switch-wrap" for="paymentLiqpayEnabled" aria-label="Увімкнути LiqPay">
@@ -1496,7 +1503,7 @@
             <li><span class="domain-support-step-num">4</span><span>Ми підключимо домен і повідомимо, коли все буде готово.</span></li>
           </ol>
 
-          <a class="domain-support-cta" href="https://t.me/sdasdadasd" target="_blank" rel="noopener">
+          <a class="domain-support-cta" href="https://t.me/vitryna_manager" target="_blank" rel="noopener">
             <img src="image/telegram.png" alt="" aria-hidden="true">
             Написати в підтримку
           </a>
@@ -1517,8 +1524,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-functions-compat.js"></script>
-<script src="firebase-sync.js?v=20260731a"></script>
-<script src="admin.js?v=20260731p"></script>
+<script src="firebase-sync.js?v=20260803c"></script>
+<script src="admin.js?v=20260803h"></script>
 <script>
   // Instant section activation: runs synchronously after the DOM is parsed but
   // BEFORE admin.js init (which firebase-sync defers by 1-2s). This makes the

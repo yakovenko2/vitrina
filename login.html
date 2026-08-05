@@ -349,6 +349,11 @@
       transform: scale(.985);
     }
 
+    .btn:disabled {
+      opacity: .55;
+      cursor: default;
+    }
+
     .btn-primary {
       background: var(--blue);
       color: #fff;
@@ -522,6 +527,7 @@
           </div>
 
           <button type="submit" class="btn btn-primary">Увійти</button>
+          <button type="button" class="btn btn-ghost" id="resendCodeBtn" disabled>Надіслати код повторно</button>
           <button type="button" class="btn btn-ghost" id="backToStep1Btn">Назад</button>
 
           <p class="status" id="step2Status" aria-live="polite"></p>
@@ -548,7 +554,6 @@
         appId: "1:446966778081:web:a9f60f4c27bb93fd45b8ee"
       };
       var currentStep = 1;
-      var generatedCode = "";
       var pendingAccount = null;
       var isCheckingAccount = false;
       var lastCheckedPhone = "";
@@ -571,8 +576,32 @@
       var codeInput = document.getElementById("codeInput");
       var codeBox = document.getElementById("codeBox");
       var sendCodeBtn = document.getElementById("sendCodeBtn");
+      var resendCodeBtn = document.getElementById("resendCodeBtn");
       var backToStep1Btn = document.getElementById("backToStep1Btn");
       var loginForm = document.getElementById("loginForm");
+
+      var RESEND_COOLDOWN_SECONDS = 30;
+      var resendCooldownInterval = null;
+
+      function startResendCooldown(seconds) {
+        var remaining = Math.max(1, Math.ceil(Number(seconds) || RESEND_COOLDOWN_SECONDS));
+        clearInterval(resendCooldownInterval);
+        resendCodeBtn.disabled = true;
+
+        function tick() {
+          if (remaining <= 0) {
+            clearInterval(resendCooldownInterval);
+            resendCodeBtn.disabled = false;
+            resendCodeBtn.textContent = "Надіслати код повторно";
+            return;
+          }
+          resendCodeBtn.textContent = "Надіслати повторно через " + remaining + "с";
+          remaining -= 1;
+        }
+
+        tick();
+        resendCooldownInterval = setInterval(tick, 1000);
+      }
 
       var step1Status = document.getElementById("step1Status");
       var step2Status = document.getElementById("step2Status");
@@ -764,6 +793,56 @@
         return /^\+?\d{10,14}$/.test(phone);
       }
 
+      var AUTH_CODE_ERROR_MESSAGES = {
+        "invalid-phone": "Введи коректний номер телефону.",
+        "too-soon": "Зачекайте трохи перед повторним надсиланням коду.",
+        "sms-send-failed": "Не вдалося надіслати SMS. Спробуйте ще раз.",
+        "not-found": "Код застарів. Отримайте новий.",
+        "expired": "Код застарів. Отримайте новий.",
+        "too-many-attempts": "Забагато невірних спроб. Отримайте новий код.",
+        "invalid-code": "Невірний код. Спробуй ще раз."
+      };
+
+      async function sendAuthCode(phone) {
+        try {
+          var response = await fetch("https://us-central1-lavka-shop.cloudfunctions.net/sendAuthCode", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ phone: phone })
+          });
+          var data = await response.json();
+          if (!data || !data.ok) {
+            return {
+              ok: false,
+              message: AUTH_CODE_ERROR_MESSAGES[data && data.error] || "Не вдалося надіслати код. Спробуйте ще раз.",
+              retryAfterSeconds: data && data.retryAfterSeconds
+            };
+          }
+          return { ok: true };
+        } catch (error) {
+          console.error("[login] sendAuthCode failed:", error);
+          return { ok: false, message: "Не вдалося зв'язатися з сервером. Перевірте інтернет-з'єднання." };
+        }
+      }
+
+      async function verifyAuthCode(phone, code) {
+        try {
+          var response = await fetch("https://us-central1-lavka-shop.cloudfunctions.net/verifyAuthCode", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ phone: phone, code: code })
+          });
+          var data = await response.json();
+          if (!data || !data.ok) {
+            return { ok: false, message: AUTH_CODE_ERROR_MESSAGES[data && data.error] || "Невірний код. Спробуй ще раз." };
+          }
+          return { ok: true };
+        } catch (error) {
+          console.error("[login] verifyAuthCode failed:", error);
+          return { ok: false, message: "Не вдалося зв'язатися з сервером. Перевірте інтернет-з'єднання." };
+        }
+      }
+
       function goToStep(step) {
         currentStep = step;
         updateProgress();
@@ -818,10 +897,40 @@
           return;
         }
 
-        generatedCode = String(Math.floor(1000 + Math.random() * 9000));
+        setCheckingState(true);
+        var sendResult = await sendAuthCode(phone);
+        setCheckingState(false);
+
+        if (!sendResult.ok) {
+          setStatus(step1Status, sendResult.message || "Не вдалося надіслати SMS. Спробуйте ще раз.", "error");
+          return;
+        }
+
         codeBox.style.display = "block";
-        codeBox.textContent = "Демо-код: " + generatedCode;
+        codeBox.textContent = "Код надіслано на " + phone;
+        startResendCooldown(RESEND_COOLDOWN_SECONDS);
         goToStep(2);
+      });
+
+      resendCodeBtn.addEventListener("click", async function () {
+        if (resendCodeBtn.disabled) {
+          return;
+        }
+        setStatus(step2Status, "", "");
+        var phone = normalizePhone(phoneInput.value);
+        resendCodeBtn.disabled = true;
+
+        var sendResult = await sendAuthCode(phone);
+        if (!sendResult.ok) {
+          setStatus(step2Status, sendResult.message || "Не вдалося надіслати код повторно.", "error");
+          startResendCooldown(sendResult.retryAfterSeconds || RESEND_COOLDOWN_SECONDS);
+          return;
+        }
+
+        codeInput.value = "";
+        codeBox.textContent = "Код надіслано повторно на " + phone;
+        setStatus(step2Status, "Новий код надіслано.", "success");
+        startResendCooldown(RESEND_COOLDOWN_SECONDS);
       });
 
       phoneInput.addEventListener("blur", async function () {
@@ -867,6 +976,7 @@
       });
 
       backToStep1Btn.addEventListener("click", function () {
+        clearInterval(resendCooldownInterval);
         goToStep(1);
       });
 
@@ -888,8 +998,9 @@
           }
         }
 
-        if (enteredCode !== generatedCode) {
-          setStatus(step2Status, "Невірний код. Спробуй ще раз.", "error");
+        var verifyResult = await verifyAuthCode(normalizePhone(phoneInput.value), enteredCode);
+        if (!verifyResult.ok) {
+          setStatus(step2Status, verifyResult.message || "Невірний код. Спробуй ще раз.", "error");
           return;
         }
 

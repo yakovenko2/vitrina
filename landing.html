@@ -11,7 +11,7 @@
 <meta property="og:locale" content="uk_UA">
 <meta property="og:site_name" content="Вітрина">
 <meta property="og:title" content="Вітрина — Створи сайт за 10 хвилин. Без коду">
-<meta property="og:description" content="Продавай свої товари 24/7 з підключеною онлайн-оплатою.">
+<meta property="og:description" content="Клієнти замовляють і платять онлайн у будь-який час — без вихідних і обідніх перерв.">
 <meta property="og:url" content="https://vitryna-shop.com/landing.html">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Вітрина — Створи сайт за 10 хвилин. Без коду">
@@ -240,6 +240,67 @@
   .hero-form input:focus { outline: none; border-color: var(--blue); }
   .hero-form .btn { min-height: 52px; }
   .hero-note { color: var(--muted); font-size: 14px; margin-top: 4px; }
+
+  /* CTA attention animation: pulsing button + fake cursor click hint */
+  .hero-form .btn-primary,
+  .final-cta .btn {
+    position: relative;
+    overflow: visible;
+    animation: ctaButtonPress 3.6s ease-in-out infinite;
+  }
+  .cta-cursor {
+    position: absolute;
+    right: -6px;
+    bottom: -10px;
+    width: 22px;
+    height: 22px;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(18px, 14px) scale(1);
+    animation: ctaCursorMove 3.6s ease-in-out infinite;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,.35));
+  }
+  .cta-cursor svg { display: block; width: 100%; height: 100%; }
+  .cta-cursor::after {
+    content: "";
+    position: absolute;
+    left: 3px;
+    top: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,.85);
+    opacity: 0;
+    animation: ctaCursorRipple 3.6s ease-in-out infinite;
+  }
+  @keyframes ctaButtonPress {
+    0%, 30% { transform: scale(1); }
+    35% { transform: scale(.96); }
+    42% { transform: scale(1.02); }
+    48%, 100% { transform: scale(1); }
+  }
+  @keyframes ctaCursorMove {
+    0% { opacity: 0; transform: translate(18px, 14px) scale(1); }
+    12% { opacity: 1; transform: translate(18px, 14px) scale(1); }
+    28% { opacity: 1; transform: translate(0, 0) scale(1); }
+    35% { transform: translate(0, 0) scale(.85); }
+    42% { transform: translate(0, 0) scale(1); }
+    60% { opacity: 1; transform: translate(0, 0) scale(1); }
+    78% { opacity: 0; transform: translate(0, 0) scale(1); }
+    100% { opacity: 0; transform: translate(18px, 14px) scale(1); }
+  }
+  @keyframes ctaCursorRipple {
+    0%, 32% { opacity: 0; transform: scale(.3); }
+    38% { opacity: .9; transform: scale(.3); }
+    50% { opacity: 0; transform: scale(1.8); }
+    100% { opacity: 0; transform: scale(1.8); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hero-form .btn-primary,
+    .final-cta .btn,
+    .cta-cursor,
+    .cta-cursor::after { animation: none; }
+  }
 
   /* Phone mockup */
   .mockup { display: flex; justify-content: center; }
@@ -528,12 +589,15 @@
   <section class="hero">
     <div class="container hero-grid">
       <div>
-        <h1 class="text-balance">Створи сайт за 10 хвилин. Без коду</h1>
-        <p class="sub">Продавай свої товари 24/7 з підключеною онлайн-оплатою</p>
+        <h1 class="text-balance">Створи магазин за 10 хвилин. Без коду</h1>
+        <p class="sub">Клієнти замовляють і платять онлайн у будь-який час — без вихідних і обідніх перерв</p>
         <form class="hero-form" action="registration.html" method="get" data-registration-phone-form="1">
           <label for="phone1" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Номер телефону</label>
           <input id="phone1" name="phone" type="tel" inputmode="tel" placeholder="+380XXXXXXXXX" autocomplete="tel">
-          <button type="submit" class="btn btn-primary">Підключити</button>
+          <button type="submit" class="btn btn-primary">
+            Підключити
+            <span class="cta-cursor" aria-hidden="true"><svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M3 2L3 16.5L6.5 13.1L9 18.5L11.3 17.4L8.8 12.1L14 11.7L3 2Z" fill="#1B2A3D" stroke="#fff" stroke-width="1"/></svg></span>
+          </button>
         </form>
         <p class="hero-note">Безкоштовно. Без картки при реєстрації.</p>
       </div>
@@ -839,7 +903,10 @@
         <form class="hero-form" action="registration.html" method="get" data-registration-phone-form="1">
           <label for="phone2" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Номер телефону</label>
           <input id="phone2" name="phone" type="tel" inputmode="tel" placeholder="+380XXXXXXXXX" autocomplete="tel">
-          <button type="submit" class="btn">Підключити</button>
+          <button type="submit" class="btn">
+            Підключити
+            <span class="cta-cursor" aria-hidden="true"><svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M3 2L3 16.5L6.5 13.1L9 18.5L11.3 17.4L8.8 12.1L14 11.7L3 2Z" fill="#1B2A3D" stroke="#fff" stroke-width="1"/></svg></span>
+          </button>
         </form>
       </div>
     </div>
@@ -871,16 +938,6 @@
         <a href="#pricing">Тарифи</a>
         <a href="#faq">FAQ</a>
       </nav>
-      <nav class="footer-legal" aria-label="Юридична інформація">
-        <a href="terms.html">Умови надання послуг</a>
-        <a href="privacy.html">Конфіденційність</a>
-      </nav>
-      <div class="footer-social">
-        <a href="#" aria-label="Instagram"><img src="image/insta.png" alt="Instagram"></a>
-        <a href="#" aria-label="TikTok"><img src="image/tik-tok.png" alt="TikTok"></a>
-        <a href="#" aria-label="Telegram"><img src="image/telegram.png" alt="Telegram"></a>
-      </div>
-      <p class="footer-owner">ФОП Яковенко Р.О</p>
       <p class="copyright">© 2026 Вітрина. Усі права захищено.</p>
     </div>
   </footer>

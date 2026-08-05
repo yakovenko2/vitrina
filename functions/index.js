@@ -39,6 +39,9 @@ const CLOUDFLARE_API_TOKEN = defineSecret("CLOUDFLARE_API_TOKEN");
 const CLOUDFLARE_ZONE_ID = defineSecret("CLOUDFLARE_ZONE_ID");
 const TELEGRAM_BOT_TOKEN = defineSecret("TELEGRAM_BOT_TOKEN");
 const MONO_X_TOKEN = defineSecret("MONO_X_TOKEN");
+const TURBOSMS_TOKEN = defineSecret("TURBOSMS_TOKEN");
+// Токен Telegram Gateway API (https://gateway.telegram.org), окремий від TELEGRAM_BOT_TOKEN.
+const TELEGRAM_GATEWAY_TOKEN = defineSecret("TELEGRAM_GATEWAY_TOKEN");
 
 // Хост, на який клієнти вказують CNAME свого домену.
 const CNAME_TARGET = "cname.vitryna-shop.com";
@@ -854,6 +857,246 @@ exports.telegramDisconnect = onCall(async (request) => {
     { merge: true }
   );
   return { ok: true };
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// TurboSMS — реальна відправка коду підтвердження при вході/реєстрації.
+// Код генерується та зберігається тільки на сервері (Firestore, недоступний
+// клієнтам напряму — див. firestore.rules), клієнт лише передає телефон/код.
+// ─────────────────────────────────────────────────────────────────────────
+const TURBOSMS_API_URL = "https://api.turbosms.ua/message/send.json";
+const TURBOSMS_SENDER = "latiao_info";
+const AUTH_CODES_COLLECTION = "auth_codes";
+const AUTH_CODE_TTL_MS = 5 * 60 * 1000;
+const AUTH_CODE_RESEND_COOLDOWN_MS = 30 * 1000;
+const AUTH_CODE_MAX_ATTEMPTS = 5;
+
+// Перетворює будь-який ввід телефону в формат 380XXXXXXXXX, який очікує TurboSMS.
+const normalizePhoneForTurboSms = (raw) => {
+  const digits = String(raw || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("380") && digits.length === 12) return digits;
+  if (digits.startsWith("0") && digits.length === 10) return `380${digits.slice(1)}`;
+  if (digits.length === 9) return `380${digits}`;
+  return digits;
+};
+
+const sanitizeAuthCodeKey = (raw) => String(raw || "").replace(/\D/g, "").slice(-15);
+
+const sendTurboSmsCode = async (token, recipientPhone, code) => {
+  const response = await fetch(TURBOSMS_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      recipients: [recipientPhone],
+      sms: {
+        sender: TURBOSMS_SENDER,
+        text: `Код підтвердження: ${code}. Нікому його не повідомляйте.`
+      }
+    })
+  });
+
+  let data = null;
+  try {
+    data = await response.json();
+  } catch (error) {
+    data = null;
+  }
+
+  const result = data && Array.isArray(data.response_result) ? data.response_result[0] : null;
+  const ok = Boolean(response.ok && result && result.response_code === 0);
+  return {
+    ok,
+    status: response.status,
+    messageId: result && result.message_id,
+    errorStatus: (result && result.response_status) || (data && data.response_status),
+    data
+  };
+};
+
+// ─────────────────────────────────────────────────────────────────────────
+// Telegram Gateway (https://gateway.telegram.org) — надсилає той самий код
+// у службовий чат "Verification Codes" користувача, якщо його номер
+// зареєстрований у Telegram. Швидше й дешевше за SMS, використовується як
+// пріоритетний канал, з резервним переходом на TurboSMS у разі невдачі.
+// ─────────────────────────────────────────────────────────────────────────
+const TELEGRAM_GATEWAY_API_URL = "https://gatewayapi.telegram.org";
+
+const normalizePhoneForTelegramGateway = (raw) => {
+  const smsFormat = normalizePhoneForTurboSms(raw);
+  return smsFormat ? `+${smsFormat}` : "";
+};
+
+const sendTelegramGatewayCode = async (token, phoneE164, code) => {
+  const response = await fetch(`${TELEGRAM_GATEWAY_API_URL}/sendVerificationMessage`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      phone_number: phoneE164,
+      code,
+      ttl: Math.round(AUTH_CODE_TTL_MS / 1000)
+    })
+  });
+
+  let data = null;
+  try {
+    data = await response.json();
+  } catch (error) {
+    data = null;
+  }
+
+  if (!response.ok || !data || !data.ok) {
+    return { ok: false, status: response.status, error: (data && data.error) || `http-${response.status}` };
+  }
+
+  return { ok: true, status: response.status, requestId: data.result && data.result.request_id };
+};
+
+// POST { phone } -> генерує 4-значний код, надсилає його через Telegram Gateway
+// (якщо номер зареєстрований у Telegram) з резервним переходом на TurboSMS SMS,
+// зберігає в auth_codes/{phone} для подальшої перевірки методом verifyAuthCode.
+exports.sendAuthCode = onRequest({ cors: true, secrets: [TURBOSMS_TOKEN, TELEGRAM_GATEWAY_TOKEN] }, async (req, res) => {
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  if (req.method !== "POST") {
+    res.status(405).json({ ok: false, error: "method-not-allowed" });
+    return;
+  }
+
+  const smsPhone = normalizePhoneForTurboSms(req.body && req.body.phone);
+  const phoneKey = sanitizeAuthCodeKey(req.body && req.body.phone);
+  if (!phoneKey || !/^380\d{9}$/.test(smsPhone)) {
+    res.status(400).json({ ok: false, error: "invalid-phone" });
+    return;
+  }
+
+  const ref = db.collection(AUTH_CODES_COLLECTION).doc(phoneKey);
+
+  try {
+    const snap = await ref.get();
+    const existing = snap.exists ? snap.data() || {} : {};
+    const lastSentAtMs = Number(existing.lastSentAtMs) || 0;
+    if (lastSentAtMs && Date.now() - lastSentAtMs < AUTH_CODE_RESEND_COOLDOWN_MS) {
+      res.status(429).json({
+        ok: false,
+        error: "too-soon",
+        retryAfterSeconds: Math.ceil((lastSentAtMs + AUTH_CODE_RESEND_COOLDOWN_MS - Date.now()) / 1000)
+      });
+      return;
+    }
+
+    const code = String(Math.floor(1000 + Math.random() * 9000));
+
+    let channel = "";
+    let messageId = "";
+    const telegramToken = TELEGRAM_GATEWAY_TOKEN.value();
+    if (telegramToken) {
+      const telegramPhone = normalizePhoneForTelegramGateway(req.body && req.body.phone);
+      const telegramResult = await sendTelegramGatewayCode(telegramToken, telegramPhone, code);
+      if (telegramResult.ok) {
+        channel = "telegram";
+        messageId = telegramResult.requestId || "";
+        console.log("sendAuthCode: Telegram Gateway accepted message", telegramPhone, messageId);
+      } else {
+        console.warn("sendAuthCode: Telegram Gateway send failed, falling back to SMS:", telegramResult.error);
+      }
+    }
+
+    if (!channel) {
+      const smsResult = await sendTurboSmsCode(TURBOSMS_TOKEN.value(), smsPhone, code);
+
+      if (!smsResult.ok) {
+        console.error("sendAuthCode: TurboSMS send failed:", smsResult.errorStatus, smsResult.data);
+        res.status(502).json({ ok: false, error: "sms-send-failed" });
+        return;
+      }
+
+      // Diagnostic log: message_id lets us query TurboSMS message/status for delivery issues.
+      console.log("sendAuthCode: TurboSMS accepted message", smsPhone, smsResult.messageId);
+      channel = "sms";
+      messageId = smsResult.messageId || "";
+    }
+
+    await ref.set({
+      code,
+      attempts: 0,
+      channel,
+      messageId,
+      createdAtMs: Date.now(),
+      lastSentAtMs: Date.now(),
+      expiresAtMs: Date.now() + AUTH_CODE_TTL_MS
+    });
+
+    res.status(200).json({ ok: true, channel });
+  } catch (error) {
+    console.error("sendAuthCode error:", error);
+    res.status(500).json({ ok: false, error: "internal" });
+  }
+});
+
+// POST { phone, code } -> перевіряє код, збережений методом sendAuthCode.
+exports.verifyAuthCode = onRequest({ cors: true }, async (req, res) => {
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  if (req.method !== "POST") {
+    res.status(405).json({ ok: false, error: "method-not-allowed" });
+    return;
+  }
+
+  const phoneKey = sanitizeAuthCodeKey(req.body && req.body.phone);
+  const enteredCode = String((req.body && req.body.code) || "").trim();
+  if (!phoneKey || !/^\d{4}$/.test(enteredCode)) {
+    res.status(400).json({ ok: false, error: "invalid-request" });
+    return;
+  }
+
+  const ref = db.collection(AUTH_CODES_COLLECTION).doc(phoneKey);
+
+  try {
+    const snap = await ref.get();
+    if (!snap.exists) {
+      res.status(200).json({ ok: false, error: "not-found" });
+      return;
+    }
+
+    const data = snap.data() || {};
+    const attempts = Number(data.attempts) || 0;
+    const expiresAtMs = Number(data.expiresAtMs) || 0;
+
+    if (Date.now() > expiresAtMs) {
+      await ref.delete();
+      res.status(200).json({ ok: false, error: "expired" });
+      return;
+    }
+
+    if (attempts >= AUTH_CODE_MAX_ATTEMPTS) {
+      await ref.delete();
+      res.status(200).json({ ok: false, error: "too-many-attempts" });
+      return;
+    }
+
+    if (String(data.code || "") !== enteredCode) {
+      await ref.update({ attempts: attempts + 1 });
+      res.status(200).json({ ok: false, error: "invalid-code" });
+      return;
+    }
+
+    await ref.delete();
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    console.error("verifyAuthCode error:", error);
+    res.status(500).json({ ok: false, error: "internal" });
+  }
 });
 
 /**

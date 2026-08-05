@@ -32,12 +32,20 @@ service cloud.firestore {
       return request.path.size() >= 4 && request.path[3] == 'landing_visits';
     }
 
+    // Login/registration SMS verification codes (auth_codes/{phone}) — only
+    // the sendAuthCode/verifyAuthCode Cloud Functions (Admin SDK, bypasses
+    // these rules) may read or write this collection. Never expose codes
+    // directly to clients, otherwise anyone could read/guess them via REST.
+    function isAuthCodesPath() {
+      return request.path.size() >= 4 && request.path[3] == 'auth_codes';
+    }
+
     match /{document=**} {
       allow read, write: if !(
         request.path.size() >= 6 &&
         request.path[3] == 'stores' &&
         request.path[5] == 'private'
-      ) && !isThrottledDataPath() && !isLandingVisitPath();
+      ) && !isThrottledDataPath() && !isLandingVisitPath() && !isAuthCodesPath();
     }
 
     match /landing_visits/{visitId} {
